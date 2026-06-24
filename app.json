@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "冷蔵庫ノート",
+    "slug": "refrigerator-note",
+    "version": "1.20.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#EAF7ED",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "食材写真を選ぶため、写真ライブラリへのアクセスを使用します。",
+          "cameraPermission": "食材写真を撮影するため、カメラを使用します。"
+        }
+      ],
+      "@react-native-community/datetimepicker",
+      "expo-notifications",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "商品バーコードを読み取るため、カメラを使用します。",
+          "recordAudioAndroid": false
+        }
+      ]
+    ]
+  }
+}
