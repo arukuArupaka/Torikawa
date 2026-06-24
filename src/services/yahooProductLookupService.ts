@@ -1,6 +1,7 @@
 import { BarcodeProduct } from '../data/productCatalog';
 import { StorageLocation } from '../types';
 import { inferFoodCategory } from '../utils/foodCategory';
+import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
 
 type YahooShoppingHit = {
   name?: string;
@@ -85,9 +86,10 @@ export async function lookupYahooProductByBarcode(barcode: string): Promise<Barc
     const hit = pickBestHit(barcode, data.hits ?? []);
     if (!hit?.name) return null;
 
-    const category = hit.genreCategory?.name
-      || hit.brand?.name
-      || 'Yahoo!ショッピング';
+    const normalized = normalizeProductToIngredient(hit.name);
+    const category = normalized.category === 'other'
+      ? hit.genreCategory?.name || hit.brand?.name || normalized.categoryLabel
+      : normalized.categoryLabel;
     const image = hit.exImage?.url
       || hit.image?.medium
       || hit.image?.small
@@ -98,6 +100,8 @@ export async function lookupYahooProductByBarcode(barcode: string): Promise<Barc
       name: hit.name,
       image,
       category,
+      ingredientName: normalized.ingredientName,
+      tags: normalized.tags,
       storage: inferStorage(hit.name, category),
     };
   } finally {

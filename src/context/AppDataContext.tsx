@@ -13,6 +13,7 @@ import { toDateString } from '../utils/date';
 import { inferFoodCategory, isFoodCategory } from '../utils/foodCategory';
 import { isFoodQuantityUnit } from '../utils/foodQuantity';
 import { createId } from '../utils/id';
+import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
 import { inferRecipeCategory, isRecipeCategory } from '../utils/recipeCategory';
 
 type AppDataContextValue = {
@@ -46,8 +47,11 @@ type StoredRecipe = Omit<Recipe, 'category' | 'isFavorite' | 'createdAt'> & {
   isFavorite?: boolean;
   createdAt?: string;
 };
-type StoredFoodItem = Omit<FoodItem, 'category' | 'quantity' | 'quantityUnit' | 'status' | 'usedAt' | 'disposedAt'> & {
+type StoredFoodItem = Omit<FoodItem, 'productName' | 'ingredientName' | 'category' | 'tags' | 'quantity' | 'quantityUnit' | 'status' | 'usedAt' | 'disposedAt'> & {
+  productName?: string | null;
+  ingredientName?: string;
   category?: FoodCategory;
+  tags?: string[];
   quantity?: number;
   quantityUnit?: FoodQuantityUnit;
   status?: FoodStatus;
@@ -57,17 +61,23 @@ type StoredFoodItem = Omit<FoodItem, 'category' | 'quantity' | 'quantityUnit' | 
 
 function normalizeFoods(storedFoods: StoredFoodItem[] | null): FoodItem[] {
   const source = storedFoods ?? createSampleFoods();
-  return source.map((food) => ({
-    ...food,
-    quantity: Number.isFinite(food.quantity) && (food.quantity ?? 0) > 0
-      ? food.quantity as number
-      : 1,
-    quantityUnit: isFoodQuantityUnit(food.quantityUnit) ? food.quantityUnit : 'piece',
-    category: isFoodCategory(food.category) ? food.category : inferFoodCategory(food.name),
-    status: food.status === 'used' || food.status === 'disposed' ? food.status : 'active',
-    usedAt: food.status === 'used' ? food.usedAt ?? null : null,
-    disposedAt: food.status === 'disposed' ? food.disposedAt ?? null : null,
-  }));
+  return source.map((food) => {
+    const normalized = normalizeProductToIngredient(food.productName || food.ingredientName || food.name);
+    return {
+      ...food,
+      productName: food.productName?.trim() || null,
+      ingredientName: food.ingredientName?.trim() || normalized.ingredientName,
+      tags: Array.isArray(food.tags) && food.tags.length > 0 ? food.tags : normalized.tags,
+      quantity: Number.isFinite(food.quantity) && (food.quantity ?? 0) > 0
+        ? food.quantity as number
+        : 1,
+      quantityUnit: isFoodQuantityUnit(food.quantityUnit) ? food.quantityUnit : 'piece',
+      category: isFoodCategory(food.category) ? food.category : normalized.category || inferFoodCategory(food.name),
+      status: food.status === 'used' || food.status === 'disposed' ? food.status : 'active',
+      usedAt: food.status === 'used' ? food.usedAt ?? null : null,
+      disposedAt: food.status === 'disposed' ? food.disposedAt ?? null : null,
+    };
+  });
 }
 
 function normalizeRecipes(storedRecipes: StoredRecipe[] | null): Recipe[] {

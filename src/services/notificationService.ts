@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { FoodItem, NotificationSettings } from '../types';
 import { parseDate } from '../utils/date';
+import { getFoodDisplayName } from '../utils/ingredientNormalizer';
 import { loadStoredValue, saveStoredValue, storageKeys } from './storage';
 
 const CHANNEL_ID = 'expiry-reminders';
@@ -108,7 +109,7 @@ async function syncFoodNotifications(
 
         const identifier = await Notifications.scheduleNotificationAsync({
           content: {
-            title: `「${food.name}」の期限が近づいています`,
+            title: `「${getFoodDisplayName(food)}」の期限が近づいています`,
             body: daysBefore === 0
               ? '今日が期限です。忘れずに使い切りましょう。'
               : `${daysBefore}日後が期限です。使い道を確認しましょう。`,
@@ -141,11 +142,11 @@ export function queueNotificationSync(
   return syncQueue;
 }
 
-export async function scheduleTestNotification(food?: Pick<FoodItem, 'id' | 'name'>): Promise<void> {
+export async function scheduleTestNotification(food?: Pick<FoodItem, 'id' | 'name' | 'productName'>): Promise<void> {
   await ensureAndroidChannel();
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: food ? `「${food.name}」のテスト通知` : '冷蔵庫ノートのテスト通知',
+      title: food ? `「${getFoodDisplayName(food)}」のテスト通知` : '冷蔵庫ノートのテスト通知',
       body: food
         ? 'タップすると食材の詳細画面を開きます。'
         : '期限通知を受け取る準備ができました。',

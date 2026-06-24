@@ -18,6 +18,7 @@ import {
   parseRecipeAmountForUnit,
   subtractQuantity,
 } from '../utils/foodQuantity';
+import { getFoodDisplayName } from '../utils/ingredientNormalizer';
 import { findMatchingFood } from '../utils/recipeMatching';
 import { recipeCategoryLabels } from '../utils/recipeCategory';
 
@@ -146,16 +147,16 @@ export function RecipeDetailScreen({ navigation, route }: Props) {
     });
     const invalidFood = updates.find((update) => update.action === 'invalid');
     if (invalidFood) {
-      Alert.alert('使用量を確認してください', `「${invalidFood.food.name}」の使用量を入力してください。`);
+      Alert.alert('使用量を確認してください', `「${getFoodDisplayName(invalidFood.food)}」の使用量を入力してください。`);
       return;
     }
 
     const usedNames = updates
       .filter((update) => update.action === 'used')
-      .map(({ food }) => food.name);
+      .map(({ food }) => getFoodDisplayName(food));
     const partialSummaries = updates
       .filter((update): update is { food: FoodItem; action: 'partial'; amount: number } => update.action === 'partial')
-      .map(({ food, amount }) => `${food.name}：${formatFoodQuantity(amount, food.quantityUnit)}使用`);
+      .map(({ food, amount }) => `${getFoodDisplayName(food)}：${formatFoodQuantity(amount, food.quantityUnit)}使用`);
     const summary = [
       usedNames.length > 0 ? `使い切る：${usedNames.join('、')}` : '',
       partialSummaries.length > 0 ? `残量を減らす：\n${partialSummaries.join('\n')}` : '',
@@ -295,7 +296,7 @@ export function RecipeDetailScreen({ navigation, route }: Props) {
                     <View key={food.id} style={styles.consumptionCard}>
                       <View style={styles.consumptionHeader}>
                         <View>
-                          <Text style={styles.consumptionName}>{food.name}</Text>
+                          <Text style={styles.consumptionName}>{getFoodDisplayName(food)}</Text>
                           <Text style={styles.consumptionMeta}>
                             {ingredients.join('・')}として使用／現在{formatFoodQuantity(food.quantity, food.quantityUnit)}
                           </Text>

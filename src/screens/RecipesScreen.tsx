@@ -12,6 +12,7 @@ import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { generateLocalRecipeIdeas, LocalRecipeIdea } from '../services/localRecipeSuggestionService';
 import { FoodItem, Recipe, RecipeCategory } from '../types';
 import { daysUntil } from '../utils/date';
+import { getFoodIngredientName } from '../utils/ingredientNormalizer';
 import { findMatchingFood, normalizeIngredientName } from '../utils/recipeMatching';
 import { recipeCategoryLabels, recipeCategoryOptions } from '../utils/recipeCategory';
 
@@ -49,9 +50,12 @@ function pickCookpadSearchFoods(foods: FoodItem[]) {
   const seen = new Set<string>();
   return foods
     .filter((food) => food.status === 'active' && daysUntil(food.expiryDate) >= 0)
-    .sort((a, b) => daysUntil(a.expiryDate) - daysUntil(b.expiryDate) || a.name.localeCompare(b.name, 'ja'))
+    .sort((a, b) =>
+      daysUntil(a.expiryDate) - daysUntil(b.expiryDate)
+      || getFoodIngredientName(a).localeCompare(getFoodIngredientName(b), 'ja'),
+    )
     .filter((food) => {
-      const normalized = normalizeIngredientName(food.name);
+      const normalized = normalizeIngredientName(getFoodIngredientName(food));
       if (seen.has(normalized)) return false;
       seen.add(normalized);
       return true;
@@ -74,7 +78,7 @@ export function RecipesScreen({ navigation }: Props) {
   ).length;
   const localIdeas = useMemo(() => generateLocalRecipeIdeas(foods), [foods]);
   const cookpadSearchFoods = useMemo(() => pickCookpadSearchFoods(foods), [foods]);
-  const cookpadKeyword = cookpadSearchFoods.map((food) => food.name).join(' ');
+  const cookpadKeyword = cookpadSearchFoods.map((food) => getFoodIngredientName(food)).join(' ');
 
   const suggestions = useMemo<RecipeSuggestion[]>(() => recipes
     .map((recipe) => {

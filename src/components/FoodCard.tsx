@@ -4,6 +4,7 @@ import { colors, radius, spacing } from '../constants/theme';
 import { FoodItem, StorageLocation } from '../types';
 import { daysUntil, getRemainingLabel } from '../utils/date';
 import { formatFoodQuantity } from '../utils/foodQuantity';
+import { getFoodDisplayName } from '../utils/ingredientNormalizer';
 
 const storageLabels: Record<StorageLocation, string> = {
   refrigerated: '冷蔵',
@@ -20,6 +21,7 @@ export function FoodCard({
 }) {
   const remaining = daysUntil(food.expiryDate);
   const urgencyColor = remaining < 0 ? colors.danger : remaining <= 3 ? colors.warning : colors.primary;
+  const displayName = getFoodDisplayName(food);
 
   return (
     <Pressable
@@ -28,7 +30,7 @@ export function FoodCard({
     >
       <Image source={{ uri: food.image }} style={styles.image} />
       <View style={styles.content}>
-        <Text numberOfLines={1} style={styles.name}>{food.name}</Text>
+        <Text numberOfLines={1} style={styles.name}>{displayName}</Text>
         <Text style={[styles.remaining, { color: urgencyColor }]}>{getRemainingLabel(food.expiryDate)}</Text>
         <View style={styles.storageRow}>
           <Ionicons color={colors.textMuted} name="location-outline" size={14} />

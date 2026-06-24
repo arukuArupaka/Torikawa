@@ -1,5 +1,6 @@
 import { FoodItem, NewRecipe, RecipeCategory } from '../types';
 import { daysUntil } from '../utils/date';
+import { getFoodIngredientName, getFoodSearchTerms } from '../utils/ingredientNormalizer';
 import { getRecipeFallbackImage } from '../utils/recipeImages';
 
 export type LocalRecipeIdea = NewRecipe & {
@@ -19,11 +20,16 @@ type IdeaSeed = {
 };
 
 function includesAny(value: string, keywords: string[]) {
-  return keywords.some((keyword) => value.includes(keyword));
+  const normalizedValue = value.toLocaleLowerCase('ja-JP');
+  return keywords.some((keyword) => normalizedValue.includes(keyword.toLocaleLowerCase('ja-JP')));
 }
 
 function findFood(foods: FoodItem[], keywords: string[]) {
-  return foods.find((food) => includesAny(food.name, keywords));
+  return foods.find((food) => getFoodSearchTerms(food).some((term) => includesAny(term, keywords)));
+}
+
+function ingredientLabel(food: FoodItem): string {
+  return getFoodIngredientName(food);
 }
 
 function toIdea(seed: IdeaSeed): LocalRecipeIdea {
@@ -54,62 +60,69 @@ export function generateLocalRecipeIdeas(foods: FoodItem[]): LocalRecipeIdea[] {
   const vegetable = findFood(usableFoods, ['キャベツ', '玉ねぎ', 'にんじん', 'レタス', 'トマト', '白菜']);
 
   if (egg && milk) {
+    const eggName = ingredientLabel(egg);
+    const milkName = ingredientLabel(milk);
     ideas.push(toIdea({
       category: 'breakfast',
-      name: `${egg.name}と${milk.name}のふわっとオムレツ`,
-      ingredients: [egg.name, milk.name, '塩こしょう'],
-      ingredientAmounts: { [egg.name]: '2個', [milk.name]: '大さじ2', 塩こしょう: '少々' },
+      name: `${eggName}と${milkName}のふわっとオムレツ`,
+      ingredients: [eggName, milkName, '塩こしょう'],
+      ingredientAmounts: { [eggName]: '2個', [milkName]: '大さじ2', 塩こしょう: '少々' },
       steps: [
-        `${egg.name}と${milk.name}をよく混ぜます。`,
+        `${eggName}と${milkName}をよく混ぜます。`,
         'フライパンで弱めの中火にし、ゆっくり火を通します。',
         '半熟になったら形を整えて盛り付けます。',
       ],
       minutes: 10,
       reason: '朝食向きで、冷蔵食材をすぐ使えます。',
-      usedFoodNames: [egg.name, milk.name],
+      usedFoodNames: [eggName, milkName],
     }));
   }
 
   if (cabbage && egg) {
+    const cabbageName = ingredientLabel(cabbage);
+    const eggName = ingredientLabel(egg);
     ideas.push(toIdea({
       category: 'quick',
-      name: `${cabbage.name}と${egg.name}のさっと炒め`,
-      ingredients: [cabbage.name, egg.name, '醤油'],
-      ingredientAmounts: { [cabbage.name]: '2枚', [egg.name]: '1個', 醤油: '小さじ2' },
+      name: `${cabbageName}と${eggName}のさっと炒め`,
+      ingredients: [cabbageName, eggName, '醤油'],
+      ingredientAmounts: { [cabbageName]: '2枚', [eggName]: '1個', 醤油: '小さじ2' },
       steps: [
-        `${cabbage.name}を食べやすい大きさに切ります。`,
-        `${egg.name}を先に炒めて取り出します。`,
-        `${cabbage.name}を炒め、${egg.name}を戻して醤油で味を整えます。`,
+        `${cabbageName}を食べやすい大きさに切ります。`,
+        `${eggName}を先に炒めて取り出します。`,
+        `${cabbageName}を炒め、${eggName}を戻して醤油で味を整えます。`,
       ],
       minutes: 10,
       reason: '短時間で作れて、期限が近い食材を合わせやすいです。',
-      usedFoodNames: [cabbage.name, egg.name],
+      usedFoodNames: [cabbageName, eggName],
     }));
   }
 
   if (tofu) {
+    const tofuName = ingredientLabel(tofu);
     ideas.push(toIdea({
       category: 'side',
-      name: `${tofu.name}の照り焼きステーキ`,
-      ingredients: [tofu.name, '片栗粉', '醤油'],
-      ingredientAmounts: { [tofu.name]: '1丁', 片栗粉: '適量', 醤油: '大さじ1' },
+      name: `${tofuName}の照り焼きステーキ`,
+      ingredients: [tofuName, '片栗粉', '醤油'],
+      ingredientAmounts: { [tofuName]: '1丁', 片栗粉: '適量', 醤油: '大さじ1' },
       steps: [
-        `${tofu.name}の水気を切って食べやすく切ります。`,
+        `${tofuName}の水気を切って食べやすく切ります。`,
         '片栗粉をまぶして両面を焼きます。',
         '醤油をからめて香ばしく仕上げます。',
       ],
       minutes: 12,
       reason: '傷みやすい豆腐を副菜として使い切れます。',
-      usedFoodNames: [tofu.name],
+      usedFoodNames: [tofuName],
     }));
   }
 
   if (vegetable) {
     const secondVegetable = onion && onion.id !== vegetable.id ? onion : usableFoods.find((food) => food.id !== vegetable.id);
-    const ingredients = secondVegetable ? [vegetable.name, secondVegetable.name, 'コンソメ'] : [vegetable.name, 'コンソメ'];
+    const vegetableName = ingredientLabel(vegetable);
+    const secondVegetableName = secondVegetable ? ingredientLabel(secondVegetable) : null;
+    const ingredients = secondVegetableName ? [vegetableName, secondVegetableName, 'コンソメ'] : [vegetableName, 'コンソメ'];
     ideas.push(toIdea({
       category: 'soup',
-      name: `${vegetable.name}のあったかスープ`,
+      name: `${vegetableName}のあったかスープ`,
       ingredients,
       ingredientAmounts: Object.fromEntries(ingredients.map((ingredient, index) => [
         ingredient,
@@ -127,20 +140,21 @@ export function generateLocalRecipeIdeas(foods: FoodItem[]): LocalRecipeIdea[] {
   }
 
   urgentFoods.slice(0, 2).forEach((food) => {
-    if (ideas.some((idea) => idea.usedFoodNames.includes(food.name))) return;
+    const foodName = ingredientLabel(food);
+    if (ideas.some((idea) => idea.usedFoodNames.includes(foodName))) return;
     ideas.push(toIdea({
       category: 'quick',
-      name: `${food.name}の簡単ソテー`,
-      ingredients: [food.name, '油', '塩こしょう'],
-      ingredientAmounts: { [food.name]: '使いたい分', 油: '小さじ1', 塩こしょう: '少々' },
+      name: `${foodName}の簡単ソテー`,
+      ingredients: [foodName, '油', '塩こしょう'],
+      ingredientAmounts: { [foodName]: '使いたい分', 油: '小さじ1', 塩こしょう: '少々' },
       steps: [
-        `${food.name}を食べやすい大きさに切ります。`,
+        `${foodName}を食べやすい大きさに切ります。`,
         'フライパンで焼き、火を通します。',
         '塩こしょうで味を整えます。',
       ],
       minutes: 8,
       reason: `期限まであと${daysUntil(food.expiryDate)}日なので、先に使う候補です。`,
-      usedFoodNames: [food.name],
+      usedFoodNames: [foodName],
     }));
   });
 

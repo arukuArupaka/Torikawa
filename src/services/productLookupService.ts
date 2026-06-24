@@ -1,4 +1,5 @@
 import { BarcodeProduct, findProductByBarcode } from '../data/productCatalog';
+import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
 import { findLearnedProduct } from './learnedProductService';
 import { lookupYahooProductByBarcode } from './yahooProductLookupService';
 
@@ -72,13 +73,18 @@ export async function lookupProductByBarcode(barcode: string): Promise<ProductLo
       return { product: null, source: 'none' };
     }
 
-    const category = data.product.categories?.split(',')[0]?.trim() || '食品';
+    const normalized = normalizeProductToIngredient(name);
+    const category = normalized.category === 'other'
+      ? data.product.categories?.split(',')[0]?.trim() || normalized.categoryLabel
+      : normalized.categoryLabel;
     return {
       product: {
         barcode,
         name,
         image: data.product.image_front_small_url || fallbackImage,
         category,
+        ingredientName: normalized.ingredientName,
+        tags: normalized.tags,
         storage: 'room',
       },
       source: 'open-food-facts',

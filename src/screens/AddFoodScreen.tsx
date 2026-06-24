@@ -18,8 +18,9 @@ import { persistFoodImage } from '../services/imageStorage';
 import { saveLearnedProduct } from '../services/learnedProductService';
 import { FoodCategory, FoodQuantityUnit, NewFoodItem, StorageLocation } from '../types';
 import { addDays, toDateString } from '../utils/date';
-import { inferFoodCategory } from '../utils/foodCategory';
+import { foodCategoryLabels, inferFoodCategory } from '../utils/foodCategory';
 import { foodQuantityUnitLabels, isValidQuantity, parseQuantityInput } from '../utils/foodQuantity';
+import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddFood'>;
 
@@ -29,11 +30,23 @@ export function AddFoodScreen({ navigation, route }: Props) {
   const { foods, addFood, updateFood } = useAppData();
   const existingFood = foods.find((food) => food.id === route.params?.foodId);
   const isEditing = Boolean(existingFood);
+  const initialProductName = existingFood?.productName ?? route.params?.initialProductName ?? null;
+  const initialIngredientInfo = normalizeProductToIngredient(
+    existingFood?.ingredientName ?? route.params?.initialIngredientName ?? initialProductName ?? route.params?.initialName ?? '',
+  );
+  const inferredInitialCategory = inferFoodCategory(
+    route.params?.initialName ?? initialProductName ?? '',
+    route.params?.initialCategory,
+  );
 
   const [name, setName] = useState(existingFood?.name ?? route.params?.initialName ?? '');
+  const [ingredientEdited, setIngredientEdited] = useState(Boolean(existingFood?.ingredientName ?? route.params?.initialIngredientName));
+  const [ingredientName, setIngredientName] = useState(
+    existingFood?.ingredientName ?? route.params?.initialIngredientName ?? initialIngredientInfo.ingredientName,
+  );
   const [category, setCategory] = useState<FoodCategory>(
     existingFood?.category
-      ?? inferFoodCategory(route.params?.initialName ?? '', route.params?.initialCategory),
+      ?? (initialIngredientInfo.category === 'other' ? inferredInitialCategory : initialIngredientInfo.category),
   );
   const [image, setImage] = useState(existingFood?.image ?? route.params?.initialImage ?? fallbackImage);
   const [storage, setStorage] = useState<StorageLocation>(
@@ -54,15 +67,29 @@ export function AddFoodScreen({ navigation, route }: Props) {
   const [isSaving, setIsSaving] = useState(false);
 
   const nameError = submitted && !name.trim() ? '食材名を入力してください。' : undefined;
+  const ingredientNameError = submitted && !ingredientName.trim() ? 'レシピ用分類を入力してください。' : undefined;
   const parsedQuantity = parseQuantityInput(quantity);
   const isQuantityValid = isValidQuantity(quantity);
   const quantityError = submitted && !isQuantityValid
     ? '0より大きい数値を入力してください。小数は2桁まで使えます。'
     : undefined;
 
+  const handleNameChange = (value: string) => {
+    setName(value);
+    if (initialProductName || ingredientEdited) return;
+    const normalized = normalizeProductToIngredient(value);
+    setIngredientName(normalized.ingredientName);
+    setCategory(normalized.category);
+  };
+
+  const handleIngredientNameChange = (value: string) => {
+    setIngredientName(value);
+    setIngredientEdited(true);
+  };
+
   const handleSave = async () => {
     setSubmitted(true);
-    if (!name.trim() || !isQuantityValid || isSaving) return;
+    if (!name.trim() || !ingredientName.trim() || !isQuantityValid || isSaving) return;
     setIsSaving(true);
 
     let savedImage = image;
@@ -77,8 +104,15 @@ export function AddFoodScreen({ navigation, route }: Props) {
 
     const input: NewFoodItem = {
       name: name.trim(),
+      productName: initialProductName?.trim() || null,
+      ingredientName: ingredientName.trim(),
       image: savedImage,
       category,
+      tags: Array.from(new Set([
+        ingredientName.trim(),
+        ...(route.params?.initialTags ?? []),
+        ...normalizeProductToIngredient(initialProductName || name).tags,
+      ].filter(Boolean))),
       storage,
       quantity: parsedQuantity,
       quantityUnit,
@@ -100,7 +134,9 @@ export function AddFoodScreen({ navigation, route }: Props) {
           barcode: route.params.initialBarcode,
           name: input.name,
           image: input.image,
-          category: route.params.initialCategory || 'ユーザー登録',
+          category: foodCategoryLabels[input.category],
+          ingredientName: input.ingredientName,
+          tags: input.tags,
           storage: input.storage,
         });
       } catch (error) {
@@ -124,13 +160,28 @@ export function AddFoodScreen({ navigation, route }: Props) {
             </View>
           ) : null}
           <FoodImagePicker image={image} onChange={setImage} />
+          {initialProductName ? (
+            <View style={styles.productInfoCard}>
+              <Text style={styles.productInfoLabel}>商品名</Text>
+              <Text style={styles.productInfoName}>{initialProductName}</Text>
+              <Text style={styles.productInfoMeta}>レシピ判定では下の「レシピ用分類」を優先します。</Text>
+            </View>
+          ) : null}
           <FormField
             autoFocus={!isEditing}
             error={nameError}
-            label="食材名"
-            onChangeText={setName}
+            label="表示名"
+            onChangeText={handleNameChange}
             placeholder="例：牛乳"
             value={name}
+          />
+          <FormField
+            error={ingredientNameError}
+            label="レシピ用分類"
+            hint="例：明治おいしい牛乳 → 牛乳。レシピ判定ではこの名前とタグを使います。"
+            onChangeText={handleIngredientNameChange}
+            placeholder="例：牛乳"
+            value={ingredientName}
           />
           <FormField label="カテゴリ">
             <CategorySelector onChange={setCategory} value={category} />
@@ -187,6 +238,10 @@ const styles = StyleSheet.create({
   content: { gap: 22, padding: spacing.md, paddingBottom: spacing.xl },
   barcodeNotice: { alignItems: 'flex-start', backgroundColor: colors.primarySoft, borderRadius: radius.md, flexDirection: 'row', gap: spacing.sm, padding: 13 },
   barcodeNoticeText: { color: colors.primaryDark, flex: 1, fontSize: 13, lineHeight: 19 },
+  productInfoCard: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, padding: spacing.md },
+  productInfoLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
+  productInfoName: { color: colors.text, fontSize: 16, fontWeight: '800', marginTop: 5 },
+  productInfoMeta: { color: colors.primaryDark, fontSize: 11, lineHeight: 16, marginTop: 6 },
   quantityRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
   quantityInput: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.sm, borderWidth: 1, color: colors.text, fontSize: 16, height: 48, paddingHorizontal: 14, textAlign: 'center', width: 100 },
   quantityInputError: { borderColor: colors.danger },

@@ -76,10 +76,13 @@ export function BarcodeScreen({ navigation }: Props) {
     if (!scanResult) return;
     navigation.navigate('AddFood', {
       initialName: scanResult.product?.name,
+      initialProductName: scanResult.product?.name,
+      initialIngredientName: scanResult.product?.ingredientName,
       initialImage: scanResult.product?.image,
       initialMemo: `バーコード: ${scanResult.barcode}`,
       initialBarcode: scanResult.barcode,
       initialCategory: scanResult.product?.category,
+      initialTags: scanResult.product?.tags,
       initialStorage: scanResult.product?.storage,
     });
   };
@@ -111,7 +114,9 @@ export function BarcodeScreen({ navigation }: Props) {
                   <Image source={{ uri: scanResult.product.image }} style={styles.productImage} />
                   <View style={styles.productInfo}>
                     <Text style={styles.productName}>{scanResult.product.name}</Text>
-                    <Text style={styles.productCategory}>{scanResult.product.category}</Text>
+                    <Text style={styles.productCategory}>商品名：{scanResult.product.name}</Text>
+                    <Text style={styles.productCategory}>レシピ用分類：{scanResult.product.ingredientName}</Text>
+                    <Text style={styles.productCategory}>カテゴリ：{scanResult.product.category}</Text>
                     <Text style={styles.barcodeText}>{scanResult.barcode}</Text>
                     <Text style={styles.sourceText}>
                       商品情報: {productSourceLabels[scanResult.source]}

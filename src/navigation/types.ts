@@ -14,11 +14,14 @@ export type RootStackParamList = {
   AddFood:
     | {
         initialName?: string;
+        initialProductName?: string;
+        initialIngredientName?: string;
         initialImage?: string;
         initialExpiryDate?: string;
         initialMemo?: string;
         initialBarcode?: string;
         initialCategory?: string;
+        initialTags?: string[];
         initialStorage?: StorageLocation;
         foodId?: string;
       }

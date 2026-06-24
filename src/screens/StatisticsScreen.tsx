@@ -10,6 +10,7 @@ import { useAppData } from '../context/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
 import { FoodItem } from '../types';
 import { formatDateJa, toDateString } from '../utils/date';
+import { getFoodDisplayName, getFoodIngredientName } from '../utils/ingredientNormalizer';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Statistics'>;
 
@@ -79,7 +80,7 @@ export function StatisticsScreen({ navigation }: Props) {
   const disposedRanking = useMemo(() => {
     const counts = new Map<string, { name: string; count: number }>();
     disposedFoods.forEach((food) => {
-        const name = food.name.trim();
+        const name = getFoodIngredientName(food).trim();
         const key = name.toLocaleLowerCase('ja-JP');
         const current = counts.get(key);
         counts.set(key, { name: current?.name ?? name, count: (current?.count ?? 0) + 1 });
@@ -114,7 +115,7 @@ export function StatisticsScreen({ navigation }: Props) {
   }, [foods, lossRate, selectedMonth, total]);
 
   const confirmRestore = (food: FoodItem) => {
-    Alert.alert('記録を取り消す', `「${food.name}」を管理中に戻しますか？`, [
+    Alert.alert('記録を取り消す', `「${getFoodDisplayName(food)}」を管理中に戻しますか？`, [
       { text: 'キャンセル', style: 'cancel' },
       { text: '管理中に戻す', onPress: () => restoreFood(food.id) },
     ]);
@@ -341,7 +342,7 @@ export function StatisticsScreen({ navigation }: Props) {
                         />
                       </View>
                       <View style={styles.historyText}>
-                        <Text style={styles.foodName}>{food.name}</Text>
+                        <Text style={styles.foodName}>{getFoodDisplayName(food)}</Text>
                         <Text style={[styles.recordMeta, disposed && styles.disposedText]}>
                           {disposed ? '捨てた' : '使い切った'}
                           {recordDate ? `・${formatDateJa(recordDate)}` : ''}
@@ -349,7 +350,7 @@ export function StatisticsScreen({ navigation }: Props) {
                       </View>
                     </Pressable>
                     <Pressable
-                      accessibilityLabel={`${food.name}の記録を取り消す`}
+                      accessibilityLabel={`${getFoodDisplayName(food)}の記録を取り消す`}
                       hitSlop={8}
                       onPress={() => confirmRestore(food)}
                       style={({ pressed }) => [styles.undoButton, pressed && styles.pressed]}

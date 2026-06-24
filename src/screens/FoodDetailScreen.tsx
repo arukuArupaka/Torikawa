@@ -11,6 +11,7 @@ import { FoodStatus, StorageLocation } from '../types';
 import { daysUntil, formatDateJa, getRemainingLabel } from '../utils/date';
 import { foodCategoryLabels } from '../utils/foodCategory';
 import { formatFoodQuantity } from '../utils/foodQuantity';
+import { getFoodDisplayName, getFoodIngredientName } from '../utils/ingredientNormalizer';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'FoodDetail'>;
 
@@ -42,6 +43,8 @@ export function FoodDetailScreen({ navigation, route }: Props) {
   }
 
   const remaining = daysUntil(food.expiryDate);
+  const displayName = getFoodDisplayName(food);
+  const ingredientName = getFoodIngredientName(food);
 
   const returnHome = () => navigation.navigate('MainTabs', { screen: 'Home' });
 
@@ -88,7 +91,7 @@ export function FoodDetailScreen({ navigation, route }: Props) {
   const confirmDelete = () => {
     Alert.alert(
       '登録データを完全に削除',
-      `「${food.name}」を完全に削除しますか？この操作は取り消せません。`,
+      `「${displayName}」を完全に削除しますか？この操作は取り消せません。`,
       [
       { text: 'キャンセル', style: 'cancel' },
       {
@@ -109,7 +112,10 @@ export function FoodDetailScreen({ navigation, route }: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.hero}>
           <Image source={{ uri: food.image }} style={styles.image} />
-          <Text style={styles.name}>{food.name}</Text>
+          <Text style={styles.name}>{displayName}</Text>
+          {ingredientName !== displayName ? (
+            <Text style={styles.ingredientName}>レシピ用分類：{ingredientName}</Text>
+          ) : null}
           {food.status === 'active' ? (
             <View style={[styles.remainingBadge, remaining < 0 && styles.expiredBadge]}>
               <Text style={[styles.remaining, remaining < 0 && styles.expiredText]}>
@@ -126,8 +132,11 @@ export function FoodDetailScreen({ navigation, route }: Props) {
         </View>
 
         <View style={styles.infoCard}>
+          {food.productName ? <DetailRow icon="barcode-outline" label="商品名" value={food.productName} /> : null}
+          <DetailRow icon="restaurant-outline" label="レシピ用分類" value={ingredientName} />
           <DetailRow icon="calendar-outline" label="期限日" value={formatDateJa(food.expiryDate)} />
           <DetailRow icon="pricetag-outline" label="カテゴリ" value={foodCategoryLabels[food.category]} />
+          <DetailRow icon="pricetags-outline" label="タグ" value={food.tags.length > 0 ? food.tags.join('、') : 'タグはありません'} />
           <DetailRow icon="snow-outline" label="保存場所" value={storageLabels[food.storage]} />
           <DetailRow icon="cube-outline" label="残量" value={formatFoodQuantity(food.quantity, food.quantityUnit)} />
           <DetailRow icon="bag-handle-outline" label="購入日" value={formatDateJa(food.purchaseDate)} />
@@ -181,6 +190,7 @@ const styles = StyleSheet.create({
   hero: { alignItems: 'center', paddingVertical: spacing.md },
   image: { backgroundColor: colors.primarySoft, borderRadius: radius.lg, height: 132, width: 132 },
   name: { color: colors.text, fontSize: 24, fontWeight: '800', marginTop: spacing.md },
+  ingredientName: { color: colors.primaryDark, fontSize: 13, fontWeight: '700', marginTop: 6 },
   remainingBadge: { backgroundColor: colors.warningSoft, borderRadius: 20, marginTop: spacing.sm, paddingHorizontal: 14, paddingVertical: 6 },
   expiredBadge: { backgroundColor: colors.dangerSoft },
   remaining: { color: colors.warning, fontWeight: '800' },

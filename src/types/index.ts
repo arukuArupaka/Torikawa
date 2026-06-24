@@ -25,8 +25,11 @@ export type RecipeCategory =
 export type FoodItem = {
   id: string;
   name: string;
+  productName: string | null;
+  ingredientName: string;
   image: string;
   category: FoodCategory;
+  tags: string[];
   storage: StorageLocation;
   quantity: number;
   quantityUnit: FoodQuantityUnit;

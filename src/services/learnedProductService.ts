@@ -1,8 +1,13 @@
 import { File, Paths } from 'expo-file-system';
 import { BarcodeProduct } from '../data/productCatalog';
+import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
 import { loadStoredValue, saveStoredValue, storageKeys } from './storage';
 
 export type LearnedProductCatalog = Record<string, BarcodeProduct>;
+type StoredBarcodeProduct = Omit<BarcodeProduct, 'ingredientName' | 'tags'> & {
+  ingredientName?: string;
+  tags?: string[];
+};
 
 function copyImageForCatalog(imageUri: string, barcode: string): string {
   if (!imageUri.startsWith('file:') && !imageUri.startsWith('content:')) return imageUri;
@@ -20,8 +25,16 @@ function copyImageForCatalog(imageUri: string, barcode: string): string {
 }
 
 export async function findLearnedProduct(barcode: string): Promise<BarcodeProduct | null> {
-  const catalog = await loadStoredValue<LearnedProductCatalog>(storageKeys.learnedProducts);
-  return catalog?.[barcode] ?? null;
+  const catalog = await loadStoredValue<Record<string, StoredBarcodeProduct>>(storageKeys.learnedProducts);
+  const product = catalog?.[barcode];
+  if (!product) return null;
+  const normalized = normalizeProductToIngredient(product.name);
+  return {
+    ...product,
+    ingredientName: product.ingredientName?.trim() || normalized.ingredientName,
+    tags: Array.isArray(product.tags) && product.tags.length > 0 ? product.tags : normalized.tags,
+    category: product.category || normalized.categoryLabel,
+  };
 }
 
 export async function saveLearnedProduct(product: BarcodeProduct): Promise<void> {

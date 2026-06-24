@@ -12,6 +12,7 @@ import { colors, radius, spacing } from '../constants/theme';
 import { useAppData } from '../context/AppDataContext';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { daysUntil, parseDate, toDateString } from '../utils/date';
+import { getFoodDisplayName } from '../utils/ingredientNormalizer';
 
 const weekDays = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -50,7 +51,7 @@ export function CalendarScreen({ navigation }: Props) {
   const selectedFoods = useMemo(
     () => activeFoods
       .filter((food) => food.expiryDate === selectedDate)
-      .sort((a, b) => a.name.localeCompare(b.name, 'ja')),
+      .sort((a, b) => getFoodDisplayName(a).localeCompare(getFoodDisplayName(b), 'ja')),
     [activeFoods, selectedDate],
   );
   const movingFood = activeFoods.find((food) => food.id === movingFoodId);
@@ -73,9 +74,10 @@ export function CalendarScreen({ navigation }: Props) {
     }
 
     const date = parseDate(dateString);
+    const displayName = getFoodDisplayName(movingFood);
     Alert.alert(
       '期限日を変更',
-      `「${movingFood.name}」の期限を${date.getMonth() + 1}月${date.getDate()}日に変更しますか？`,
+      `「${displayName}」の期限を${date.getMonth() + 1}月${date.getDate()}日に変更しますか？`,
       [
         { text: 'キャンセル', style: 'cancel' },
         {
@@ -106,7 +108,7 @@ export function CalendarScreen({ navigation }: Props) {
           <View style={styles.movingBanner}>
             <Ionicons color={colors.primary} name="calendar-outline" size={23} />
             <View style={styles.movingBannerText}>
-              <Text style={styles.movingTitle}>「{movingFood.name}」の移動先を選択</Text>
+              <Text style={styles.movingTitle}>「{getFoodDisplayName(movingFood)}」の移動先を選択</Text>
               <Text style={styles.movingDescription}>新しい期限日をカレンダーからタップしてください。</Text>
             </View>
             <Pressable hitSlop={10} onPress={() => setMovingFoodId(null)}>
@@ -163,7 +165,7 @@ export function CalendarScreen({ navigation }: Props) {
                       </View>
                       {dayFoods.slice(0, 2).map((food) => (
                         <View key={food.id} style={styles.foodLabel}>
-                          <Text numberOfLines={1} style={styles.foodLabelText}>{food.name}</Text>
+                          <Text numberOfLines={1} style={styles.foodLabelText}>{getFoodDisplayName(food)}</Text>
                         </View>
                       ))}
                       {dayFoods.length > 2 ? <Text style={styles.more}>+{dayFoods.length - 2}</Text> : null}
@@ -192,7 +194,7 @@ export function CalendarScreen({ navigation }: Props) {
                       onPress={() => navigation.navigate('FoodDetail', { foodId: food.id })}
                     />
                     <Pressable
-                      accessibilityLabel={`${food.name}の期限日を変更`}
+                      accessibilityLabel={`${getFoodDisplayName(food)}の期限日を変更`}
                       accessibilityRole="button"
                       onPress={() => setMovingFoodId(food.id)}
                       style={styles.moveButton}
@@ -236,7 +238,7 @@ export function CalendarScreen({ navigation }: Props) {
                       <Text style={styles.dateDay}>{date.getDate()}</Text>
                     </View>
                     <View style={styles.upcomingText}>
-                      <Text style={styles.foodName}>{food.name}の期限</Text>
+                      <Text style={styles.foodName}>{getFoodDisplayName(food)}の期限</Text>
                       <Text style={styles.remaining}>あと{daysUntil(food.expiryDate)}日</Text>
                     </View>
                   </View>

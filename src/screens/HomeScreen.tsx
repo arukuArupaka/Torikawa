@@ -15,6 +15,7 @@ import { loadStoredValue, saveStoredValue, storageKeys } from '../services/stora
 import { FoodItem } from '../types';
 import { daysUntil } from '../utils/date';
 import { foodCategoryOptions } from '../utils/foodCategory';
+import { getFoodDisplayName, getFoodSearchTerms } from '../utils/ingredientNormalizer';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Home'>,
@@ -47,8 +48,12 @@ export function HomeScreen({ navigation }: Props) {
   );
 
   const sections = useMemo<FoodSection[]>(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase('ja-JP');
     const filtered = activeFoods
-      .filter((food) => food.name.toLowerCase().includes(query.trim().toLowerCase()))
+      .filter((food) =>
+        !normalizedQuery
+        || getFoodSearchTerms(food).some((term) => term.toLocaleLowerCase('ja-JP').includes(normalizedQuery)),
+      )
       .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
     if (viewMode === 'storage') {
       return [
@@ -111,9 +116,10 @@ export function HomeScreen({ navigation }: Props) {
 
   const confirmStatusChange = (food: FoodItem, status: 'used' | 'disposed') => {
     const isUsed = status === 'used';
+    const displayName = getFoodDisplayName(food);
     Alert.alert(
       isUsed ? '使い切ったとして記録' : '捨てたとして記録',
-      `「${food.name}」を${isUsed ? '使い切った' : '捨てた'}として記録しますか？`,
+      `「${displayName}」を${isUsed ? '使い切った' : '捨てた'}として記録しますか？`,
       [
         { text: 'キャンセル', style: 'cancel' },
         {

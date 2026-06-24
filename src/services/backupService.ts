@@ -44,8 +44,11 @@ function isFoodItem(value: unknown): value is FoodItem {
   if (!isObject(value)) return false;
   return typeof value.id === 'string'
     && typeof value.name === 'string'
+    && (value.productName === undefined || value.productName === null || typeof value.productName === 'string')
+    && (value.ingredientName === undefined || typeof value.ingredientName === 'string')
     && typeof value.image === 'string'
     && isFoodCategory(value.category as FoodCategory)
+    && (value.tags === undefined || (Array.isArray(value.tags) && value.tags.every((tag) => typeof tag === 'string')))
     && isStorageLocation(value.storage)
     && Number.isFinite(value.quantity)
     && (value.quantityUnit === undefined || isFoodQuantityUnit(value.quantityUnit as FoodQuantityUnit))
@@ -98,6 +101,8 @@ function isBarcodeProduct(value: unknown): value is BarcodeProduct {
     && typeof value.name === 'string'
     && typeof value.image === 'string'
     && typeof value.category === 'string'
+    && (value.ingredientName === undefined || typeof value.ingredientName === 'string')
+    && (value.tags === undefined || (Array.isArray(value.tags) && value.tags.every((tag) => typeof tag === 'string')))
     && isStorageLocation(value.storage);
 }
 
