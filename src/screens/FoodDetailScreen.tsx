@@ -28,7 +28,7 @@ const statusLabels: Record<FoodStatus, string> = {
 };
 
 export function FoodDetailScreen({ navigation, route }: Props) {
-  const { foods, deleteFood, markFoodDisposed, markFoodUsed, restoreFood } = useAppData();
+  const { foods, addShoppingItem, deleteFood, markFoodDisposed, markFoodUsed, restoreFood } = useAppData();
   const food = foods.find((item) => item.id === route.params.foodId);
 
   if (!food) {
@@ -47,14 +47,28 @@ export function FoodDetailScreen({ navigation, route }: Props) {
   const ingredientName = getFoodIngredientName(food);
 
   const returnHome = () => navigation.navigate('MainTabs', { screen: 'Home' });
+  const addToShoppingList = () => {
+    const added = addShoppingItem(displayName, '使い切った食材から追加');
+    if (!added) {
+      Alert.alert('追加済みです', `「${displayName}」は未完了の買い物リストにあります。`);
+    }
+  };
 
   const confirmMarkUsed = () => {
     Alert.alert('使い切ったとして記録', 'この食材を使い切ったとして記録しますか？', [
       { text: 'キャンセル', style: 'cancel' },
       {
-        text: 'OK',
+        text: '記録だけ',
         onPress: () => {
           markFoodUsed(food.id);
+          returnHome();
+        },
+      },
+      {
+        text: '買い物リストにも追加',
+        onPress: () => {
+          markFoodUsed(food.id);
+          addToShoppingList();
           returnHome();
         },
       },

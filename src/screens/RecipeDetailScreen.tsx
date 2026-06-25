@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type AlertButton } from 'react-native';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -31,7 +31,7 @@ type MatchedFood = {
 };
 
 export function RecipeDetailScreen({ navigation, route }: Props) {
-  const { deleteRecipe, foods, markFoodUsed, recipes, toggleRecipeFavorite, updateFood } = useAppData();
+  const { addShoppingItem, deleteRecipe, foods, markFoodUsed, recipes, toggleRecipeFavorite, updateFood } = useAppData();
   const recipe = recipes.find((item) => item.id === route.params.recipeId);
   const usableFoods = foods.filter(
     (food) => food.status === 'active' && daysUntil(food.expiryDate) >= 0,
@@ -162,27 +162,39 @@ export function RecipeDetailScreen({ navigation, route }: Props) {
       partialSummaries.length > 0 ? `残量を減らす：\n${partialSummaries.join('\n')}` : '',
     ].filter(Boolean).join('\n');
 
-    Alert.alert('調理内容を記録', `${summary}\n\nこの内容で食材を更新しますか？`, [
+    const applyUpdates = (addUsedFoodsToShoppingList: boolean) => {
+      updates.forEach((update) => {
+        if (update.action === 'used') {
+          const { food } = update;
+          markFoodUsed(food.id);
+          if (addUsedFoodsToShoppingList) {
+            addShoppingItem(getFoodDisplayName(food), `「${recipe.name}」で使い切り`);
+          }
+          return;
+        }
+        if (update.action === 'partial') {
+          const { food, amount } = update;
+          const { id, createdAt, status, usedAt, disposedAt, ...input } = food;
+          updateFood(id, { ...input, quantity: subtractQuantity(food.quantity, amount) });
+        }
+      });
+      navigation.navigate('MainTabs', { screen: 'Home' });
+    };
+    const buttons: AlertButton[] = [
       { text: 'キャンセル', style: 'cancel' },
       {
         text: '記録する',
-        onPress: () => {
-          updates.forEach((update) => {
-            if (update.action === 'used') {
-              const { food } = update;
-              markFoodUsed(food.id);
-              return;
-            }
-            if (update.action === 'partial') {
-              const { food, amount } = update;
-              const { id, createdAt, status, usedAt, disposedAt, ...input } = food;
-              updateFood(id, { ...input, quantity: subtractQuantity(food.quantity, amount) });
-            }
-          });
-          navigation.navigate('MainTabs', { screen: 'Home' });
-        },
+        onPress: () => applyUpdates(false),
       },
-    ]);
+    ];
+    if (usedNames.length > 0) {
+      buttons.push({
+        text: '買い物リストにも追加',
+        onPress: () => applyUpdates(true),
+      });
+    }
+
+    Alert.alert('調理内容を記録', `${summary}\n\nこの内容で食材を更新しますか？`, buttons);
   };
 
   const confirmDeleteRecipe = () => {

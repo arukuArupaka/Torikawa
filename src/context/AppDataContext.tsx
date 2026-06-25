@@ -15,6 +15,7 @@ import { isFoodQuantityUnit } from '../utils/foodQuantity';
 import { createId } from '../utils/id';
 import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
 import { inferRecipeCategory, isRecipeCategory } from '../utils/recipeCategory';
+import { hasPendingShoppingItem } from '../utils/shoppingList';
 
 type AppDataContextValue = {
   foods: FoodItem[];
@@ -33,7 +34,7 @@ type AppDataContextValue = {
   deleteRecipe: (id: string) => void;
   toggleRecipeFavorite: (id: string) => void;
   replaceAppData: (data: AppDataSnapshot) => void;
-  addShoppingItem: (name: string, memo?: string) => void;
+  addShoppingItem: (name: string, memo?: string) => boolean;
   toggleShoppingItem: (id: string) => void;
   deleteShoppingItem: (id: string) => void;
   updateNotificationSettings: (settings: NotificationSettings) => void;
@@ -271,18 +272,23 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const addShoppingItem = (name: string, memo?: string) => {
     const trimmedName = name.trim();
-    if (!trimmedName) return;
+    if (!trimmedName) return false;
+    if (hasPendingShoppingItem(shoppingItems, trimmedName)) return false;
     const trimmedMemo = memo?.trim();
-    setShoppingItems((current) => [
-      ...current,
-      {
-        id: createId('shopping'),
-        name: trimmedName,
-        memo: trimmedMemo || undefined,
-        checked: false,
-        createdAt: new Date().toISOString(),
-      },
-    ]);
+    setShoppingItems((current) => {
+      if (hasPendingShoppingItem(current, trimmedName)) return current;
+      return [
+        ...current,
+        {
+          id: createId('shopping'),
+          name: trimmedName,
+          memo: trimmedMemo || undefined,
+          checked: false,
+          createdAt: new Date().toISOString(),
+        },
+      ];
+    });
+    return true;
   };
 
   const toggleShoppingItem = (id: string) => {

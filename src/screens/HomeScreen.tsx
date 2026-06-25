@@ -38,7 +38,7 @@ const viewModeOptions: { key: HomeViewMode; label: string }[] = [
 ];
 
 export function HomeScreen({ navigation }: Props) {
-  const { foods, markFoodDisposed, markFoodUsed } = useAppData();
+  const { foods, addShoppingItem, markFoodDisposed, markFoodUsed } = useAppData();
   const [query, setQuery] = useState('');
   const [viewMode, setViewMode] = useState<HomeViewMode>('expiry');
   const swipeGuideCheckStarted = useRef(false);
@@ -117,15 +117,40 @@ export function HomeScreen({ navigation }: Props) {
   const confirmStatusChange = (food: FoodItem, status: 'used' | 'disposed') => {
     const isUsed = status === 'used';
     const displayName = getFoodDisplayName(food);
+    const addToShoppingList = () => {
+      const added = addShoppingItem(displayName, '使い切った食材から追加');
+      if (!added) {
+        Alert.alert('追加済みです', `「${displayName}」は未完了の買い物リストにあります。`);
+      }
+    };
+    if (isUsed) {
+      Alert.alert(
+        '使い切ったとして記録',
+        `「${displayName}」を使い切ったとして記録しますか？`,
+        [
+          { text: 'キャンセル', style: 'cancel' },
+          { text: '記録だけ', onPress: () => markFoodUsed(food.id) },
+          {
+            text: '買い物リストにも追加',
+            onPress: () => {
+              markFoodUsed(food.id);
+              addToShoppingList();
+            },
+          },
+        ],
+      );
+      return;
+    }
+
     Alert.alert(
-      isUsed ? '使い切ったとして記録' : '捨てたとして記録',
-      `「${displayName}」を${isUsed ? '使い切った' : '捨てた'}として記録しますか？`,
+      '捨てたとして記録',
+      `「${displayName}」を捨てたとして記録しますか？`,
       [
         { text: 'キャンセル', style: 'cancel' },
         {
           text: 'OK',
-          style: isUsed ? 'default' : 'destructive',
-          onPress: () => isUsed ? markFoodUsed(food.id) : markFoodDisposed(food.id),
+          style: 'destructive',
+          onPress: () => markFoodDisposed(food.id),
         },
       ],
     );

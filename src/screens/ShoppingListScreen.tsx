@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -8,16 +8,34 @@ import { colors, radius, spacing } from '../constants/theme';
 import { useAppData } from '../context/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
 import { ShoppingItem } from '../types';
+import { getFrequentShoppingSuggestions } from '../utils/shoppingList';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ShoppingList'>;
 
 export function ShoppingListScreen({ navigation }: Props) {
-  const { shoppingItems, addShoppingItem, toggleShoppingItem, deleteShoppingItem } = useAppData();
+  const { foods, shoppingItems, addShoppingItem, toggleShoppingItem, deleteShoppingItem } = useAppData();
   const [name, setName] = useState('');
+  const frequentItems = useMemo(
+    () => getFrequentShoppingSuggestions(foods, shoppingItems),
+    [foods, shoppingItems],
+  );
 
   const handleAdd = () => {
-    addShoppingItem(name);
-    setName('');
+    const trimmedName = name.trim();
+    if (!trimmedName) return;
+    const added = addShoppingItem(trimmedName);
+    if (added) {
+      setName('');
+      return;
+    }
+    Alert.alert('追加済みです', `「${trimmedName}」は未完了の買い物リストにあります。`);
+  };
+
+  const handleAddFrequentItem = (itemName: string) => {
+    const added = addShoppingItem(itemName, 'よく買うものから追加');
+    if (!added) {
+      Alert.alert('追加済みです', `「${itemName}」は未完了の買い物リストにあります。`);
+    }
   };
 
   const handleToggleItem = (item: ShoppingItem) => {
@@ -66,6 +84,27 @@ export function ShoppingListScreen({ navigation }: Props) {
             <Ionicons color={colors.primary} name="checkmark-circle-outline" size={19} />
             <Text style={styles.purchaseHintText}>未購入の食材をチェックすると、食材登録画面へ進みます</Text>
           </View>
+
+          {frequentItems.length > 0 ? (
+            <View style={styles.frequentCard}>
+              <View style={styles.frequentHeader}>
+                <Ionicons color={colors.primary} name="repeat-outline" size={18} />
+                <Text style={styles.frequentTitle}>よく買うもの</Text>
+              </View>
+              <View style={styles.frequentList}>
+                {frequentItems.map((item) => (
+                  <Pressable
+                    key={item.name}
+                    onPress={() => handleAddFrequentItem(item.name)}
+                    style={({ pressed }) => [styles.frequentButton, pressed && styles.pressed]}
+                  >
+                    <Ionicons color={colors.primary} name="add-circle-outline" size={17} />
+                    <Text numberOfLines={1} style={styles.frequentButtonText}>{item.name}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : null}
 
           <View style={styles.listCard}>
             {shoppingItems.length === 0 ? (
@@ -118,6 +157,13 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.4 },
   purchaseHint: { alignItems: 'center', backgroundColor: colors.primarySoft, borderRadius: radius.sm, flexDirection: 'row', gap: spacing.sm, paddingHorizontal: 12, paddingVertical: 9 },
   purchaseHintText: { color: colors.primaryDark, flex: 1, fontSize: 11 },
+  frequentCard: { backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md },
+  frequentHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
+  frequentTitle: { color: colors.text, fontSize: 15, fontWeight: '800' },
+  frequentList: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  frequentButton: { alignItems: 'center', backgroundColor: colors.primarySoft, borderColor: colors.primary, borderRadius: radius.sm, borderWidth: 1, flexDirection: 'row', gap: 5, maxWidth: '100%', minHeight: 36, paddingHorizontal: 10 },
+  frequentButtonText: { color: colors.primaryDark, flexShrink: 1, fontSize: 12, fontWeight: '800' },
+  pressed: { opacity: 0.72 },
   listCard: { backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing.md },
   itemRow: { alignItems: 'center', borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: 'row', minHeight: 61 },
   lastRow: { borderBottomWidth: 0 },
