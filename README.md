@@ -148,7 +148,8 @@ torikawa/
 │  ├─ services/                  # 端末保存、通知、商品検索、バックアップ
 │  ├─ types/index.ts             # FoodItemなどのTypeScript型
 │  └─ utils/                     # 日付計算、ID生成、食材分類、レシピ判定、買い物候補
-└─ assets/                        # アプリアイコン
+└─ assets/                        # アプリアイコン、サンプルレシピ画像
+   └─ recipes/                    # デフォルトレシピ用の料理画像
 ```
 
 画面を直す場合は`src/screens`、色や余白を直す場合は`src/constants/theme.ts`、共通の見た目を直す場合は`src/components`から探すと迷いにくい構成です。

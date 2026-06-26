@@ -3,6 +3,8 @@ import {
   createSampleFoods,
   initialNotificationSettings,
   initialShoppingItems,
+  legacySampleRecipeImages,
+  sampleRecipeImages,
   sampleRecipes,
 } from '../data/sampleData';
 import { loadStoredValue, saveStoredValue, storageKeys } from '../services/storage';
@@ -85,12 +87,21 @@ function normalizeRecipes(storedRecipes: StoredRecipe[] | null): Recipe[] {
   const source = storedRecipes ?? sampleRecipes;
   return source.map((recipe) => ({
     ...recipe,
+    image: normalizeRecipeImage(recipe),
     category: isRecipeCategory(recipe.category)
       ? recipe.category
       : inferRecipeCategory(recipe.name, recipe.ingredients, recipe.minutes),
     isFavorite: recipe.isFavorite ?? false,
     createdAt: recipe.createdAt ?? new Date().toISOString(),
   }));
+}
+
+function normalizeRecipeImage(recipe: StoredRecipe): string {
+  const sampleImage = sampleRecipeImages[recipe.id];
+  const legacyImage = legacySampleRecipeImages[recipe.id];
+  if (!sampleImage) return recipe.image;
+  if (!recipe.image.trim() || recipe.image === legacyImage) return sampleImage;
+  return recipe.image;
 }
 
 function normalizeNotificationSettings(

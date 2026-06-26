@@ -1,5 +1,32 @@
+import { Image } from 'react-native';
 import { FoodItem, NotificationSettings, Recipe, ShoppingItem } from '../types';
 import { addDays, toDateString } from '../utils/date';
+
+declare const require: (path: string) => number;
+
+const resolveRecipeImage = (asset: number) => Image.resolveAssetSource(asset).uri;
+
+export const sampleRecipeImages: Record<string, string> = {
+  'recipe-1': resolveRecipeImage(require('../../assets/recipes/pork-cabbage-miso-stir-fry.jpg')),
+  'recipe-2': resolveRecipeImage(require('../../assets/recipes/fluffy-omelette.jpg')),
+  'recipe-3': resolveRecipeImage(require('../../assets/recipes/tofu-wakame-miso-soup.jpg')),
+  'recipe-4': resolveRecipeImage(require('../../assets/recipes/cabbage-egg-stir-fry.jpg')),
+  'recipe-5': resolveRecipeImage(require('../../assets/recipes/milk-potage.jpg')),
+  'recipe-6': resolveRecipeImage(require('../../assets/recipes/tofu-steak.jpg')),
+  'recipe-7': resolveRecipeImage(require('../../assets/recipes/vegetable-soup.jpg')),
+  'recipe-8': resolveRecipeImage(require('../../assets/recipes/egg-sandwich.jpg')),
+};
+
+export const legacySampleRecipeImages: Record<string, string> = {
+  'recipe-1': 'https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=800',
+  'recipe-2': 'https://images.unsplash.com/photo-1510693206972-df098062cb71?w=800',
+  'recipe-3': 'https://images.unsplash.com/photo-1607301405390-d831c242f59b?w=800',
+  'recipe-4': 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=800',
+  'recipe-5': 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=800',
+  'recipe-6': 'https://images.unsplash.com/photo-1617692855027-33b14f061079?w=800',
+  'recipe-7': 'https://images.unsplash.com/photo-1547592180-85f173990554?w=800',
+  'recipe-8': 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=800',
+};
 
 export function createSampleFoods(): FoodItem[] {
   const today = new Date();
@@ -100,7 +127,7 @@ export const sampleRecipes: Recipe[] = [
   {
     id: 'recipe-1',
     name: '豚肉とキャベツの味噌炒め',
-    image: 'https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=800',
+    image: sampleRecipeImages['recipe-1'],
     category: 'main',
     ingredients: ['豚肉', 'キャベツ', '玉ねぎ'],
     ingredientAmounts: { 豚肉: '200g', キャベツ: '1/4玉', 玉ねぎ: '1/2個' },
@@ -116,7 +143,7 @@ export const sampleRecipes: Recipe[] = [
   {
     id: 'recipe-2',
     name: 'ふわとろ卵のオムレツ',
-    image: 'https://images.unsplash.com/photo-1510693206972-df098062cb71?w=800',
+    image: sampleRecipeImages['recipe-2'],
     category: 'breakfast',
     ingredients: ['卵', '牛乳', '玉ねぎ'],
     ingredientAmounts: { 卵: '2個', 牛乳: '大さじ2', 玉ねぎ: '1/4個' },
@@ -132,7 +159,7 @@ export const sampleRecipes: Recipe[] = [
   {
     id: 'recipe-3',
     name: '豆腐とわかめの味噌汁',
-    image: 'https://images.unsplash.com/photo-1607301405390-d831c242f59b?w=800',
+    image: sampleRecipeImages['recipe-3'],
     category: 'soup',
     ingredients: ['豆腐', 'わかめ'],
     ingredientAmounts: { 豆腐: '1/2丁', わかめ: 'ひとつまみ' },
@@ -148,7 +175,7 @@ export const sampleRecipes: Recipe[] = [
   {
     id: 'recipe-4',
     name: 'キャベツと卵の中華炒め',
-    image: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=800',
+    image: sampleRecipeImages['recipe-4'],
     category: 'quick',
     ingredients: ['キャベツ', '卵', '醤油'],
     ingredientAmounts: { キャベツ: '1/4玉', 卵: '2個', 醤油: '小さじ2' },
@@ -164,7 +191,7 @@ export const sampleRecipes: Recipe[] = [
   {
     id: 'recipe-5',
     name: '牛乳ポタージュ',
-    image: 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=800',
+    image: sampleRecipeImages['recipe-5'],
     category: 'soup',
     ingredients: ['牛乳', '玉ねぎ', 'じゃがいも'],
     ingredientAmounts: { 牛乳: '200ml', 玉ねぎ: '1/2個', じゃがいも: '1個' },
@@ -180,7 +207,7 @@ export const sampleRecipes: Recipe[] = [
   {
     id: 'recipe-6',
     name: '豆腐ステーキ',
-    image: 'https://images.unsplash.com/photo-1617692855027-33b14f061079?w=800',
+    image: sampleRecipeImages['recipe-6'],
     category: 'side',
     ingredients: ['豆腐', '醤油', '片栗粉'],
     ingredientAmounts: { 豆腐: '1丁', 醤油: '大さじ1', 片栗粉: '適量' },
@@ -196,7 +223,7 @@ export const sampleRecipes: Recipe[] = [
   {
     id: 'recipe-7',
     name: '野菜たっぷりスープ',
-    image: 'https://images.unsplash.com/photo-1547592180-85f173990554?w=800',
+    image: sampleRecipeImages['recipe-7'],
     category: 'healthy',
     ingredients: ['キャベツ', '玉ねぎ', 'にんじん'],
     ingredientAmounts: { キャベツ: '2枚', 玉ねぎ: '1/2個', にんじん: '1/3本' },
@@ -212,7 +239,7 @@ export const sampleRecipes: Recipe[] = [
   {
     id: 'recipe-8',
     name: '卵サンド',
-    image: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=800',
+    image: sampleRecipeImages['recipe-8'],
     category: 'breakfast',
     ingredients: ['卵', '食パン', 'マヨネーズ'],
     ingredientAmounts: { 卵: '2個', 食パン: '2枚', マヨネーズ: '大さじ1' },
