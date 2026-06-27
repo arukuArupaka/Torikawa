@@ -17,9 +17,10 @@ import { RootStackParamList } from '../navigation/types';
 import { persistFoodImage } from '../services/imageStorage';
 import { saveLearnedProduct } from '../services/learnedProductService';
 import { FoodCategory, FoodQuantityUnit, NewFoodItem, StorageLocation } from '../types';
-import { addDays, toDateString } from '../utils/date';
+import { toDateString } from '../utils/date';
 import { foodCategoryLabels, inferFoodCategory } from '../utils/foodCategory';
 import { getFoodFallbackImage } from '../utils/foodImages';
+import { getDefaultExpiryDate, getFoodRegistrationDefaults } from '../utils/foodRegistrationDefaults';
 import { foodQuantityUnitLabels, isValidQuantity, parseQuantityInput } from '../utils/foodQuantity';
 import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
 
@@ -37,38 +38,50 @@ export function AddFoodScreen({ navigation, route }: Props) {
     route.params?.initialName ?? initialProductName ?? '',
     route.params?.initialCategory,
   );
+  const initialName = existingFood?.name ?? route.params?.initialName ?? '';
+  const initialCategory = existingFood?.category
+    ?? (initialIngredientInfo.category === 'other' ? inferredInitialCategory : initialIngredientInfo.category);
+  const initialPurchaseDate = existingFood?.purchaseDate ?? toDateString(new Date());
+  const initialRegistrationDefaults = getFoodRegistrationDefaults({
+    category: initialCategory,
+    ingredientName: existingFood?.ingredientName ?? route.params?.initialIngredientName ?? initialIngredientInfo.ingredientName,
+    name: initialName,
+    productName: initialProductName,
+    storage: existingFood?.storage ?? route.params?.initialStorage,
+  });
 
-  const [name, setName] = useState(existingFood?.name ?? route.params?.initialName ?? '');
+  const [name, setName] = useState(initialName);
   const [ingredientEdited, setIngredientEdited] = useState(Boolean(existingFood?.ingredientName ?? route.params?.initialIngredientName));
   const [ingredientName, setIngredientName] = useState(
     existingFood?.ingredientName ?? route.params?.initialIngredientName ?? initialIngredientInfo.ingredientName,
   );
-  const [category, setCategory] = useState<FoodCategory>(
-    existingFood?.category
-      ?? (initialIngredientInfo.category === 'other' ? inferredInitialCategory : initialIngredientInfo.category),
-  );
+  const [category, setCategory] = useState<FoodCategory>(initialCategory);
   const hasInitialImage = Boolean(existingFood?.image ?? route.params?.initialImage);
   const initialFoodImage = existingFood?.image ?? route.params?.initialImage ?? getFoodFallbackImage({
-    category: initialIngredientInfo.category === 'other' ? inferredInitialCategory : initialIngredientInfo.category,
+    category: initialCategory,
     ingredientName: initialIngredientInfo.ingredientName,
-    name: route.params?.initialName ?? '',
+    name: initialName,
     productName: initialProductName,
   });
   const [image, setImage] = useState(initialFoodImage);
   const [imageEdited, setImageEdited] = useState(hasInitialImage);
   const [storage, setStorage] = useState<StorageLocation>(
-    existingFood?.storage ?? route.params?.initialStorage ?? 'refrigerated',
+    existingFood?.storage ?? route.params?.initialStorage ?? initialRegistrationDefaults.storage,
   );
-  const [quantity, setQuantity] = useState(String(existingFood?.quantity ?? 1));
-  const [quantityUnit, setQuantityUnit] = useState<FoodQuantityUnit>(existingFood?.quantityUnit ?? 'piece');
+  const [storageEdited, setStorageEdited] = useState(Boolean(existingFood?.storage ?? route.params?.initialStorage));
+  const [quantity, setQuantity] = useState(String(existingFood?.quantity ?? initialRegistrationDefaults.quantity));
+  const [quantityEdited, setQuantityEdited] = useState(Boolean(existingFood?.quantity));
+  const [quantityUnit, setQuantityUnit] = useState<FoodQuantityUnit>(
+    existingFood?.quantityUnit ?? initialRegistrationDefaults.quantityUnit,
+  );
+  const [quantityUnitEdited, setQuantityUnitEdited] = useState(Boolean(existingFood?.quantityUnit));
   const [expiryDate, setExpiryDate] = useState(
     existingFood?.expiryDate
       ?? route.params?.initialExpiryDate
-      ?? toDateString(addDays(new Date(), 7)),
+      ?? getDefaultExpiryDate(initialPurchaseDate, initialRegistrationDefaults.expiryDays),
   );
-  const [purchaseDate, setPurchaseDate] = useState(
-    existingFood?.purchaseDate ?? toDateString(new Date()),
-  );
+  const [expiryDateEdited, setExpiryDateEdited] = useState(Boolean(existingFood?.expiryDate ?? route.params?.initialExpiryDate));
+  const [purchaseDate, setPurchaseDate] = useState(initialPurchaseDate);
   const [memo, setMemo] = useState(existingFood?.memo ?? route.params?.initialMemo ?? '');
   const [submitted, setSubmitted] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -80,6 +93,34 @@ export function AddFoodScreen({ navigation, route }: Props) {
   const quantityError = submitted && !isQuantityValid
     ? '0より大きい数値を入力してください。小数は2桁まで使えます。'
     : undefined;
+
+  const applyRegistrationDefaults = ({
+    nextCategory = category,
+    nextIngredientName = ingredientName,
+    nextName = name,
+    nextPurchaseDate = purchaseDate,
+    nextStorage = storage,
+  }: {
+    nextCategory?: FoodCategory;
+    nextIngredientName?: string;
+    nextName?: string;
+    nextPurchaseDate?: string;
+    nextStorage?: StorageLocation;
+  }) => {
+    const defaults = getFoodRegistrationDefaults({
+      category: nextCategory,
+      ingredientName: nextIngredientName,
+      name: nextName,
+      productName: initialProductName,
+      storage: storageEdited ? nextStorage : undefined,
+    });
+    const defaultStorage = storageEdited ? nextStorage : defaults.storage;
+
+    if (!storageEdited) setStorage(defaultStorage);
+    if (!quantityEdited) setQuantity(String(defaults.quantity));
+    if (!quantityUnitEdited) setQuantityUnit(defaults.quantityUnit);
+    if (!expiryDateEdited) setExpiryDate(getDefaultExpiryDate(nextPurchaseDate, defaults.expiryDays));
+  };
 
   const handleNameChange = (value: string) => {
     setName(value);
@@ -102,19 +143,31 @@ export function AddFoodScreen({ navigation, route }: Props) {
         productName: initialProductName,
       }));
     }
+    applyRegistrationDefaults({
+      nextCategory,
+      nextIngredientName,
+      nextName: value,
+    });
   };
 
   const handleIngredientNameChange = (value: string) => {
     setIngredientName(value);
     setIngredientEdited(true);
+    const normalized = normalizeProductToIngredient(value);
+    const nextCategory = normalized.category === 'other' ? category : normalized.category;
+    setCategory(nextCategory);
     if (!imageEdited) {
       setImage(getFoodFallbackImage({
-        category,
+        category: nextCategory,
         ingredientName: value,
         name,
         productName: initialProductName,
       }));
     }
+    applyRegistrationDefaults({
+      nextCategory,
+      nextIngredientName: value,
+    });
   };
 
   const handleCategoryChange = (value: FoodCategory) => {
@@ -127,6 +180,42 @@ export function AddFoodScreen({ navigation, route }: Props) {
         productName: initialProductName,
       }));
     }
+    applyRegistrationDefaults({ nextCategory: value });
+  };
+
+  const handleStorageChange = (value: StorageLocation) => {
+    setStorage(value);
+    setStorageEdited(true);
+    if (!expiryDateEdited) {
+      const defaults = getFoodRegistrationDefaults({
+        category,
+        ingredientName,
+        name,
+        productName: initialProductName,
+        storage: value,
+      });
+      setExpiryDate(getDefaultExpiryDate(purchaseDate, defaults.expiryDays));
+    }
+  };
+
+  const handleQuantityUnitChange = (value: FoodQuantityUnit) => {
+    setQuantityUnit(value);
+    setQuantityUnitEdited(true);
+  };
+
+  const handleQuantityChange = (value: string) => {
+    setQuantity(value);
+    setQuantityEdited(true);
+  };
+
+  const handleExpiryDateChange = (value: string) => {
+    setExpiryDate(value);
+    setExpiryDateEdited(true);
+  };
+
+  const handlePurchaseDateChange = (value: string) => {
+    setPurchaseDate(value);
+    applyRegistrationDefaults({ nextPurchaseDate: value });
   };
 
   const handleImageChange = (value: string) => {
@@ -234,7 +323,7 @@ export function AddFoodScreen({ navigation, route }: Props) {
             <CategorySelector onChange={handleCategoryChange} value={category} />
           </FormField>
           <FormField label="保存場所">
-            <StorageSelector onChange={setStorage} value={storage} />
+            <StorageSelector onChange={handleStorageChange} value={storage} />
           </FormField>
           <FormField
             error={quantityError}
@@ -245,7 +334,7 @@ export function AddFoodScreen({ navigation, route }: Props) {
               <TextInput
                 keyboardType="decimal-pad"
                 maxLength={8}
-                onChangeText={setQuantity}
+                onChangeText={handleQuantityChange}
                 placeholder="1"
                 placeholderTextColor={colors.textMuted}
                 style={[styles.quantityInput, quantityError && styles.quantityInputError]}
@@ -255,10 +344,10 @@ export function AddFoodScreen({ navigation, route }: Props) {
             </View>
           </FormField>
           <FormField label="単位">
-            <QuantityUnitSelector onChange={setQuantityUnit} value={quantityUnit} />
+            <QuantityUnitSelector onChange={handleQuantityUnitChange} value={quantityUnit} />
           </FormField>
-          <DatePickerField label="期限日" onChange={setExpiryDate} value={expiryDate} />
-          <DatePickerField label="購入日" onChange={setPurchaseDate} value={purchaseDate} />
+          <DatePickerField label="期限日" onChange={handleExpiryDateChange} value={expiryDate} />
+          <DatePickerField label="購入日" onChange={handlePurchaseDateChange} value={purchaseDate} />
           <FormField
             label="メモ（任意）"
             multiline
