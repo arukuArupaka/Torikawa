@@ -99,7 +99,7 @@ export function SettingsScreen({ navigation }: Props) {
         if (!granted) {
           Alert.alert(
             '通知が許可されていません',
-            '端末の設定から「冷蔵庫ノート」の通知を許可して、もう一度保存してください。',
+            '端末の設定から「たべどき！！」の通知を許可して、もう一度保存してください。',
           );
           return;
         }
@@ -372,7 +372,7 @@ export function SettingsScreen({ navigation }: Props) {
         </View>
 
         <View style={styles.about}>
-          <Text style={styles.appName}>冷蔵庫ノート</Text>
+          <Text style={styles.appName}>たべどき！！</Text>
           <Text style={styles.version}>バックアップ・復元 v1.20.0</Text>
         </View>
       </ScrollView>

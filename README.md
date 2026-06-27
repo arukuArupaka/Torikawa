@@ -1,6 +1,6 @@
-# 冷蔵庫ノート
+# たべどき！！
 
-冷蔵庫の食材と期限を管理し、食材ロスを減らすためのスマホアプリです。React Native + Expo SDK 54 + TypeScriptで作っているため、1つのコードからiPhoneとAndroidの両方で動かせます。SDK 54は今回使用するiPhone版Expo Goの「Supported SDK 54」に合わせています。
+冷蔵庫の食材と期限を管理し、「食べどき」を逃さず食材ロスを減らすためのスマホアプリです。React Native + Expo SDK 54 + TypeScriptで作っているため、1つのコードからiPhoneとAndroidの両方で動かせます。SDK 54は今回使用するiPhone版Expo Goの「Supported SDK 54」に合わせています。
 
 このリポジトリは、最初から機能を詰め込みすぎない「動く最小版」から育てている学習用アプリです。食材、買い物リスト、通知設定、レシピ、学習済みバーコード商品は、サーバーではなく端末内のAsyncStorageへ保存します。
 

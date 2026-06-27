@@ -146,7 +146,7 @@ export async function scheduleTestNotification(food?: Pick<FoodItem, 'id' | 'nam
   await ensureAndroidChannel();
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: food ? `「${getFoodDisplayName(food)}」のテスト通知` : '冷蔵庫ノートのテスト通知',
+      title: food ? `「${getFoodDisplayName(food)}」のテスト通知` : 'たべどき！！のテスト通知',
       body: food
         ? 'タップすると食材の詳細画面を開きます。'
         : '期限通知を受け取る準備ができました。',

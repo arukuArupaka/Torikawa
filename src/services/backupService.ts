@@ -196,10 +196,10 @@ export async function shareBackup(data: AppDataSnapshot): Promise<void> {
     },
   };
   const date = new Date().toISOString().slice(0, 10);
-  const file = new File(Paths.cache, `refrigerator-note-backup-${date}.json`);
+  const file = new File(Paths.cache, `tabedoki-backup-${date}.json`);
   file.write(JSON.stringify(payload));
   await Sharing.shareAsync(file.uri, {
-    dialogTitle: '冷蔵庫ノートのバックアップを保存',
+    dialogTitle: 'たべどき！！のバックアップを保存',
     mimeType: 'application/json',
     UTI: 'public.json',
   });

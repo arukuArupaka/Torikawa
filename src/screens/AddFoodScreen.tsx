@@ -19,12 +19,11 @@ import { saveLearnedProduct } from '../services/learnedProductService';
 import { FoodCategory, FoodQuantityUnit, NewFoodItem, StorageLocation } from '../types';
 import { addDays, toDateString } from '../utils/date';
 import { foodCategoryLabels, inferFoodCategory } from '../utils/foodCategory';
+import { getFoodFallbackImage } from '../utils/foodImages';
 import { foodQuantityUnitLabels, isValidQuantity, parseQuantityInput } from '../utils/foodQuantity';
 import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddFood'>;
-
-const fallbackImage = 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=300';
 
 export function AddFoodScreen({ navigation, route }: Props) {
   const { foods, addFood, updateFood } = useAppData();
@@ -48,7 +47,15 @@ export function AddFoodScreen({ navigation, route }: Props) {
     existingFood?.category
       ?? (initialIngredientInfo.category === 'other' ? inferredInitialCategory : initialIngredientInfo.category),
   );
-  const [image, setImage] = useState(existingFood?.image ?? route.params?.initialImage ?? fallbackImage);
+  const hasInitialImage = Boolean(existingFood?.image ?? route.params?.initialImage);
+  const initialFoodImage = existingFood?.image ?? route.params?.initialImage ?? getFoodFallbackImage({
+    category: initialIngredientInfo.category === 'other' ? inferredInitialCategory : initialIngredientInfo.category,
+    ingredientName: initialIngredientInfo.ingredientName,
+    name: route.params?.initialName ?? '',
+    productName: initialProductName,
+  });
+  const [image, setImage] = useState(initialFoodImage);
+  const [imageEdited, setImageEdited] = useState(hasInitialImage);
   const [storage, setStorage] = useState<StorageLocation>(
     existingFood?.storage ?? route.params?.initialStorage ?? 'refrigerated',
   );
@@ -76,15 +83,55 @@ export function AddFoodScreen({ navigation, route }: Props) {
 
   const handleNameChange = (value: string) => {
     setName(value);
-    if (initialProductName || ingredientEdited) return;
-    const normalized = normalizeProductToIngredient(value);
-    setIngredientName(normalized.ingredientName);
-    setCategory(normalized.category);
+    let nextIngredientName = ingredientName;
+    let nextCategory = category;
+
+    if (!initialProductName && !ingredientEdited) {
+      const normalized = normalizeProductToIngredient(value);
+      nextIngredientName = normalized.ingredientName;
+      nextCategory = normalized.category;
+      setIngredientName(nextIngredientName);
+      setCategory(nextCategory);
+    }
+
+    if (!imageEdited) {
+      setImage(getFoodFallbackImage({
+        category: nextCategory,
+        ingredientName: nextIngredientName,
+        name: value,
+        productName: initialProductName,
+      }));
+    }
   };
 
   const handleIngredientNameChange = (value: string) => {
     setIngredientName(value);
     setIngredientEdited(true);
+    if (!imageEdited) {
+      setImage(getFoodFallbackImage({
+        category,
+        ingredientName: value,
+        name,
+        productName: initialProductName,
+      }));
+    }
+  };
+
+  const handleCategoryChange = (value: FoodCategory) => {
+    setCategory(value);
+    if (!imageEdited) {
+      setImage(getFoodFallbackImage({
+        category: value,
+        ingredientName,
+        name,
+        productName: initialProductName,
+      }));
+    }
+  };
+
+  const handleImageChange = (value: string) => {
+    setImage(value);
+    setImageEdited(true);
   };
 
   const handleSave = async () => {
@@ -159,7 +206,7 @@ export function AddFoodScreen({ navigation, route }: Props) {
               </Text>
             </View>
           ) : null}
-          <FoodImagePicker image={image} onChange={setImage} />
+          <FoodImagePicker image={image} onChange={handleImageChange} />
           {initialProductName ? (
             <View style={styles.productInfoCard}>
               <Text style={styles.productInfoLabel}>商品名</Text>
@@ -184,7 +231,7 @@ export function AddFoodScreen({ navigation, route }: Props) {
             value={ingredientName}
           />
           <FormField label="カテゴリ">
-            <CategorySelector onChange={setCategory} value={category} />
+            <CategorySelector onChange={handleCategoryChange} value={category} />
           </FormField>
           <FormField label="保存場所">
             <StorageSelector onChange={setStorage} value={storage} />
