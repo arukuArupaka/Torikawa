@@ -88,7 +88,7 @@ export function BarcodeScanner({
 
 const styles = StyleSheet.create({
   scanner: { backgroundColor: '#111', height: 300, overflow: 'hidden' },
-  shade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.18)' },
+  shade: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.18)' },
   focusFrame: { alignSelf: 'center', borderColor: '#60E383', borderRadius: radius.sm, borderWidth: 3, height: 126, justifyContent: 'center', position: 'absolute', top: 88, width: '76%' },
   scanLine: { backgroundColor: '#67F18B', height: 2, width: '100%' },
   scanHint: { alignItems: 'center', bottom: 22, left: 0, position: 'absolute', right: 0 },

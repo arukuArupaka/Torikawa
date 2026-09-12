@@ -38,7 +38,9 @@
           "cameraPermission": "商品バーコードを読み取るため、カメラを使用します。",
           "recordAudioAndroid": false
         }
-      ]
+      ],
+      "expo-sharing",
+      "expo-status-bar"
     ]
   }
 }

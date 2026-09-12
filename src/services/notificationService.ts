@@ -175,7 +175,7 @@ export async function getNotificationStatusSummary(): Promise<NotificationStatus
   return {
     permission: permissionLabel,
     scheduledCount: scheduled.filter((notification) =>
-      typeof notification.content.data.foodId === 'string',
+      typeof notification.content.data?.foodId === 'string',
     ).length,
   };
 }

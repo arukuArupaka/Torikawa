@@ -1,6 +1,6 @@
 # たべどき！！
 
-冷蔵庫の食材と期限を管理し、「食べどき」を逃さず食材ロスを減らすためのスマホアプリです。React Native + Expo SDK 54 + TypeScriptで作っているため、1つのコードからiPhoneとAndroidの両方で動かせます。SDK 54は今回使用するiPhone版Expo Goの「Supported SDK 54」に合わせています。
+冷蔵庫の食材と期限を管理し、「食べどき」を逃さず食材ロスを減らすためのスマホアプリです。React Native + Expo SDK 57 + TypeScriptで作っているため、1つのコードからiPhoneとAndroidの両方で動かせます。SDK 57は今回使用するiPhone版Expo Goに合わせています。
 
 このリポジトリは、最初から機能を詰め込みすぎない「動く最小版」から育てている学習用アプリです。食材、買い物リスト、通知設定、レシピ、学習済みバーコード商品は、サーバーではなく端末内のAsyncStorageへ保存します。
 
@@ -122,7 +122,7 @@ WindowsではiOSシミュレーターを起動できませんが、実機iPhone�
 
 ### 「Project is incompatible」と表示された場合
 
-このプロジェクトは端末のExpo Goに合わせてSDK 54に固定済みです。古い開発サーバーを終了してから、キャッシュを消して起動し直してください。
+このプロジェクトは端末のExpo Goに合わせてSDK 57へ更新済みです。Expo Go側もSDK 57であることを確認し、古い開発サーバーを終了してからキャッシュを消して起動し直してください。
 
 ```powershell
 npx.cmd expo start --clear

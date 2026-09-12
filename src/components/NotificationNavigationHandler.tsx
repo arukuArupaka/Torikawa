@@ -25,7 +25,7 @@ export function NotificationNavigationHandler({
 
     handledIdentifier.current = identifier;
     pendingResponse.current = null;
-    const foodId = response.notification.request.content.data.foodId;
+    const foodId = response.notification.request.content.data?.foodId;
 
     if (typeof foodId === 'string' && foods.some((food) => food.id === foodId)) {
       navigationRef.navigate('FoodDetail', { foodId });
