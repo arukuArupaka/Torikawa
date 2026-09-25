@@ -20,6 +20,7 @@ export function PrimaryButton({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
@@ -61,12 +62,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 50,
     paddingHorizontal: spacing.lg,
+    paddingVertical: 12,
   },
   outline: { backgroundColor: colors.surface, borderColor: colors.primary, borderWidth: 1 },
   danger: { backgroundColor: colors.surface, borderColor: colors.danger, borderWidth: 1 },
   disabled: { opacity: 0.45 },
   pressed: { opacity: 0.75 },
-  label: { color: colors.surface, fontSize: 16, fontWeight: '700' },
+  label: { color: colors.surface, flexShrink: 1, fontSize: 16, fontWeight: '700', textAlign: 'center' },
   outlineLabel: { color: colors.primary },
   dangerLabel: { color: colors.danger },
 });

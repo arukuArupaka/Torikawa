@@ -25,19 +25,23 @@ export function FoodCard({
 
   return (
     <Pressable
+      accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
       <Image source={{ uri: food.image }} style={styles.image} />
       <View style={styles.content}>
-        <Text numberOfLines={1} style={styles.name}>{displayName}</Text>
+        <Text numberOfLines={2} style={styles.name}>{displayName}</Text>
         <Text style={[styles.remaining, { color: urgencyColor }]}>{getRemainingLabel(food.expiryDate)}</Text>
         <View style={styles.storageRow}>
-          <Ionicons color={colors.textMuted} name="location-outline" size={14} />
-          <Text style={styles.storage}>{storageLabels[food.storage]}</Text>
-          <Text style={styles.metaDivider}>・</Text>
-          <Ionicons color={colors.textMuted} name="cube-outline" size={14} />
-          <Text style={styles.storage}>{formatFoodQuantity(food.quantity, food.quantityUnit)}</Text>
+          <View style={styles.metaGroup}>
+            <Ionicons color={colors.textMuted} name="location-outline" size={15} />
+            <Text style={styles.storage}>{storageLabels[food.storage]}</Text>
+          </View>
+          <View style={styles.metaGroup}>
+            <Ionicons color={colors.textMuted} name="cube-outline" size={15} />
+            <Text style={styles.storage}>{formatFoodQuantity(food.quantity, food.quantityUnit)}</Text>
+          </View>
         </View>
       </View>
       <Ionicons color={colors.textMuted} name="chevron-forward" size={20} />
@@ -57,10 +61,10 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.7 },
   image: { backgroundColor: colors.primarySoft, borderRadius: radius.sm, height: 62, width: 62 },
-  content: { flex: 1, marginLeft: 13 },
+  content: { flex: 1, marginLeft: 13, minWidth: 0 },
   name: { color: colors.text, fontSize: 16, fontWeight: '700' },
   remaining: { fontSize: 13, fontWeight: '700', marginTop: spacing.xs },
-  storageRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.xs, marginTop: 5 },
-  storage: { color: colors.textMuted, fontSize: 12 },
-  metaDivider: { color: colors.textMuted, fontSize: 12 },
+  storageRow: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 4, marginTop: 6 },
+  metaGroup: { alignItems: 'center', flexDirection: 'row', gap: 4, maxWidth: '100%' },
+  storage: { color: colors.textMuted, flexShrink: 1, fontSize: 14, lineHeight: 20 },
 });

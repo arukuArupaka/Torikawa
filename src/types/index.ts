@@ -70,6 +70,7 @@ export type Recipe = {
   ingredientAmounts: Record<string, string>;
   steps: string[];
   minutes: number;
+  servings?: number | null;
   isFavorite: boolean;
   createdAt: string;
 };

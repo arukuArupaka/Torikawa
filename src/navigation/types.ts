@@ -5,7 +5,7 @@ export type MainTabParamList = {
   Home: undefined;
   Calendar: undefined;
   Barcode: undefined;
-  Recipes: undefined;
+  Recipes: { initialFilter?: 'urgent' | 'all' } | undefined;
   Settings: undefined;
 };
 
@@ -20,10 +20,12 @@ export type RootStackParamList = {
         initialExpiryDate?: string;
         initialMemo?: string;
         initialBarcode?: string;
+        allowProductSharing?: boolean;
         initialCategory?: string;
         initialTags?: string[];
         initialStorage?: StorageLocation;
         foodId?: string;
+        reuseFoodId?: string;
       }
     | undefined;
   FoodDetail: { foodId: string };

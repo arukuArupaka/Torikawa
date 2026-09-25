@@ -19,6 +19,8 @@ export function FormField({
       <Text style={styles.label}>{label}</Text>
       {children ?? (
         <TextInput
+          accessibilityLabel={label}
+          accessibilityHint={error ?? hint}
           placeholderTextColor={colors.textMuted}
           style={[styles.input, inputProps.multiline && styles.multiline, error && styles.inputError]}
           {...inputProps}

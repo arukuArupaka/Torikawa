@@ -4,7 +4,11 @@ import { addDays, toDateString } from '../utils/date';
 
 declare const require: (path: string) => number;
 
-const resolveRecipeImage = (asset: number) => Image.resolveAssetSource(asset).uri;
+const resolveRecipeImage = (asset: number | string | { uri: string }) => {
+  if (typeof asset === 'string') return asset;
+  if (typeof asset === 'object') return asset.uri;
+  return Image.resolveAssetSource(asset).uri;
+};
 
 export const sampleRecipeImages: Record<string, string> = {
   'recipe-1': resolveRecipeImage(require('../../assets/recipes/pork-cabbage-miso-stir-fry.jpg')),
@@ -126,14 +130,15 @@ export const initialNotificationSettings: NotificationSettings = {
 export const sampleRecipes: Recipe[] = [
   {
     id: 'recipe-1',
+    servings: 2,
     name: '豚肉とキャベツの味噌炒め',
     image: sampleRecipeImages['recipe-1'],
     category: 'main',
-    ingredients: ['豚肉', 'キャベツ', '玉ねぎ'],
-    ingredientAmounts: { 豚肉: '200g', キャベツ: '1/4玉', 玉ねぎ: '1/2個' },
+    ingredients: ['豚肉', 'キャベツ', '玉ねぎ', '味噌', 'みりん', '醤油', '油'],
+    ingredientAmounts: { 豚肉: '200g', キャベツ: '1/4玉', 玉ねぎ: '1/2個', 味噌: '大さじ1', みりん: '大さじ1', 醤油: '小さじ1', 油: '小さじ1' },
     steps: [
       '豚肉と野菜を食べやすい大きさに切ります。',
-      'フライパンで豚肉を炒め、火が通ったら野菜を加えます。',
+      'フライパンに油を熱して豚肉を炒め、火が通ったら野菜を加えます。',
       '味噌、みりん、醤油を混ぜて加え、全体になじませます。',
     ],
     minutes: 15,
@@ -142,14 +147,15 @@ export const sampleRecipes: Recipe[] = [
   },
   {
     id: 'recipe-2',
+    servings: 1,
     name: 'ふわとろ卵のオムレツ',
     image: sampleRecipeImages['recipe-2'],
     category: 'breakfast',
-    ingredients: ['卵', '牛乳', '玉ねぎ'],
-    ingredientAmounts: { 卵: '2個', 牛乳: '大さじ2', 玉ねぎ: '1/4個' },
+    ingredients: ['卵', '牛乳', '玉ねぎ', '油'],
+    ingredientAmounts: { 卵: '2個', 牛乳: '大さじ2', 玉ねぎ: '1/4個', 油: '小さじ1' },
     steps: [
       '卵と牛乳をボウルでよく混ぜます。',
-      '薄切りにした玉ねぎを炒め、卵液を流し入れます。',
+      'フライパンに油を熱し、薄切りにした玉ねぎを炒めて卵液を流し入れます。',
       '半熟になったら形を整えて盛り付けます。',
     ],
     minutes: 10,
@@ -158,13 +164,14 @@ export const sampleRecipes: Recipe[] = [
   },
   {
     id: 'recipe-3',
+    servings: 2,
     name: '豆腐とわかめの味噌汁',
     image: sampleRecipeImages['recipe-3'],
     category: 'soup',
-    ingredients: ['豆腐', 'わかめ'],
-    ingredientAmounts: { 豆腐: '1/2丁', わかめ: 'ひとつまみ' },
+    ingredients: ['豆腐', 'わかめ', '顆粒だし', '味噌', '水'],
+    ingredientAmounts: { 豆腐: '1/2丁', わかめ: 'ひとつまみ', 顆粒だし: '小さじ1', 味噌: '大さじ1と1/2', 水: '400ml' },
     steps: [
-      '鍋にだしを入れて温め、食べやすく切った豆腐を加えます。',
+      '鍋に水と顆粒だしを入れて温め、食べやすく切った豆腐を加えます。',
       'わかめを加えてひと煮立ちさせます。',
       '火を止めて味噌を溶き入れます。',
     ],
@@ -174,14 +181,15 @@ export const sampleRecipes: Recipe[] = [
   },
   {
     id: 'recipe-4',
+    servings: 2,
     name: 'キャベツと卵の中華炒め',
     image: sampleRecipeImages['recipe-4'],
     category: 'quick',
-    ingredients: ['キャベツ', '卵', '醤油'],
-    ingredientAmounts: { キャベツ: '1/4玉', 卵: '2個', 醤油: '小さじ2' },
+    ingredients: ['キャベツ', '卵', '醤油', '油'],
+    ingredientAmounts: { キャベツ: '1/4玉', 卵: '2個', 醤油: '小さじ2', 油: '小さじ2' },
     steps: [
       'キャベツをざく切りにし、卵は溶いておきます。',
-      'フライパンで卵を半熟に炒めて一度取り出します。',
+      'フライパンに油を熱し、卵を半熟に炒めて一度取り出します。',
       'キャベツを炒め、卵を戻して醤油で味を整えます。',
     ],
     minutes: 10,
@@ -190,14 +198,15 @@ export const sampleRecipes: Recipe[] = [
   },
   {
     id: 'recipe-5',
+    servings: 2,
     name: '牛乳ポタージュ',
     image: sampleRecipeImages['recipe-5'],
     category: 'soup',
-    ingredients: ['牛乳', '玉ねぎ', 'じゃがいも'],
-    ingredientAmounts: { 牛乳: '200ml', 玉ねぎ: '1/2個', じゃがいも: '1個' },
+    ingredients: ['牛乳', '玉ねぎ', 'じゃがいも', '油', '塩こしょう', '水'],
+    ingredientAmounts: { 牛乳: '200ml', 玉ねぎ: '1/2個', じゃがいも: '1個', 油: '小さじ1', 塩こしょう: '少々', 水: '100ml' },
     steps: [
       '玉ねぎとじゃがいもを薄切りにします。',
-      '鍋で野菜を炒め、水を少し加えて柔らかく煮ます。',
+      '鍋に油を熱して野菜を炒め、水を加えて柔らかく煮ます。',
       '牛乳を加えて温め、塩こしょうで味を整えます。',
     ],
     minutes: 18,
@@ -206,14 +215,15 @@ export const sampleRecipes: Recipe[] = [
   },
   {
     id: 'recipe-6',
+    servings: 2,
     name: '豆腐ステーキ',
     image: sampleRecipeImages['recipe-6'],
     category: 'side',
-    ingredients: ['豆腐', '醤油', '片栗粉'],
-    ingredientAmounts: { 豆腐: '1丁', 醤油: '大さじ1', 片栗粉: '適量' },
+    ingredients: ['豆腐', '醤油', '片栗粉', '油'],
+    ingredientAmounts: { 豆腐: '1丁', 醤油: '大さじ1', 片栗粉: '適量', 油: '小さじ2' },
     steps: [
       '豆腐の水気を切り、食べやすい厚さに切ります。',
-      '片栗粉をまぶしてフライパンで両面を焼きます。',
+      '片栗粉をまぶし、油を熱したフライパンで両面を焼きます。',
       '醤油を回しかけて香ばしく仕上げます。',
     ],
     minutes: 12,
@@ -222,15 +232,16 @@ export const sampleRecipes: Recipe[] = [
   },
   {
     id: 'recipe-7',
+    servings: 2,
     name: '野菜たっぷりスープ',
     image: sampleRecipeImages['recipe-7'],
     category: 'healthy',
-    ingredients: ['キャベツ', '玉ねぎ', 'にんじん'],
-    ingredientAmounts: { キャベツ: '2枚', 玉ねぎ: '1/2個', にんじん: '1/3本' },
+    ingredients: ['キャベツ', '玉ねぎ', 'にんじん', 'コンソメ', '塩こしょう', '油', '水'],
+    ingredientAmounts: { キャベツ: '2枚', 玉ねぎ: '1/2個', にんじん: '1/3本', コンソメ: '小さじ2', 塩こしょう: '少々', 油: '小さじ1', 水: '400ml' },
     steps: [
       '野菜を食べやすい大きさに切ります。',
-      '鍋で野菜を軽く炒め、水を加えて煮込みます。',
-      'コンソメまたは塩こしょうで味を整えます。',
+      '鍋に油を熱して野菜を軽く炒め、水を加えて煮込みます。',
+      'コンソメを加え、塩こしょうで味を整えます。',
     ],
     minutes: 20,
     isFavorite: false,
@@ -238,13 +249,14 @@ export const sampleRecipes: Recipe[] = [
   },
   {
     id: 'recipe-8',
+    servings: 1,
     name: '卵サンド',
     image: sampleRecipeImages['recipe-8'],
     category: 'breakfast',
-    ingredients: ['卵', '食パン', 'マヨネーズ'],
-    ingredientAmounts: { 卵: '2個', 食パン: '2枚', マヨネーズ: '大さじ1' },
+    ingredients: ['卵', '食パン', 'マヨネーズ', '塩こしょう', '水'],
+    ingredientAmounts: { 卵: '2個', 食パン: '2枚', マヨネーズ: '大さじ1', 塩こしょう: '少々', 水: '卵が浸る量（ゆで用）' },
     steps: [
-      'ゆで卵を作り、粗くつぶします。',
+      '鍋に卵と卵が浸る量の水を入れてゆで卵を作り、粗くつぶします。',
       'マヨネーズと塩こしょうで味を整えます。',
       '食パンにはさんで食べやすく切ります。',
     ],

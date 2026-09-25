@@ -1,18 +1,20 @@
+import { useAppAlert } from '../context/AppAlertContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing } from '../constants/theme';
 
 type ImageSource = 'camera' | 'library';
 
 export function FoodImagePicker({ image, onChange }: { image: string; onChange: (uri: string) => void }) {
+  const alert = useAppAlert();
   const openPicker = async (source: ImageSource) => {
     const permission = source === 'camera'
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert(
+      alert(
         '写真へのアクセスが必要です',
         source === 'camera'
           ? '食材を撮影するため、カメラの使用を許可してください。'
@@ -39,7 +41,7 @@ export function FoodImagePicker({ image, onChange }: { image: string; onChange: 
   };
 
   const showOptions = () => {
-    Alert.alert('食材の写真', '写真の追加方法を選んでください。', [
+    alert('食材の写真', '写真の追加方法を選んでください。', [
       { text: '写真を撮る', onPress: () => void openPicker('camera') },
       { text: 'ライブラリから選ぶ', onPress: () => void openPicker('library') },
       { text: 'キャンセル', style: 'cancel' },

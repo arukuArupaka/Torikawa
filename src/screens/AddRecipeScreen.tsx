@@ -1,3 +1,4 @@
+import { useAppAlert } from '../context/AppAlertContext';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useState } from 'react';
@@ -24,6 +25,7 @@ import { RootStackParamList } from '../navigation/types';
 import { persistFoodImage } from '../services/imageStorage';
 import { NewRecipe, RecipeCategory } from '../types';
 import { inferRecipeCategory } from '../utils/recipeCategory';
+import { isValidServings, parseServingsInput } from '../utils/recipeServings';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddRecipe'>;
 
@@ -45,6 +47,7 @@ function createLocalId(prefix: string): string {
 }
 
 export function AddRecipeScreen({ navigation, route }: Props) {
+  const alert = useAppAlert();
   const { addRecipe, recipes, updateRecipe } = useAppData();
   const existingRecipe = recipes.find((recipe) => recipe.id === route.params?.recipeId);
   const isEditing = Boolean(existingRecipe);
@@ -54,6 +57,7 @@ export function AddRecipeScreen({ navigation, route }: Props) {
     existingRecipe?.category ?? inferRecipeCategory(existingRecipe?.name ?? ''),
   );
   const [minutes, setMinutes] = useState(String(existingRecipe?.minutes ?? 15));
+  const [servings, setServings] = useState(isValidServings(existingRecipe?.servings) ? String(existingRecipe.servings) : '');
   const [ingredients, setIngredients] = useState<IngredientInput[]>(
     existingRecipe
       ? existingRecipe.ingredients.map((ingredient) => ({
@@ -72,6 +76,8 @@ export function AddRecipeScreen({ navigation, route }: Props) {
   const [isSaving, setIsSaving] = useState(false);
 
   const parsedMinutes = Number(minutes);
+  const parsedServings = parseServingsInput(servings);
+  const servingsValid = servings.trim() === '' || parsedServings !== null;
   const minutesValid = /^\d+$/.test(minutes)
     && Number.isInteger(parsedMinutes)
     && parsedMinutes >= 1
@@ -97,8 +103,12 @@ export function AddRecipeScreen({ navigation, route }: Props) {
     setSubmitted(true);
     const validIngredients = ingredients.filter((ingredient) => ingredient.name.trim());
     const validSteps = steps.filter((step) => step.text.trim());
+    if (!servingsValid) {
+      alert('人数を確認してください', '1〜99の整数を入力するか、空欄にしてください。');
+      return;
+    }
     if (!name.trim() || !minutesValid || validIngredients.length === 0 || validSteps.length === 0) {
-      Alert.alert(
+      alert(
         '入力内容を確認してください',
         '料理名、1〜999分の調理時間、材料1件以上、手順1件以上が必要です。',
       );
@@ -108,7 +118,7 @@ export function AddRecipeScreen({ navigation, route }: Props) {
       ingredient.name.trim().toLocaleLowerCase('ja-JP'),
     );
     if (new Set(normalizedIngredientNames).size !== normalizedIngredientNames.length) {
-      Alert.alert('材料名が重複しています', '同じ材料は1件にまとめて入力してください。');
+      alert('材料名が重複しています', '同じ材料は1件にまとめて入力してください。');
       return;
     }
     if (isSaving) return;
@@ -119,7 +129,7 @@ export function AddRecipeScreen({ navigation, route }: Props) {
       if (image !== existingRecipe?.image) savedImage = persistFoodImage(image);
     } catch (error) {
       console.warn('レシピ画像を保存できませんでした。', error);
-      Alert.alert('画像を保存できませんでした', '別の画像を選ぶか、もう一度お試しください。');
+      alert('画像を保存できませんでした', '別の画像を選ぶか、もう一度お試しください。');
       setIsSaving(false);
       return;
     }
@@ -138,6 +148,7 @@ export function AddRecipeScreen({ navigation, route }: Props) {
       ),
       steps: validSteps.map((step) => step.text.trim()),
       minutes: parsedMinutes,
+      servings: parsedServings,
     };
 
     if (existingRecipe) {
@@ -182,6 +193,17 @@ export function AddRecipeScreen({ navigation, route }: Props) {
           <FormField label="レシピカテゴリ">
             <RecipeCategorySelector onChange={setCategory} value={category} />
           </FormField>
+
+          <FormField
+            label="分量の基準（人分・任意）"
+            hint="入力する材料が何人分かを設定します。空欄は人数未設定になります。"
+            error={submitted && !servingsValid ? '1〜99の整数か、空欄にしてください。' : undefined}
+            keyboardType="number-pad"
+            maxLength={2}
+            placeholder="例：2"
+            onChangeText={setServings}
+            value={servings}
+          />
 
           <FormField label="材料と分量">
             <View style={styles.dynamicList}>

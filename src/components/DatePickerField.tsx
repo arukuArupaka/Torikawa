@@ -24,7 +24,7 @@ export function DatePickerField({
   return (
     <View style={styles.group}>
       <Text style={styles.label}>{label}</Text>
-      <Pressable onPress={() => setShowPicker(true)} style={styles.input}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${label}：${formatDateJa(value)}`} onPress={() => setShowPicker(true)} style={styles.input}>
         <Text style={styles.value}>{formatDateJa(value)}</Text>
         <Ionicons color={colors.primary} name="calendar-outline" size={21} />
       </Pressable>

@@ -16,6 +16,7 @@ import {
 import { isFoodCategory } from '../utils/foodCategory';
 import { isFoodQuantityUnit } from '../utils/foodQuantity';
 import { isRecipeCategory } from '../utils/recipeCategory';
+import { isValidServings } from '../utils/recipeServings';
 import { LearnedProductCatalog } from './learnedProductService';
 import { loadStoredValue, saveStoredValue, storageKeys } from './storage';
 
@@ -82,6 +83,7 @@ function isRecipe(value: unknown): value is Recipe {
     && Array.isArray(value.steps)
     && value.steps.every((step) => typeof step === 'string')
     && Number.isInteger(value.minutes)
+    && (value.servings === undefined || value.servings === null || isValidServings(value.servings))
     && typeof value.isFavorite === 'boolean'
     && typeof value.createdAt === 'string';
 }

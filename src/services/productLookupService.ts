@@ -2,8 +2,9 @@ import { BarcodeProduct, findProductByBarcode } from '../data/productCatalog';
 import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
 import { findLearnedProduct } from './learnedProductService';
 import { lookupYahooProductByBarcode } from './yahooProductLookupService';
+import { lookupSharedProduct } from './sharedProductService';
 
-export type ProductLookupSource = 'learned' | 'local' | 'yahoo-shopping' | 'open-food-facts' | 'none';
+export type ProductLookupSource = 'learned' | 'local' | 'shared' | 'yahoo-shopping' | 'open-food-facts' | 'none';
 
 export type ProductLookupResult = {
   product: BarcodeProduct | null;
@@ -31,6 +32,13 @@ export async function lookupProductByBarcode(barcode: string): Promise<ProductLo
 
   const localProduct = findProductByBarcode(barcode);
   if (localProduct) return { product: localProduct, source: 'local' };
+
+  try {
+    const shared = await lookupSharedProduct(barcode);
+    if (shared) return { product: shared, source: 'shared' };
+  } catch {
+    // A shared catalog outage must not prevent the existing lookup or manual entry.
+  }
 
   try {
     const yahooProduct = await lookupYahooProductByBarcode(barcode);
@@ -62,6 +70,7 @@ export async function lookupProductByBarcode(barcode: string): Promise<ProductLo
         signal: controller.signal,
       },
     );
+    if (response.status === 404) return { product: null, source: 'none' };
     if (!response.ok) throw new Error(`Open Food Facts: HTTP ${response.status}`);
 
     const data = await response.json() as OpenFoodFactsResponse;

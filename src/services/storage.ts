@@ -15,6 +15,16 @@ export async function loadStoredValue<T>(key: string): Promise<T | null> {
   return value ? (JSON.parse(value) as T) : null;
 }
 
+const pendingWrites = new Map<string, Promise<void>>();
+
 export async function saveStoredValue<T>(key: string, value: T): Promise<void> {
-  await AsyncStorage.setItem(key, JSON.stringify(value));
+  const serialized = JSON.stringify(value);
+  const previous = pendingWrites.get(key) ?? Promise.resolve();
+  const write = previous.catch(() => undefined).then(() => AsyncStorage.setItem(key, serialized));
+  pendingWrites.set(key, write);
+  try {
+    await write;
+  } finally {
+    if (pendingWrites.get(key) === write) pendingWrites.delete(key);
+  }
 }

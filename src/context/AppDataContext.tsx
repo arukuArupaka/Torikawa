@@ -18,6 +18,8 @@ import { createId } from '../utils/id';
 import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
 import { inferRecipeCategory, isRecipeCategory } from '../utils/recipeCategory';
 import { hasPendingShoppingItem } from '../utils/shoppingList';
+import { migrateSampleRecipe } from '../utils/recipeMigration';
+import { isValidServings } from '../utils/recipeServings';
 
 type AppDataContextValue = {
   foods: FoodItem[];
@@ -25,6 +27,10 @@ type AppDataContextValue = {
   shoppingItems: ShoppingItem[];
   notificationSettings: NotificationSettings;
   isReady: boolean;
+  loadError: string | null;
+  retryLoad: () => void;
+  saveError: string | null;
+  retrySave: () => void;
   addFood: (food: NewFoodItem) => FoodItem;
   updateFood: (id: string, food: NewFoodItem) => void;
   markFoodUsed: (id: string) => void;
@@ -85,15 +91,19 @@ function normalizeFoods(storedFoods: StoredFoodItem[] | null): FoodItem[] {
 
 function normalizeRecipes(storedRecipes: StoredRecipe[] | null): Recipe[] {
   const source = storedRecipes ?? sampleRecipes;
-  return source.map((recipe) => ({
-    ...recipe,
-    image: normalizeRecipeImage(recipe),
-    category: isRecipeCategory(recipe.category)
-      ? recipe.category
-      : inferRecipeCategory(recipe.name, recipe.ingredients, recipe.minutes),
-    isFavorite: recipe.isFavorite ?? false,
-    createdAt: recipe.createdAt ?? new Date().toISOString(),
-  }));
+  return source.map((storedRecipe) => {
+    const recipe = migrateSampleRecipe(storedRecipe, sampleRecipes);
+    return {
+      ...recipe,
+      ...(recipe.servings === undefined ? {} : { servings: isValidServings(recipe.servings) ? recipe.servings : null }),
+      image: normalizeRecipeImage(recipe),
+      category: isRecipeCategory(recipe.category)
+        ? recipe.category
+        : inferRecipeCategory(recipe.name, recipe.ingredients, recipe.minutes),
+      isFavorite: recipe.isFavorite ?? false,
+      createdAt: recipe.createdAt ?? new Date().toISOString(),
+    };
+  });
 }
 
 function normalizeRecipeImage(recipe: StoredRecipe): string {
@@ -132,9 +142,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [notificationSettings, setNotificationSettings] =
     useState<NotificationSettings>(initialNotificationSettings);
   const [isReady, setIsReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveAttempt, setSaveAttempt] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
     async function hydrate() {
+      setLoadError(null);
       try {
         const [storedFoods, storedShopping, storedSettings, storedRecipes] = await Promise.all([
           loadStoredValue<StoredFoodItem[]>(storageKeys.foods),
@@ -142,37 +158,42 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           loadStoredValue<StoredNotificationSettings>(storageKeys.notifications),
           loadStoredValue<StoredRecipe[]>(storageKeys.recipes),
         ]);
-        setFoods(normalizeFoods(storedFoods));
+        // Normalize all records before committing any state. A malformed record must
+        // not trigger persistence of partial data or sample fallbacks.
+        const nextFoods = normalizeFoods(storedFoods);
+        const nextRecipes = normalizeRecipes(storedRecipes);
+        const nextSettings = normalizeNotificationSettings(storedSettings);
+        if (cancelled) return;
+        setFoods(nextFoods);
         setShoppingItems(storedShopping ?? initialShoppingItems);
-        setNotificationSettings(normalizeNotificationSettings(storedSettings));
-        setRecipes(normalizeRecipes(storedRecipes));
-      } catch (error) {
-        console.warn('保存データを読み込めませんでした。サンプルデータを表示します。', error);
-        setFoods(createSampleFoods());
-        setShoppingItems(initialShoppingItems);
-        setRecipes(sampleRecipes);
-      } finally {
+        setNotificationSettings(nextSettings);
+        setRecipes(nextRecipes);
         setIsReady(true);
+      } catch (error) {
+        console.warn('保存データを読み込めませんでした。元のデータを保持します。', error);
+        if (!cancelled) setLoadError('保存データを読み込めませんでした。データは上書きせずに保護しています。もう一度お試しください。');
       }
     }
     void hydrate();
-  }, []);
+    return () => { cancelled = true; };
+  }, [loadAttempt]);
 
   useEffect(() => {
-    if (isReady) void saveStoredValue(storageKeys.foods, foods);
-  }, [foods, isReady]);
-
-  useEffect(() => {
-    if (isReady) void saveStoredValue(storageKeys.shopping, shoppingItems);
-  }, [shoppingItems, isReady]);
-
-  useEffect(() => {
-    if (isReady) void saveStoredValue(storageKeys.recipes, recipes);
-  }, [isReady, recipes]);
-
-  useEffect(() => {
-    if (isReady) void saveStoredValue(storageKeys.notifications, notificationSettings);
-  }, [notificationSettings, isReady]);
+    if (!isReady) return;
+    let cancelled = false;
+    void Promise.all([
+      saveStoredValue(storageKeys.foods, foods),
+      saveStoredValue(storageKeys.shopping, shoppingItems),
+      saveStoredValue(storageKeys.recipes, recipes),
+      saveStoredValue(storageKeys.notifications, notificationSettings),
+    ]).then(() => {
+      if (!cancelled) setSaveError(null);
+    }).catch((error) => {
+      console.warn('変更を端末へ保存できませんでした。', error);
+      if (!cancelled) setSaveError('変更を保存できませんでした。アプリを閉じずに、保存を再試行してください。');
+    });
+    return () => { cancelled = true; };
+  }, [foods, shoppingItems, recipes, notificationSettings, isReady, saveAttempt]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -320,6 +341,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         shoppingItems,
         notificationSettings,
         isReady,
+        loadError,
+        retryLoad: () => setLoadAttempt((attempt) => attempt + 1),
+        saveError,
+        retrySave: () => setSaveAttempt((attempt) => attempt + 1),
         addFood,
         updateFood,
         markFoodUsed,

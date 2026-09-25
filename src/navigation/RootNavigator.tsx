@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../constants/theme';
 import { useAppData } from '../context/AppDataContext';
 import { AddFoodScreen } from '../screens/AddFoodScreen';
@@ -70,30 +72,46 @@ function MainTabs() {
 }
 
 export function RootNavigator() {
-  const { isReady } = useAppData();
+  const { isReady, loadError, retryLoad, saveError, retrySave } = useAppData();
 
   if (!isReady) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator color={colors.primary} size="large" />
+        {loadError ? (
+          <View style={styles.loadError}>
+            <Text accessibilityRole="alert" style={styles.loadErrorText}>{loadError}</Text>
+            <PrimaryButton label="もう一度読み込む" onPress={retryLoad} />
+          </View>
+        ) : <ActivityIndicator color={colors.primary} size="large" />}
       </View>
     );
   }
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen component={MainTabs} name="MainTabs" />
-      <Stack.Screen component={AddFoodScreen} name="AddFood" options={{ presentation: 'modal' }} />
-      <Stack.Screen component={FoodDetailScreen} name="FoodDetail" />
-      <Stack.Screen component={RecipeDetailScreen} name="RecipeDetail" />
-      <Stack.Screen component={AddRecipeScreen} name="AddRecipe" options={{ presentation: 'modal' }} />
-      <Stack.Screen component={ShoppingListScreen} name="ShoppingList" />
-      <Stack.Screen component={StatisticsScreen} name="Statistics" />
-    </Stack.Navigator>
+    <View style={{ flex: 1 }}>
+      {saveError ? (
+        <SafeAreaView edges={['top']} style={styles.saveError}>
+          <Text accessibilityRole="alert" style={styles.loadErrorText}>{saveError}</Text>
+          <PrimaryButton label="保存を再試行" onPress={retrySave} variant="outline" />
+        </SafeAreaView>
+      ) : null}
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen component={MainTabs} name="MainTabs" />
+        <Stack.Screen component={AddFoodScreen} name="AddFood" options={{ presentation: 'modal' }} />
+        <Stack.Screen component={FoodDetailScreen} name="FoodDetail" />
+        <Stack.Screen component={RecipeDetailScreen} name="RecipeDetail" />
+        <Stack.Screen component={AddRecipeScreen} name="AddRecipe" options={{ presentation: 'modal' }} />
+        <Stack.Screen component={ShoppingListScreen} name="ShoppingList" />
+        <Stack.Screen component={StatisticsScreen} name="Statistics" />
+      </Stack.Navigator>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  loadError: { width: '100%', maxWidth: 420, padding: 24, gap: 20 },
+  loadErrorText: { color: colors.text, fontSize: 16, lineHeight: 26 },
+  saveError: { backgroundColor: colors.warningSoft, padding: 16, gap: 10 },
   loading: { alignItems: 'center', backgroundColor: colors.background, flex: 1, justifyContent: 'center' },
   tabBar: { backgroundColor: colors.surface, borderTopColor: colors.border, height: 68, paddingBottom: 7, paddingTop: 7 },
   tabLabel: { fontSize: 10, fontWeight: '600' },

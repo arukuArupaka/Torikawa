@@ -1,0 +1,836 @@
+require('./register-typescript.cjs');
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const Module = require('node:module');
+const React = require('react');
+const { act, create } = require('react-test-renderer');
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+const store = new Map();
+const writes = [];
+let readFailure = false;
+let writeFailure = false;
+let holdNextWrite = false;
+let releaseWrite;
+const asyncStorage = {
+  async getItem(key) {
+    if (readFailure) throw new Error('Temporary read failure');
+    return store.get(key) ?? null;
+  },
+  async setItem(key, value) {
+    writes.push({ key, value });
+    if (writeFailure) throw new Error('Disk full');
+    if (holdNextWrite) {
+      holdNextWrite = false;
+      await new Promise((resolve) => { releaseWrite = resolve; });
+    }
+    store.set(key, value);
+  },
+};
+const originalLoad = Module._load;
+const alerts = [];
+const sharedPayloads = [];
+let sharedConfigured = true;
+let shareFailure = false;
+const nativeMock = {
+  AppState: { addEventListener: () => ({ remove() {} }) },
+  Modal: 'Modal',
+  Platform: { OS: 'web' }, KeyboardAvoidingView: 'KeyboardAvoidingView',
+  Image: { resolveAssetSource: () => ({ uri: 'test-image' }) },
+  Alert: { alert: (...args) => alerts.push(args) },
+  StyleSheet: { create: (styles) => styles },
+  Pressable: 'Pressable', ScrollView: 'ScrollView', Text: 'Text', TextInput: 'TextInput', View: 'View',
+};
+Module._load = function (request, ...args) {
+  if (request === '@react-native-async-storage/async-storage') return asyncStorage;
+  if (request === 'react-native') return { ...nativeMock, Image: Object.assign((props) => React.createElement('Image', props), nativeMock.Image) };
+  if (request === '@expo/vector-icons') return { Ionicons: (props) => React.createElement('Icon', props) };
+  if (request.startsWith('../components/')) {
+    const name = request.split('/').at(-1);
+    return { [name]: (props) => React.createElement(name, props) };
+  }
+  if (request.endsWith('/services/notificationService')) return { queueNotificationSync: async () => {} };
+  if (request.endsWith('/services/imageStorage')) return { deleteStoredFoodImage: () => {}, persistFoodImage: (uri) => uri };
+  if (request.endsWith('/services/learnedProductService')) return { saveLearnedProduct: async () => {} };
+  if (request.endsWith('/services/sharedProductService')) return {
+    isSharedProductsConfigured: () => sharedConfigured,
+    shareProduct: async (product) => {
+      sharedPayloads.push(structuredClone(product));
+      if (shareFailure) throw new Error('offline');
+      return 'created';
+    },
+  };
+  return originalLoad.call(this, request, ...args);
+};
+require.extensions['.jpg'] = (module, filename) => { module.exports = filename; };
+const { AppDataProvider, useAppData } = require('../src/context/AppDataContext.tsx');
+const { storageKeys, saveStoredValue } = require('../src/services/storage.ts');
+const { RecipeDetailScreen } = require('../src/screens/RecipeDetailScreen.tsx');
+const { RecipesScreen } = require('../src/screens/RecipesScreen.tsx');
+const { AddFoodScreen } = require('../src/screens/AddFoodScreen.tsx');
+const { FoodDetailScreen } = require('../src/screens/FoodDetailScreen.tsx');
+const { createSampleFoods } = require('../src/data/sampleData.ts');
+const { getRecentFoods } = require('../src/utils/recentFoods.ts');
+const { AddRecipeScreen } = require('../src/screens/AddRecipeScreen.tsx');
+const { ShoppingListScreen } = require('../src/screens/ShoppingListScreen.tsx');
+const { AppAlertProvider, useAppAlert } = require('../src/context/AppAlertContext.tsx');
+const { CalendarScreen } = require('../src/screens/CalendarScreen.tsx');
+const { sampleRecipes } = require('../src/data/sampleData.ts');
+const legacyRecipes = require('../src/data/legacySampleRecipes.v1.json');
+let context;
+function Consumer() { context = useAppData(); return null; }
+async function mount() {
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer))); });
+  return renderer;
+}
+function reset() {
+  store.clear(); writes.length = 0;
+  readFailure = false; writeFailure = false; holdNextWrite = false;
+  sharedPayloads.length = 0; sharedConfigured = true; shareFailure = false;
+}
+
+test('corrupt stored JSON is preserved; no sample data is written', async () => {
+  reset();
+  store.set(storageKeys.foods, '[]');
+  store.set(storageKeys.recipes, '{broken');
+  const renderer = await mount();
+  assert.equal(context.isReady, false);
+  assert.match(context.loadError, /上書きせず/);
+  assert.equal(writes.length, 0);
+  assert.equal(store.get(storageKeys.recipes), '{broken');
+  await act(async () => renderer.unmount());
+});
+test('transient read errors can be retried without resetting user data', async () => {
+  reset();
+  store.set(storageKeys.foods, '[]');
+  store.set(storageKeys.recipes, '[]');
+  readFailure = true;
+  const renderer = await mount();
+  assert.equal(writes.length, 0);
+  readFailure = false;
+  await act(async () => context.retryLoad());
+  assert.equal(context.isReady, true);
+  assert.equal(context.loadError, null);
+  assert.deepEqual(context.foods, []);
+  assert.deepEqual(context.recipes, []);
+  await act(async () => renderer.unmount());
+});
+test('invalid stored food shape does not overwrite valid other collections', async () => {
+  reset();
+  store.set(storageKeys.foods, '{}');
+  store.set(storageKeys.recipes, '[]');
+  const renderer = await mount();
+  assert.equal(context.isReady, false);
+  assert.equal(writes.length, 0);
+  assert.equal(store.get(storageKeys.recipes), '[]');
+  await act(async () => renderer.unmount());
+});
+test('first launch still loads and persists initial data', async () => {
+  reset();
+  const renderer = await mount();
+  assert.equal(context.isReady, true);
+  assert.ok(context.foods.length > 0);
+  assert.ok(store.has(storageKeys.foods));
+  await act(async () => renderer.unmount());
+});
+
+test('hydration persists corrected defaults, preserves edits and never restores deleted recipes', async () => {
+  reset();
+  const soup = { ...structuredClone(legacyRecipes[2]), isFavorite: true, image: 'file:///my-soup.jpg', createdAt: '2025-01-01' };
+  const edited = { ...structuredClone(legacyRecipes[0]), name: '我が家の味噌炒め', image: 'file:///my-pork.jpg', isFavorite: false, createdAt: '2025-02-01' };
+  store.set(storageKeys.recipes, JSON.stringify([soup, edited]));
+  let renderer = await mount();
+  assert.equal(context.recipes.length, 2);
+  assert.deepEqual(context.recipes[0].ingredients, sampleRecipes[2].ingredients);
+  assert.equal(context.recipes[0].isFavorite, true);
+  assert.equal(context.recipes[0].image, soup.image);
+  assert.equal(context.recipes[0].createdAt, soup.createdAt);
+  assert.deepEqual(context.recipes[1], edited);
+  const persisted = JSON.parse(store.get(storageKeys.recipes));
+  assert.deepEqual(persisted, context.recipes);
+  await act(async () => renderer.unmount());
+  renderer = await mount();
+  assert.deepEqual(context.recipes, persisted, 'a second launch must leave the migrated data intact');
+  await act(async () => renderer.unmount());
+});
+
+test('restoring an old backup uses the same conservative recipe migration', async () => {
+  reset();
+  const renderer = await mount();
+  const custom = { ...structuredClone(legacyRecipes[2]), id: 'saved-local-idea', isFavorite: true, image: 'my-image', createdAt: '2025-01-01' };
+  await act(async () => context.replaceAppData({
+    foods: context.foods, shoppingItems: [], notificationSettings: context.notificationSettings,
+    recipes: [{ ...structuredClone(legacyRecipes[2]), image: '', isFavorite: false, createdAt: '2025-01-01' }, custom],
+  }));
+  assert.deepEqual(context.recipes[0].ingredients, sampleRecipes[2].ingredients);
+  assert.deepEqual(context.recipes[1], custom);
+  assert.equal(context.recipes.length, 2);
+  assert.deepEqual(JSON.parse(store.get(storageKeys.recipes)), context.recipes);
+  await act(async () => renderer.unmount());
+});
+
+test('recipe shopping action adds missing seasonings with quantities and excludes water', async () => {
+  reset(); alerts.length = 0;
+  store.set(storageKeys.recipes, JSON.stringify([{ ...legacyRecipes[2], image: '', isFavorite: false, createdAt: '2025-01-01' }]));
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(AppDataProvider, null,
+      React.createElement(Consumer), React.createElement(RecipesScreen, { navigation: {} }),
+    ));
+  });
+  const materialToggle = renderer.root.findByProps({ accessibilityLabel: '豆腐とわかめの味噌汁の材料の確認', accessibilityRole: 'button' });
+  await act(async () => materialToggle.props.onPress());
+  const button = renderer.root.findAllByType('Pressable').find((node) =>
+    node.findAllByType('Text').some((text) => /不足食材\d+品を追加/.test(String(text.props.children))));
+  assert.ok(button);
+  await act(async () => button.props.onPress());
+  const confirmation = alerts.at(-1);
+  assert.equal(confirmation[0], '不足食材を追加');
+  assert.match(confirmation[1], /味噌（大さじ1と1\/2）/);
+  assert.doesNotMatch(confirmation[1], /水/);
+  await act(async () => confirmation[2].find((option) => option.text === '追加する').onPress());
+  for (const name of ['わかめ', '顆粒だし', '味噌']) {
+    assert.ok(context.shoppingItems.some((item) => item.name === name));
+  }
+  assert.ok(!context.shoppingItems.some((item) => item.name === '水'));
+  assert.match(context.shoppingItems.find((item) => item.name === '味噌').memo, /大さじ1と1\/2/);
+  await act(async () => renderer.unmount());
+});
+
+test('preparation water is shown in recipe detail but excluded from consumption controls', async () => {
+  reset();
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(AppDataProvider, null,
+      React.createElement(Consumer),
+      React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-3' } }, navigation: {} }),
+    ));
+  });
+  await act(async () => context.addFood({
+    name: '水', ingredientName: '水', productName: null, tags: [], image: '', category: 'beverages',
+    storage: 'room', quantity: 1000, quantityUnit: 'ml', expiryDate: '2099-01-01', purchaseDate: '2026-01-01', memo: '',
+  }));
+  assert.ok(renderer.root.findAllByType('Text').some((node) => node.props.children === '調理用に用意'));
+  assert.ok(renderer.root.findAllByType('Text').some((node) => node.props.children === '400ml'));
+  const autoSelect = renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((text) => text.props.children === '使った分を自動選択'));
+  await act(async () => autoSelect.props.onPress());
+  const labels = renderer.root.findAllByType('TextInput').map((node) => node.props.accessibilityLabel);
+  assert.ok(labels.includes('豆腐の使用量'));
+  assert.ok(!labels.includes('水の使用量'));
+  assert.equal(context.foods.find((food) => food.name === '水').quantity, 1000);
+  await act(async () => renderer.unmount());
+});
+
+test('expired inventory is identified in materials but cannot be selected or consumed', async () => {
+  reset(); alerts.length = 0;
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(AppDataProvider, null,
+      React.createElement(Consumer),
+      React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-2' } }, navigation: { navigate: () => {} } }),
+    ));
+  });
+  const expiredLabel = renderer.root.findAllByType('Text').find((node) =>
+    Array.isArray(node.props.children) && node.props.children.join('').includes('期限切れ（使用対象外）'));
+  assert.ok(expiredLabel, 'expired milk must not be described as unregistered');
+  assert.ok(expiredLabel.props.children.join('').includes('1000ml'));
+  const autoSelect = renderer.root.findAllByType('Pressable').find((node) =>
+    node.findAllByType('Text').some((text) => text.props.children === '使った分を自動選択'));
+  await act(async () => autoSelect.props.onPress());
+  const labels = renderer.root.findAllByType('TextInput').map((node) => node.props.accessibilityLabel);
+  assert.ok(labels.includes('卵の使用量'));
+  assert.ok(!labels.some((label) => label.includes('牛乳')));
+  const submit = renderer.root.findAllByType('PrimaryButton').find((node) => node.props.label === 'このレシピを作った');
+  await act(async () => submit.props.onPress());
+  await act(async () => alerts.at(-1)[2].find((button) => button.text === '記録する').onPress());
+  assert.equal(context.foods.find((food) => food.name === '牛乳').quantity, 1000);
+  assert.equal(context.foods.find((food) => food.name === '卵').quantity, 8);
+  await act(async () => renderer.unmount());
+});
+test('save failure is visible and retry persists the current changes', async () => {
+  reset();
+  const renderer = await mount();
+  writeFailure = true;
+  await act(async () => context.addShoppingItem('テスト用にんじん'));
+  assert.match(context.saveError, /保存できません/);
+  assert.ok(context.shoppingItems.some((item) => item.name === 'テスト用にんじん'));
+  writeFailure = false;
+  await act(async () => context.retrySave());
+  assert.equal(context.saveError, null);
+  assert.ok(JSON.parse(store.get(storageKeys.shopping)).some((item) => item.name === 'テスト用にんじん'));
+  await act(async () => renderer.unmount());
+});
+test('rapid saves cannot finish in reverse order and restore old data', async () => {
+  reset();
+  holdNextWrite = true;
+  const first = saveStoredValue('queue-test', { value: 1 });
+  const second = saveStoredValue('queue-test', { value: 2 });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(writes.length, 1);
+  releaseWrite();
+  await Promise.all([first, second]);
+  assert.deepEqual(JSON.parse(store.get('queue-test')), { value: 2 });
+});
+test('a rejected write does not block the next write for that key', async () => {
+  reset(); writeFailure = true;
+  await assert.rejects(saveStoredValue('queue-test', 1), /Disk full/);
+  writeFailure = false;
+  await saveStoredValue('queue-test', 2);
+  assert.equal(store.get('queue-test'), '2');
+});
+test('recording the actual recipe screen keeps remaining cabbage and eggs', async () => {
+  reset(); alerts.length = 0;
+  let renderer;
+  let destination;
+  await act(async () => {
+    renderer = create(React.createElement(AppDataProvider, null,
+      React.createElement(Consumer),
+      React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-4' } }, navigation: { navigate: (...args) => { destination = args; } } }),
+    ));
+  });
+  const autoSelect = renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((text) => text.props.children === '使った分を自動選択'));
+  await act(async () => autoSelect.props.onPress());
+  const cabbageInput = renderer.root.findAllByType('TextInput').find((node) => node.props.accessibilityLabel === 'キャベツの使用量');
+  assert.equal(cabbageInput.props.value, '0.25');
+  const submit = () => renderer.root.findAllByType('PrimaryButton').find((node) => node.props.label === 'このレシピを作った').props.onPress();
+  // A mistyped amount must not remove the stock.
+  await act(async () => cabbageInput.props.onChangeText('2'));
+  await act(async () => submit());
+  assert.equal(alerts.at(-1)[0], '残量より多く入力されています');
+  assert.equal(context.foods.find((food) => food.name === 'キャベツ').quantity, 1);
+  await act(async () => cabbageInput.props.onChangeText('0.25'));
+  await act(async () => submit());
+  const buttons = alerts.at(-1)[2];
+  await act(async () => buttons.find((button) => button.text === '記録する').onPress());
+  const cabbage = context.foods.find((food) => food.name === 'キャベツ');
+  assert.equal(cabbage.quantity, 0.75);
+  assert.equal(cabbage.status, 'active');
+  assert.equal(context.foods.find((food) => food.name === '卵').quantity, 8);
+  assert.deepEqual(destination, ['MainTabs', { screen: 'Home' }]);
+  assert.equal(JSON.parse(store.get(storageKeys.foods)).find((food) => food.name === 'キャベツ').quantity, 0.75);
+  await act(async () => renderer.unmount());
+});
+
+test('changing people updates visible quantities and usage, clears stale selections, and records scaled amounts', async (t) => {
+  reset(); alerts.length = 0;
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(AppDataProvider, null,
+      React.createElement(Consumer),
+      React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-4' } }, navigation: { navigate() {} } }),
+    ));
+  });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const button = (label) => renderer.root.findAllByType('Pressable').find((node) => node.props.accessibilityLabel === label);
+  const autoSelect = () => renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((text) => text.props.children === '使った分を自動選択'));
+  const input = (label) => renderer.root.findAllByType('TextInput').find((node) => node.props.accessibilityLabel === label);
+  await act(async () => autoSelect().props.onPress());
+  assert.equal(input('卵の使用量').props.value, '2');
+  await act(async () => button('作る人数を増やす').props.onPress());
+  assert.equal(input('卵の使用量'), undefined, 'old selection must not silently use the previous serving count');
+  assert.equal(renderer.root.findAllByType('PrimaryButton').find((node) => node.props.label === 'このレシピを作った').props.disabled, true);
+  await act(async () => button('作る人数を増やす').props.onPress());
+  assert.ok(renderer.root.findAllByType('Text').some((node) => node.props.children === '1/2玉'));
+  assert.ok(renderer.root.findAllByType('Text').some((node) => node.props.children === '小さじ4'));
+  await act(async () => autoSelect().props.onPress());
+  assert.equal(input('卵の使用量').props.value, '4');
+  assert.equal(input('キャベツの使用量').props.value, '0.5');
+  assert.equal(context.recipes.find((r) => r.id === 'recipe-4').servings, 2, 'viewing four servings must not overwrite the base');
+  await act(async () => renderer.root.findAllByType('PrimaryButton').find((node) => node.props.label === 'このレシピを作った').props.onPress());
+  await act(async () => alerts.at(-1)[2].find((option) => option.text === '記録する').onPress());
+  assert.equal(context.foods.find((food) => food.name === '卵').quantity, 6);
+  assert.equal(context.foods.find((food) => food.name === 'キャベツ').quantity, 0.5);
+});
+
+test('recipe editor validates servings and preserves saved or explicitly unset values after reload', async (t) => {
+  reset(); alerts.length = 0;
+  let renderer;
+  function EditorWhenReady() {
+    return useAppData().isReady ? React.createElement(AddRecipeScreen, {
+      route: { params: { recipeId: 'recipe-4' } }, navigation: { goBack() {} },
+    }) : null;
+  }
+  const mountEditor = async () => {
+    await act(async () => {
+      renderer = create(React.createElement(AppDataProvider, null,
+        React.createElement(Consumer),
+        React.createElement(EditorWhenReady),
+      ));
+    });
+  };
+  t.after(async () => { await act(async () => renderer?.unmount()); });
+  await mountEditor();
+  const field = () => renderer.root.findAllByType('FormField').find((node) => node.props.label === '分量の基準（人分・任意）');
+  const save = () => renderer.root.findAllByType('PrimaryButton').find((node) => node.props.label === '変更を保存');
+  assert.equal(field().props.value, '2');
+  await act(async () => field().props.onChangeText('0'));
+  await act(async () => save().props.onPress());
+  assert.equal(alerts.at(-1)[0], '人数を確認してください');
+  assert.equal(context.recipes.find((recipe) => recipe.id === 'recipe-4').servings, 2);
+  await act(async () => field().props.onChangeText('３'));
+  await act(async () => save().props.onPress());
+  assert.equal(JSON.parse(store.get(storageKeys.recipes)).find((recipe) => recipe.id === 'recipe-4').servings, 3);
+  await act(async () => renderer.unmount());
+  await mountEditor();
+  assert.equal(field().props.value, '3');
+  await act(async () => field().props.onChangeText(''));
+  await act(async () => save().props.onPress());
+  await act(async () => renderer.unmount());
+  await mountEditor();
+  assert.equal(field().props.value, '');
+  assert.equal(context.recipes.find((recipe) => recipe.id === 'recipe-4').servings, null, 'clearing a built-in base must survive migration');
+});
+
+test('old custom recipes remain unset and restoring backups preserves known serving counts', async (t) => {
+  reset();
+  const { servings, ...custom } = { ...structuredClone(sampleRecipes[3]), id: 'my-recipe' };
+  store.set(storageKeys.recipes, JSON.stringify([custom]));
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(AppDataProvider, null,
+      React.createElement(Consumer),
+      React.createElement(RecipeDetailScreen, { route: { params: { recipeId: custom.id } }, navigation: {} }),
+    ));
+  });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  assert.equal(context.recipes[0].servings, undefined);
+  assert.ok(renderer.root.findAllByType('Text').some((node) => node.props.children === '人数未設定'));
+  assert.equal(renderer.root.findAllByProps({ accessibilityLabel: '作る人数を増やす' }).length, 0);
+  assert.ok(renderer.root.findAllByType('Text').some((node) => node.props.children === '1/4玉'));
+  await act(async () => context.replaceAppData({
+    foods: context.foods, recipes: [{ ...custom, servings: 5 }], shoppingItems: [], notificationSettings: context.notificationSettings,
+  }));
+  assert.equal(context.recipes[0].servings, 5);
+  assert.equal(JSON.parse(store.get(storageKeys.recipes))[0].servings, 5);
+  const increase = renderer.root.findAllByType('Pressable').find((node) => node.props.accessibilityLabel === '作る人数を増やす');
+  await act(async () => increase.props.onPress());
+  const resetPeople = renderer.root.findAllByType('Pressable').find((node) => node.props.accessibilityLabel === '登録の人数に戻す');
+  await act(async () => resetPeople.props.onPress());
+  assert.ok(renderer.root.findAllByType('Text').some((node) => node.props.children === '1/4玉'));
+});
+
+test('detail adds scaled shopping memos directly, prevents duplicate additions and keeps the recipe base', async (t) => {
+  reset();
+  store.set(storageKeys.shopping, '[]');
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
+      React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-4' } }, navigation: {} })));
+  });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const increase = () => renderer.root.findAllByType('Pressable').find((node) => node.props.accessibilityLabel === '作る人数を増やす');
+  await act(async () => increase().props.onPress());
+  await act(async () => increase().props.onPress());
+  const add = renderer.root.findAllByType('PrimaryButton').find((node) => node.props.label === '材料2品を買い物に追加');
+  await act(async () => add.props.onPress());
+  assert.deepEqual(context.shoppingItems.map((item) => item.name), ['醤油', '油']);
+  assert.ok(context.shoppingItems.every((item) => /4人分.*必要量：小さじ4/.test(item.memo)));
+  assert.equal(renderer.root.findAllByType('PrimaryButton').find((node) => node.props.label === '対象の材料は追加済み').props.disabled, true);
+  await act(async () => increase().props.onPress());
+  assert.ok(context.shoppingItems.every((item) => /4人分/.test(item.memo)), 'changing servings must not overwrite existing shopping notes');
+  assert.equal(context.recipes.find((item) => item.id === 'recipe-4').servings, 2);
+  assert.equal(JSON.parse(store.get(storageKeys.shopping)).length, 2);
+});
+
+test('shopping check is reversible without navigation, registration carries the memo, deletion requires confirmation', async (t) => {
+  reset(); alerts.length = 0;
+  store.set(storageKeys.shopping, JSON.stringify([
+    { id: 'buy-egg', name: '卵', checked: false, memo: '「卵料理」4人分 / 必要量：4個', createdAt: '2026-09-24' },
+    { id: 'buy-milk', name: '牛乳', checked: true, createdAt: '2026-09-24' },
+  ]));
+  const destinations = [];
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
+      React.createElement(ShoppingListScreen, { navigation: { navigate: (...args) => destinations.push(args) } })));
+  });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const control = (label) => renderer.root.findAllByType('Pressable').find((node) => node.props.accessibilityLabel === label);
+  assert.equal(control('牛乳を未購入に戻す'), undefined, 'purchased rows start collapsed');
+  await act(async () => control('卵を購入済みにする').props.onPress());
+  assert.equal(destinations.length, 0);
+  assert.equal(context.shoppingItems[0].checked, true);
+  assert.equal(JSON.parse(store.get(storageKeys.shopping))[0].checked, true);
+  assert.equal(alerts.length, 0, 'a check must work on Web without a native alert');
+  await act(async () => control('購入済み2件').props.onPress());
+  await act(async () => control('卵を食材として登録').props.onPress());
+  assert.deepEqual(destinations[0], ['AddFood', { initialName: '卵', initialMemo: '「卵料理」4人分 / 必要量：4個' }]);
+  await act(async () => control('卵を未購入に戻す').props.onPress());
+  assert.equal(context.shoppingItems[0].checked, false);
+  await act(async () => control('卵を買い物リストから削除').props.onPress());
+  assert.equal(context.shoppingItems.length, 2);
+  await act(async () => control('卵の削除をキャンセル').props.onPress());
+  assert.equal(context.shoppingItems.length, 2);
+  await act(async () => control('卵を買い物リストから削除').props.onPress());
+  await act(async () => control('卵の削除を確定').props.onPress());
+  assert.deepEqual(context.shoppingItems.map((item) => item.id), ['buy-milk']);
+});
+
+test('shopping duplicate feedback is visible on Web and does not clear the input or overwrite its memo', async (t) => {
+  reset();
+  store.set(storageKeys.shopping, JSON.stringify([{ id: 'egg', name: '卵', checked: false, memo: '既存のメモ', createdAt: '2026-09-24' }]));
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
+      React.createElement(ShoppingListScreen, { navigation: {} })));
+  });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const input = renderer.root.findByType('TextInput');
+  await act(async () => input.props.onChangeText(' 卵 '));
+  await act(async () => input.props.onSubmitEditing());
+  assert.ok(renderer.root.findAllByType('Text').some((node) => node.props.children === '「卵」はすでに買うものにあります。'));
+  assert.equal(input.props.value, ' 卵 ');
+  assert.equal(context.shoppingItems.length, 1);
+  assert.equal(context.shoppingItems[0].memo, '既存のメモ');
+});
+
+test('a cooking confirmation held across midnight cannot consume newly expired food', async (t) => {
+  reset(); alerts.length = 0;
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: new Date(2026, 8, 24, 23, 59, 59) });
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
+      React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-4' } }, navigation: { navigate() {} } })));
+  });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const egg = context.foods.find((item) => item.name === '卵');
+  await act(async () => context.updateFood(egg.id, { ...egg, expiryDate: '2026-09-24' }));
+  const autoSelect = renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((text) => text.props.children === '使った分を自動選択'));
+  await act(async () => autoSelect.props.onPress());
+  await act(async () => renderer.root.findAllByType('PrimaryButton').find((node) => node.props.label === 'このレシピを作った').props.onPress());
+  const confirm = alerts.at(-1)[2].find((item) => item.text === '記録する');
+  await act(async () => t.mock.timers.tick(1000));
+  assert.equal(renderer.root.findAllByProps({ accessibilityLabel: '卵の使用量' }).length, 0, 'detail eligibility must refresh at midnight');
+  await act(async () => confirm.onPress());
+  assert.equal(alerts.at(-1)[0], '期限を確認してください');
+  assert.equal(context.foods.find((item) => item.name === '卵').quantity, 10);
+  assert.equal(context.foods.find((item) => item.name === 'キャベツ').quantity, 1);
+});
+
+test('web alerts support cancellation, queued messages, and execute a choice only once', async (t) => {
+  alerts.length = 0;
+  let show;
+  function DialogConsumer() { show = useAppAlert(); return null; }
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppAlertProvider, null, React.createElement(DialogConsumer))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  let changes = 0;
+  const button = (label) => renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((text) => text.props.children === label));
+  await act(async () => show('削除の確認', '元には戻せません', [
+    { text: '削除する', style: 'destructive', onPress: () => { changes++; } },
+    { text: 'キャンセル', style: 'cancel' },
+  ]));
+  assert.equal(alerts.length, 0, 'web must render a dialog rather than call native Alert');
+  assert.equal(renderer.root.findAllByType('Pressable')[0], button('キャンセル'), 'safe option receives initial keyboard focus');
+  await act(async () => renderer.root.findByType('Modal').props.onRequestClose());
+  assert.equal(changes, 0);
+  assert.equal(renderer.root.findAllByType('Modal').length, 0);
+  await act(async () => {
+    show('確認', '', [{ text: '実行', onPress: () => { changes++; show('完了しました'); } }]);
+    show('先に届いたお知らせ');
+  });
+  const press = button('実行').props.onPress;
+  await act(async () => { press(); press(); });
+  assert.equal(changes, 1);
+  assert.ok(renderer.root.findByProps({ accessibilityLabel: '先に届いたお知らせ' }));
+  await act(async () => button('OK').props.onPress());
+  assert.ok(renderer.root.findByProps({ accessibilityLabel: '完了しました' }));
+  await act(async () => button('OK').props.onPress());
+  assert.equal(renderer.root.findAllByType('Modal').length, 0);
+});
+
+test('web dismiss respects noncancelable dialogs and never chooses a destructive action', async (t) => {
+  let show;
+  function DialogConsumer() { show = useAppAlert(); return null; }
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppAlertProvider, null, React.createElement(DialogConsumer))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  let changes = 0;
+  let dismissed = 0;
+  await act(async () => show('確認', '', [{ text: '確定', style: 'destructive', onPress: () => { changes++; } }], { cancelable: false }));
+  await act(async () => renderer.root.findByType('Modal').props.onRequestClose());
+  assert.equal(renderer.root.findAllByType('Modal').length, 1);
+  assert.equal(changes, 0);
+  await act(async () => renderer.root.findByType('Pressable').props.onPress());
+  assert.equal(changes, 1);
+  await act(async () => show('確認', '', [{ text: '確定', style: 'destructive', onPress: () => { changes++; } }], { onDismiss: () => { dismissed++; } }));
+  await act(async () => renderer.root.findByType('Modal').props.onRequestClose());
+  assert.equal(changes, 1);
+  assert.equal(dismissed, 1);
+});
+
+test('device alerts preserve native options and callbacks', async (t) => {
+  alerts.length = 0;
+  nativeMock.Platform.OS = 'ios';
+  t.after(() => { nativeMock.Platform.OS = 'web'; });
+  let show;
+  function DialogConsumer() { show = useAppAlert(); return null; }
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppAlertProvider, null, React.createElement(DialogConsumer))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const buttons = [{ text: '取消', style: 'cancel', onPress() {} }];
+  const options = { cancelable: false };
+  await act(async () => show('端末の確認', '本文', buttons, options));
+  assert.deepEqual(alerts.at(-1), ['端末の確認', '本文', buttons, options]);
+  assert.equal(renderer.root.findAllByType('Modal').length, 0);
+});
+
+test('web cooking dialog cancels without changes and records a partial amount once after confirmation', async (t) => {
+  reset(); alerts.length = 0;
+  const destinations = [];
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(AppAlertProvider, null,
+      React.createElement(AppDataProvider, null, React.createElement(Consumer),
+        React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-4' } }, navigation: { navigate: (...args) => destinations.push(args) } }))));
+  });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const button = (label) => renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((text) => text.props.children === label));
+  await act(async () => button('使った分を自動選択').props.onPress());
+  const cook = () => renderer.root.findAllByType('PrimaryButton').find((node) => node.props.label === 'このレシピを作った').props.onPress();
+  await act(async () => cook());
+  assert.ok(renderer.root.findByProps({ accessibilityLabel: '調理内容を記録' }));
+  await act(async () => button('キャンセル').props.onPress());
+  assert.equal(context.foods.find((food) => food.name === '卵').quantity, 10);
+  assert.equal(destinations.length, 0);
+  await act(async () => cook());
+  const record = button('記録する').props.onPress;
+  await act(async () => { record(); record(); });
+  assert.equal(context.foods.find((food) => food.name === '卵').quantity, 8);
+  assert.equal(context.foods.find((food) => food.name === 'キャベツ').quantity, 0.75);
+  assert.equal(JSON.parse(store.get(storageKeys.foods)).find((food) => food.name === '卵').quantity, 8);
+  assert.equal(destinations.length, 1);
+  assert.equal(alerts.length, 0);
+});
+
+test('calendar refreshes at midnight and today returns from another month without changing stock', async (t) => {
+  reset();
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: new Date(2026, 8, 30, 23, 59, 59) });
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(CalendarScreen, { navigation: {} }))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const egg = context.foods.find((food) => food.name === '卵');
+  await act(async () => context.updateFood(egg.id, { ...egg, expiryDate: '2026-09-30' }));
+  const upcomingEgg = () => renderer.root.findAllByType('Text').some((text) => [text.props.children].flat().join('') === '卵の期限');
+  assert.equal(upcomingEgg(), true);
+  await act(async () => t.mock.timers.tick(1000));
+  assert.equal(upcomingEgg(), false, 'expired food leaves upcoming without user interaction');
+  const control = (label) => renderer.root.findAllByType('Pressable').find((node) => node.props.accessibilityLabel === label);
+  await act(async () => control('前の月').props.onPress());
+  await act(async () => control('今日の日付を表示').props.onPress());
+  const today = renderer.root.findAllByType('Pressable').find((node) => node.props.accessibilityLabel?.startsWith('10月1日、'));
+  assert.equal(today.props.accessibilityState.selected, true);
+  assert.equal(context.foods.find((food) => food.id === egg.id).expiryDate, '2026-09-30');
+});
+
+test('detail recalculates shortage with servings and adds a quantity memo without altering stock', async (t) => {
+  reset();
+  store.set(storageKeys.shopping, JSON.stringify(['醤油', '油'].map((name) => ({ id: name, name, checked: false, createdAt: '2026-09-25' }))));
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
+      React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-4' } }, navigation: {} })));
+  });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const egg = context.foods.find((food) => food.name === '卵');
+  await act(async () => context.updateFood(egg.id, { ...egg, quantity: 1, expiryDate: '2099-01-01' }));
+  const hasText = (value) => renderer.root.findAllByType('Text').some((node) => node.props.children === value);
+  assert.ok(hasText('あと1個必要'));
+  const increase = renderer.root.findAllByType('Pressable').find((node) => node.props.accessibilityLabel === '作る人数を増やす');
+  await act(async () => increase.props.onPress());
+  assert.ok(hasText('あと2個必要'));
+  await act(async () => renderer.root.findAllByType('PrimaryButton').find((node) => node.props.label === '材料1品を買い物に追加').props.onPress());
+  assert.match(context.shoppingItems.find((item) => item.name === '卵').memo, /3人分.*不足分：2個/);
+  assert.equal(context.foods.find((food) => food.id === egg.id).quantity, 1);
+  await act(async () => increase.props.onPress());
+  assert.ok(hasText('あと3個必要'));
+  assert.match(context.shoppingItems.find((item) => item.name === '卵').memo, /3人分.*不足分：2個/);
+  assert.ok(hasText('追加済みの分量は買い物リストで確認できます。'));
+});
+
+test('recipe list distinguishes measured availability from shortages and offers the missing quantity', async (t) => {
+  reset(); alerts.length = 0;
+  const base = { ...sampleRecipes[3], image: '', ingredients: ['卵'], ingredientAmounts: { 卵: '2個' } };
+  store.set(storageKeys.recipes, JSON.stringify([base]));
+  store.set(storageKeys.shopping, '[]');
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(RecipesScreen, { navigation: {} }))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const egg = context.foods.find((food) => food.name === '卵');
+  await act(async () => context.updateFood(egg.id, { ...egg, quantity: 1, expiryDate: '2099-01-01' }));
+  const button = (label) => renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((text) => text.props.children === label));
+  await act(async () => renderer.root.findByProps({ accessibilityLabel: `${base.name}の材料の確認` }).props.onPress());
+  await act(async () => button('不足食材1品を追加').props.onPress());
+  assert.match(alerts.at(-1)[1], /卵（あと1個必要）/);
+  await act(async () => alerts.at(-1)[2].find((item) => item.text === '追加する').onPress());
+  assert.match(context.shoppingItems[0].memo, /不足分：1個/);
+  await act(async () => button('絞り込み').props.onPress());
+  await act(async () => button('分量あり').props.onPress());
+  assert.ok(renderer.root.findAllByType('Text').some((node) => node.props.children === '条件に合うレシピがありません'));
+  await act(async () => context.updateFood(egg.id, { ...egg, quantity: 2, expiryDate: '2099-01-01' }));
+  assert.ok(renderer.root.findAllByType('Text').some((node) => node.props.children === base.name));
+});
+
+test('recent foods keep the newest same-name settings, search products, and include consumed history', () => {
+  const base = createSampleFoods()[0];
+  const old = { ...base, id: 'old', name: '牛乳', createdAt: '2025-01-01', storage: 'room' };
+  const newest = { ...base, id: 'new', name: ' 牛乳 ', createdAt: '2026-01-01', status: 'used', storage: 'refrigerated' };
+  const different = { ...base, id: 'different', name: '牛乳', productName: '別メーカーの牛乳', createdAt: '2025-06-01' };
+  assert.deepEqual(getRecentFoods([old, newest, different]).map((food) => food.id), ['new', 'different']);
+  assert.deepEqual(getRecentFoods([old, newest, different], '別メーカー').map((food) => food.id), ['different']);
+  assert.equal(getRecentFoods([old, newest, different], '', 1)[0].storage, 'refrigerated');
+  assert.deepEqual(getRecentFoods([old], '見つからない'), []);
+});
+
+test('repeat registration carries settings but starts fresh quantity, dates, memo, image and lifecycle', async (t) => {
+  reset();
+  t.mock.timers.enable({ apis: ['Date'], now: new Date(2026, 8, 25, 12) });
+  const original = { ...createSampleFoods()[0], id: 'previous', quantity: 150, quantityUnit: 'ml', storage: 'frozen', expiryDate: '2025-01-02', purchaseDate: '2025-01-01', memo: '開封済み', image: 'file:///private/old-food.jpg', tags: ['牛乳', 'いつもの商品'], status: 'used', usedAt: '2025-01-02' };
+  store.set(storageKeys.foods, JSON.stringify([original]));
+  const navigation = [];
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(AddFoodScreen, { route: { params: { reuseFoodId: original.id } }, navigation: { navigate: (...args) => navigation.push(args) } }))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const quantity = renderer.root.findByProps({ accessibilityLabel: '今回の購入量' });
+  assert.equal(quantity.props.value, '');
+  assert.equal(renderer.root.findAllByType('DatePickerField').find((node) => node.props.label === '購入日').props.value, '2026-09-25');
+  assert.notEqual(renderer.root.findAllByType('DatePickerField').find((node) => node.props.label === '期限日').props.value, original.expiryDate);
+  assert.equal(renderer.root.findAllByType('FormField').find((node) => node.props.label === 'メモ（任意）').props.value, '');
+  const save = () => renderer.root.findByType('PrimaryButton').props.onPress();
+  await act(async () => save());
+  assert.equal(context.foods.length, 1, 'old remaining quantity must not silently become a new purchase');
+  await act(async () => quantity.props.onChangeText('1000'));
+  await act(async () => renderer.root.findAllByType('DatePickerField').find((node) => node.props.label === '期限日').props.onChange('2026-10-01'));
+  await act(async () => save());
+  assert.equal(context.foods.length, 2);
+  const added = context.foods.find((food) => food.id !== original.id);
+  assert.equal(added.quantity, 1000);
+  assert.equal(added.quantityUnit, 'ml');
+  assert.equal(added.storage, 'frozen');
+  assert.equal(added.name, original.name);
+  assert.equal(added.productName, original.productName);
+  assert.equal(added.ingredientName, original.ingredientName);
+  assert.equal(added.category, original.category);
+  assert.ok(added.tags.includes('いつもの商品'));
+  assert.notEqual(added.image, original.image, 'new record must not share a deletable local photo with history');
+  assert.equal(added.expiryDate, '2026-10-01');
+  assert.equal(added.purchaseDate, '2026-09-25');
+  assert.equal(added.status, 'active');
+  assert.equal(added.usedAt, null);
+  assert.deepEqual(context.foods.find((food) => food.id === original.id), original);
+  assert.equal(JSON.parse(store.get(storageKeys.foods)).length, 2);
+  assert.equal(navigation.length, 1);
+});
+
+test('choosing a previous registration retains incoming shopping memo and calendar date', async (t) => {
+  reset();
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(AddFoodScreen, { route: { params: { initialName: '卵', initialMemo: '買い物のメモ', initialExpiryDate: '2026-12-01' } }, navigation: {} }))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const press = (text) => renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((label) => label.props.children === text));
+  await act(async () => press('前の登録から選ぶ').props.onPress());
+  assert.equal(renderer.root.findByProps({ accessibilityLabel: '前の登録を検索' }).props.value, '卵');
+  await act(async () => renderer.root.findByProps({ accessibilityLabel: '卵の前回の設定を使う' }).props.onPress());
+  assert.equal(renderer.root.findByProps({ accessibilityLabel: '今回の購入量' }).props.value, '');
+  assert.equal(renderer.root.findAllByType('DatePickerField').find((node) => node.props.label === '期限日').props.value, '2026-12-01');
+  assert.equal(renderer.root.findAllByType('FormField').find((node) => node.props.label === 'メモ（任意）').props.value, '買い物のメモ');
+  assert.equal(renderer.root.findAllByType('StorageSelector').length, 0);
+  await act(async () => press('その他の項目を編集').props.onPress());
+  assert.equal(renderer.root.findByType('StorageSelector').props.value, 'refrigerated');
+  assert.equal(renderer.root.findByType('QuantityUnitSelector').props.value, 'piece');
+});
+
+test('editing a food retains its values and manual entry does not get replaced by previous registrations', async (t) => {
+  reset();
+  const original = createSampleFoods()[0];
+  store.set(storageKeys.foods, JSON.stringify([original]));
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(AddFoodScreen, { route: { params: { foodId: original.id, reuseFoodId: original.id } }, navigation: {} }))); });
+  assert.equal(renderer.root.findByProps({ accessibilityLabel: '残量' }).props.value, String(original.quantity));
+  assert.equal(renderer.root.findAllByType('DatePickerField').find((node) => node.props.label === '期限日').props.value, original.expiryDate);
+  await act(async () => renderer.unmount());
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(AddFoodScreen, { route: { params: {} }, navigation: {} }))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  await act(async () => renderer.root.findAllByType('FormField').find((node) => node.props.label === '表示名').props.onChangeText('手入力の食材'));
+  assert.equal(renderer.root.findAllByType('Text').filter((node) => node.props.children === '前の登録から選ぶ').length, 0);
+  assert.equal(renderer.root.findAllByType('FormField').find((node) => node.props.label === '表示名').props.value, '手入力の食材');
+});
+
+test('food detail reopens used history as a separate new registration', async (t) => {
+  reset();
+  const original = { ...createSampleFoods()[0], status: 'used', usedAt: '2026-09-24' };
+  store.set(storageKeys.foods, JSON.stringify([original]));
+  const destinations = [];
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(FoodDetailScreen, { route: { params: { foodId: original.id } }, navigation: { navigate: (...args) => destinations.push(args) } }))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  await act(async () => renderer.root.findAllByType('PrimaryButton').find((node) => node.props.label === 'もう一度登録する').props.onPress());
+  assert.deepEqual(destinations, [['AddFood', { reuseFoodId: original.id }]]);
+  assert.deepEqual(context.foods, [original]);
+});
+
+async function mountSharedForm(t, params = {}) {
+  reset();
+  store.set(storageKeys.foods, '[]');
+  const destinations = [];
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
+    React.createElement(AddFoodScreen, { route: { params: {
+      initialBarcode: '4901234567887', allowProductSharing: true,
+      initialName: '共有テスト牛乳', initialIngredientName: '牛乳', initialCategory: '乳製品',
+      initialMemo: 'PRIVATE memo', initialStorage: 'frozen', ...params,
+    } }, navigation: { navigate: (...args) => destinations.push(args) } })));
+  });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  return { renderer, destinations, save: () => renderer.root.findAllByType('PrimaryButton').find((node) => node.props.label === '保存する').props.onPress() };
+}
+
+test('sharing is opt-in; saving without consent never publishes a product', async (t) => {
+  const { renderer, save, destinations } = await mountSharedForm(t);
+  const choice = renderer.root.findByProps({ accessibilityRole: 'checkbox' });
+  assert.equal(choice.props.accessibilityState.checked, false);
+  await act(async () => save());
+  assert.equal(sharedPayloads.length, 0);
+  assert.equal(context.foods.length, 1);
+  assert.equal(context.foods[0].memo, 'PRIVATE memo');
+  assert.equal(destinations.length, 1);
+});
+
+test('failed sharing keeps food saved; retry and double taps never duplicate the inventory', async (t) => {
+  const { renderer, save } = await mountSharedForm(t);
+  await act(async () => renderer.root.findByProps({ accessibilityRole: 'checkbox' }).props.onPress());
+  shareFailure = true;
+  await act(async () => { await Promise.all([save(), save()]); });
+  assert.equal(context.foods.length, 1);
+  assert.equal(JSON.parse(store.get(storageKeys.foods)).length, 1);
+  assert.deepEqual(sharedPayloads, [{ barcode: '4901234567887', name: '共有テスト牛乳', ingredientName: '牛乳', category: 'dairy' }]);
+  assert.equal(context.foods[0].storage, 'frozen');
+  const retry = renderer.root.findAllByType('PrimaryButton').find((node) => node.props.label === '商品情報の共有を再試行').props.onPress;
+  shareFailure = false;
+  await act(async () => { retry(); retry(); });
+  assert.equal(sharedPayloads.length, 2);
+  assert.deepEqual(sharedPayloads[0], sharedPayloads[1]);
+  assert.equal(context.foods.length, 1);
+  assert.ok(renderer.root.findAllByType('Text').some((node) => String(node.props.children).includes('商品情報を共有しました')));
+});
+
+test('external product registration does not offer to republish provider data', async (t) => {
+  const { renderer, save } = await mountSharedForm(t, { allowProductSharing: false });
+  assert.equal(renderer.root.findAllByProps({ accessibilityRole: 'checkbox' }).length, 0);
+  await act(async () => save());
+  assert.equal(sharedPayloads.length, 0);
+  assert.equal(context.foods.length, 1);
+});
+
+test('invalid public product text is checked before any local save or publication', async (t) => {
+  const { renderer, save } = await mountSharedForm(t, { initialName: 'あ'.repeat(121) });
+  await act(async () => renderer.root.findByProps({ accessibilityRole: 'checkbox' }).props.onPress());
+  await act(async () => save());
+  assert.equal(context.foods.length, 0);
+  assert.equal(sharedPayloads.length, 0);
+  assert.equal(alerts.at(-1)[0], '共有する商品情報を確認してください');
+  await act(async () => renderer.root.findByProps({ accessibilityRole: 'checkbox' }).props.onPress());
+  await act(async () => save());
+  assert.equal(context.foods.length, 1, 'opting out still allows private names');
+});

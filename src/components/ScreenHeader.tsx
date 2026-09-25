@@ -25,11 +25,11 @@ export function ScreenHeader({
     <View style={styles.container}>
       <View style={styles.side}>
         {onBack ? (
-          <Pressable accessibilityLabel="戻る" hitSlop={12} onPress={onBack}>
+          <Pressable accessibilityRole="button" accessibilityLabel="戻る" style={styles.iconButton} onPress={onBack}>
             <Ionicons color={colors.text} name="chevron-back" size={26} />
           </Pressable>
         ) : leftAction ? (
-          <Pressable accessibilityLabel={leftAction.label} hitSlop={10} onPress={leftAction.onPress}>
+          <Pressable accessibilityRole="button" accessibilityLabel={leftAction.label} style={styles.iconButton} onPress={leftAction.onPress}>
             <Ionicons color={colors.text} name={leftAction.icon} size={24} />
           </Pressable>
         ) : null}
@@ -40,7 +40,7 @@ export function ScreenHeader({
       </View>
       <View style={[styles.side, styles.right]}>
         {action ? (
-          <Pressable accessibilityLabel={action.label} hitSlop={10} onPress={action.onPress}>
+          <Pressable accessibilityRole="button" accessibilityLabel={action.label} style={styles.iconButton} onPress={action.onPress}>
             <Ionicons color={colors.text} name={action.icon} size={24} />
           </Pressable>
         ) : null}
@@ -60,6 +60,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   side: { width: 44 },
+  iconButton: { width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   right: { alignItems: 'flex-end' },
   titleArea: { alignItems: 'center', flex: 1 },
   title: { color: colors.text, fontSize: 18, fontWeight: '700' },

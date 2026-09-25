@@ -1,9 +1,10 @@
+import { useAppAlert } from '../context/AppAlertContext';
 import { Ionicons } from '@expo/vector-icons';
 import { CompositeScreenProps, useFocusEffect } from '@react-navigation/native';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -29,6 +30,7 @@ type Props = CompositeScreenProps<
 >;
 
 export function SettingsScreen({ navigation }: Props) {
+  const alert = useAppAlert();
   const {
     foods,
     notificationSettings,
@@ -67,11 +69,11 @@ export function SettingsScreen({ navigation }: Props) {
   const addNotificationDay = () => {
     const day = Number(dayInput);
     if (!/^\d+$/.test(dayInput) || !Number.isInteger(day) || day < 0 || day > 365) {
-      Alert.alert('日数を確認してください', '0〜365の整数を入力してください。');
+      alert('日数を確認してください', '0〜365の整数を入力してください。');
       return;
     }
     if (daysBeforeList.includes(day)) {
-      Alert.alert('追加済みです', `${day}日前はすでに追加されています。`);
+      alert('追加済みです', `${day}日前はすでに追加されています。`);
       return;
     }
     setDaysBeforeList((current) => [...current, day].sort((a, b) => a - b));
@@ -85,11 +87,11 @@ export function SettingsScreen({ navigation }: Props) {
   const save = async () => {
     const validTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
     if (!validTime) {
-      Alert.alert('時刻を確認してください', '00:00〜23:59の形式で入力してください。');
+      alert('時刻を確認してください', '00:00〜23:59の形式で入力してください。');
       return;
     }
     if (enabled && daysBeforeList.length === 0) {
-      Alert.alert('通知日を追加してください', '通知をONにする場合は、1つ以上の日数が必要です。');
+      alert('通知日を追加してください', '通知をONにする場合は、1つ以上の日数が必要です。');
       return;
     }
 
@@ -97,7 +99,7 @@ export function SettingsScreen({ navigation }: Props) {
       try {
         const granted = await ensureNotificationPermission();
         if (!granted) {
-          Alert.alert(
+          alert(
             '通知が許可されていません',
             '端末の設定から「たべどき！！」の通知を許可して、もう一度保存してください。',
           );
@@ -105,14 +107,14 @@ export function SettingsScreen({ navigation }: Props) {
         }
       } catch (error) {
         console.warn('通知の許可を確認できませんでした。', error);
-        Alert.alert('通知を設定できませんでした', '時間をおいて、もう一度お試しください。');
+        alert('通知を設定できませんでした', '時間をおいて、もう一度お試しください。');
         return;
       }
     }
 
     updateNotificationSettings({ enabled, daysBeforeList, time });
     setTimeout(() => void refreshNotificationStatus(), 800);
-    Alert.alert(
+    alert(
       '保存しました',
       enabled
         ? '食材の期限通知を更新しました。'
@@ -124,12 +126,12 @@ export function SettingsScreen({ navigation }: Props) {
     try {
       const granted = await ensureNotificationPermission();
       if (!granted) {
-        Alert.alert('通知が許可されていません', '端末の設定から通知を許可してください。');
+        alert('通知が許可されていません', '端末の設定から通知を許可してください。');
         return;
       }
       await scheduleTestNotification(firstActiveFood);
       await refreshNotificationStatus();
-      Alert.alert(
+      alert(
         'テスト通知を予約しました',
         firstActiveFood
           ? '約3秒後に表示されます。通知をタップすると食材詳細を開きます。'
@@ -137,7 +139,7 @@ export function SettingsScreen({ navigation }: Props) {
       );
     } catch (error) {
       console.warn('テスト通知を予約できませんでした。', error);
-      Alert.alert('テスト通知に失敗しました', '時間をおいて、もう一度お試しください。');
+      alert('テスト通知に失敗しました', '時間をおいて、もう一度お試しください。');
     }
   };
 
@@ -146,13 +148,13 @@ export function SettingsScreen({ navigation }: Props) {
     setIsBackingUp(true);
     try {
       await shareBackup({ foods, recipes, shoppingItems, notificationSettings });
-      Alert.alert(
+      alert(
         '共有画面を閉じました',
         'ファイルアプリやクラウドストレージへJSONファイルを保存したことを確認してください。',
       );
     } catch (error) {
       console.warn('バックアップを書き出せませんでした。', error);
-      Alert.alert('バックアップに失敗しました', error instanceof Error ? error.message : 'もう一度お試しください。');
+      alert('バックアップに失敗しました', error instanceof Error ? error.message : 'もう一度お試しください。');
     } finally {
       setIsBackingUp(false);
     }
@@ -164,10 +166,10 @@ export function SettingsScreen({ navigation }: Props) {
       const snapshot = await restoreBackup(payload);
       replaceAppData(snapshot);
       setTimeout(() => void refreshNotificationStatus(), 1000);
-      Alert.alert('復元しました', '食材、履歴、買い物リスト、通知設定、レシピ、バーコード商品を復元しました。');
+      alert('復元しました', '食材、履歴、買い物リスト、通知設定、レシピ、バーコード商品を復元しました。');
     } catch (error) {
       console.warn('バックアップを復元できませんでした。', error);
-      Alert.alert('復元に失敗しました', error instanceof Error ? error.message : 'ファイルを確認してください。');
+      alert('復元に失敗しました', error instanceof Error ? error.message : 'ファイルを確認してください。');
     } finally {
       setIsRestoring(false);
     }
@@ -180,7 +182,7 @@ export function SettingsScreen({ navigation }: Props) {
       const payload = await pickBackup();
       if (!payload) return;
       const exportedAt = new Date(payload.exportedAt).toLocaleString('ja-JP');
-      Alert.alert(
+      alert(
         'バックアップから復元',
         `現在のデータをバックアップ内容へ置き換えます。\n\n作成日時：${exportedAt}\n食材：${payload.data.foods.length}件\n買い物：${payload.data.shoppingItems.length}件\nレシピ：${payload.data.recipes.length}件\nバーコード商品：${Object.keys(payload.data.learnedProducts).length}件\n\nこの操作を続けますか？`,
         [
@@ -194,7 +196,7 @@ export function SettingsScreen({ navigation }: Props) {
       );
     } catch (error) {
       console.warn('バックアップファイルを読み込めませんでした。', error);
-      Alert.alert('ファイルを読み込めませんでした', error instanceof Error ? error.message : 'JSONファイルを確認してください。');
+      alert('ファイルを読み込めませんでした', error instanceof Error ? error.message : 'JSONファイルを確認してください。');
     } finally {
       setIsRestoring(false);
     }

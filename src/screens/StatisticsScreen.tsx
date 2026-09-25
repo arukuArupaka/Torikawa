@@ -1,7 +1,9 @@
+import { useCurrentDay } from '../hooks/useCurrentDay';
+import { useAppAlert } from '../context/AppAlertContext';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -48,6 +50,8 @@ function getRecordDate(food: FoodItem): string | null {
 }
 
 export function StatisticsScreen({ navigation }: Props) {
+  const alert = useAppAlert();
+  useCurrentDay();
   const { addShoppingItem, foods, restoreFood, shoppingItems } = useAppData();
   const [period, setPeriod] = useState<StatsPeriod>('current');
   const currentMonth = getMonthKey(new Date());
@@ -115,7 +119,7 @@ export function StatisticsScreen({ navigation }: Props) {
   }, [foods, lossRate, selectedMonth, total]);
 
   const confirmRestore = (food: FoodItem) => {
-    Alert.alert('記録を取り消す', `「${getFoodDisplayName(food)}」を管理中に戻しますか？`, [
+    alert('記録を取り消す', `「${getFoodDisplayName(food)}」を管理中に戻しますか？`, [
       { text: 'キャンセル', style: 'cancel' },
       { text: '管理中に戻す', onPress: () => restoreFood(food.id) },
     ]);
@@ -124,11 +128,11 @@ export function StatisticsScreen({ navigation }: Props) {
   const confirmAddToShoppingList = (name: string) => {
     const alreadyAdded = isPendingShoppingItem(name);
     if (alreadyAdded) {
-      Alert.alert('追加済みです', `「${name}」は未完了の買い物リストにあります。`);
+      alert('追加済みです', `「${name}」は未完了の買い物リストにあります。`);
       return;
     }
 
-    Alert.alert(
+    alert(
       '買い物リストに追加',
       `「${name}」を次回は少なめに買う項目として追加しますか？`,
       [

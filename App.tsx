@@ -1,3 +1,4 @@
+import { AppAlertProvider } from './src/context/AppAlertContext';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
@@ -17,13 +18,15 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AppDataProvider>
-          <NavigationContainer ref={navigationRef} onReady={() => setNavigationReady(true)}>
-            <StatusBar style="dark" />
-            <RootNavigator />
-          </NavigationContainer>
-          <NotificationNavigationHandler navigationReady={navigationReady} />
-        </AppDataProvider>
+        <AppAlertProvider>
+          <AppDataProvider>
+            <NavigationContainer ref={navigationRef} onReady={() => setNavigationReady(true)}>
+              <StatusBar style="dark" />
+              <RootNavigator />
+            </NavigationContainer>
+            <NotificationNavigationHandler navigationReady={navigationReady} />
+          </AppDataProvider>
+        </AppAlertProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

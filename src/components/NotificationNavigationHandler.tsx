@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { useCallback, useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
 import { useAppData } from '../context/AppDataContext';
 import { navigationRef } from '../navigation/navigationRef';
 
@@ -37,6 +38,7 @@ export function NotificationNavigationHandler({
   }, [foods, isReady, navigationReady]);
 
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       void handleResponse(response);
     });

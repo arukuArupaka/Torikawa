@@ -1,7 +1,11 @@
+import { normalizeSharedBarcode, validateSharedProduct, SharedProduct } from '../../shared/productContract';
+import { isSharedProductsConfigured, shareProduct } from '../services/sharedProductService';
+import { getRecentFoods } from '../utils/recentFoods';
+import { useAppAlert } from '../context/AppAlertContext';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { DatePickerField } from '../components/DatePickerField';
 import { CategorySelector } from '../components/CategorySelector';
 import { FoodImagePicker } from '../components/FoodImagePicker';
@@ -16,44 +20,53 @@ import { useAppData } from '../context/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
 import { persistFoodImage } from '../services/imageStorage';
 import { saveLearnedProduct } from '../services/learnedProductService';
-import { FoodCategory, FoodQuantityUnit, NewFoodItem, StorageLocation } from '../types';
+import { FoodCategory, FoodItem, FoodQuantityUnit, NewFoodItem, StorageLocation } from '../types';
 import { toDateString } from '../utils/date';
 import { foodCategoryLabels, inferFoodCategory } from '../utils/foodCategory';
 import { getFoodFallbackImage } from '../utils/foodImages';
 import { getDefaultExpiryDate, getFoodRegistrationDefaults } from '../utils/foodRegistrationDefaults';
 import { foodQuantityUnitLabels, isValidQuantity, parseQuantityInput } from '../utils/foodQuantity';
-import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
+import { getFoodDisplayName, normalizeProductToIngredient } from '../utils/ingredientNormalizer';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddFood'>;
 
-export function AddFoodScreen({ navigation, route }: Props) {
+export function AddFoodScreen(props: Props) {
+  const { foods, isReady } = useAppData();
+  const [templateId, setTemplateId] = useState(props.route.params?.reuseFoodId);
+  if (!isReady) return null;
+  const templateFood = props.route.params?.foodId ? undefined : foods.find((food) => food.id === templateId);
+  return <AddFoodForm key={`${props.route.params?.foodId ?? 'new'}:${templateId ?? ''}`} {...props} templateFood={templateFood} onReuse={setTemplateId} />;
+}
+
+function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { templateFood?: FoodItem; onReuse: (id: string) => void }) {
+  const alert = useAppAlert();
   const { foods, addFood, updateFood } = useAppData();
   const existingFood = foods.find((food) => food.id === route.params?.foodId);
   const isEditing = Boolean(existingFood);
-  const initialProductName = existingFood?.productName ?? route.params?.initialProductName ?? null;
+  const initialProductName = existingFood?.productName ?? templateFood?.productName ?? route.params?.initialProductName ?? null;
   const initialIngredientInfo = normalizeProductToIngredient(
-    existingFood?.ingredientName ?? route.params?.initialIngredientName ?? initialProductName ?? route.params?.initialName ?? '',
+    existingFood?.ingredientName ?? templateFood?.ingredientName ?? route.params?.initialIngredientName ?? initialProductName ?? route.params?.initialName ?? '',
   );
   const inferredInitialCategory = inferFoodCategory(
     route.params?.initialName ?? initialProductName ?? '',
     route.params?.initialCategory,
   );
-  const initialName = existingFood?.name ?? route.params?.initialName ?? '';
-  const initialCategory = existingFood?.category
+  const initialName = existingFood?.name ?? templateFood?.name ?? route.params?.initialName ?? '';
+  const initialCategory = existingFood?.category ?? templateFood?.category
     ?? (initialIngredientInfo.category === 'other' ? inferredInitialCategory : initialIngredientInfo.category);
   const initialPurchaseDate = existingFood?.purchaseDate ?? toDateString(new Date());
   const initialRegistrationDefaults = getFoodRegistrationDefaults({
     category: initialCategory,
-    ingredientName: existingFood?.ingredientName ?? route.params?.initialIngredientName ?? initialIngredientInfo.ingredientName,
+    ingredientName: existingFood?.ingredientName ?? templateFood?.ingredientName ?? route.params?.initialIngredientName ?? initialIngredientInfo.ingredientName,
     name: initialName,
     productName: initialProductName,
-    storage: existingFood?.storage ?? route.params?.initialStorage,
+    storage: existingFood?.storage ?? templateFood?.storage ?? route.params?.initialStorage,
   });
 
   const [name, setName] = useState(initialName);
-  const [ingredientEdited, setIngredientEdited] = useState(Boolean(existingFood?.ingredientName ?? route.params?.initialIngredientName));
+  const [ingredientEdited, setIngredientEdited] = useState(Boolean(existingFood?.ingredientName ?? templateFood?.ingredientName ?? route.params?.initialIngredientName));
   const [ingredientName, setIngredientName] = useState(
-    existingFood?.ingredientName ?? route.params?.initialIngredientName ?? initialIngredientInfo.ingredientName,
+    existingFood?.ingredientName ?? templateFood?.ingredientName ?? route.params?.initialIngredientName ?? initialIngredientInfo.ingredientName,
   );
   const [category, setCategory] = useState<FoodCategory>(initialCategory);
   const hasInitialImage = Boolean(existingFood?.image ?? route.params?.initialImage);
@@ -66,15 +79,15 @@ export function AddFoodScreen({ navigation, route }: Props) {
   const [image, setImage] = useState(initialFoodImage);
   const [imageEdited, setImageEdited] = useState(hasInitialImage);
   const [storage, setStorage] = useState<StorageLocation>(
-    existingFood?.storage ?? route.params?.initialStorage ?? initialRegistrationDefaults.storage,
+    existingFood?.storage ?? templateFood?.storage ?? route.params?.initialStorage ?? initialRegistrationDefaults.storage,
   );
-  const [storageEdited, setStorageEdited] = useState(Boolean(existingFood?.storage ?? route.params?.initialStorage));
-  const [quantity, setQuantity] = useState(String(existingFood?.quantity ?? initialRegistrationDefaults.quantity));
-  const [quantityEdited, setQuantityEdited] = useState(Boolean(existingFood?.quantity));
+  const [storageEdited, setStorageEdited] = useState(Boolean(existingFood?.storage ?? templateFood?.storage ?? route.params?.initialStorage));
+  const [quantity, setQuantity] = useState(templateFood ? '' : String(existingFood?.quantity ?? initialRegistrationDefaults.quantity));
+  const [quantityEdited, setQuantityEdited] = useState(Boolean(existingFood?.quantity) || Boolean(templateFood));
   const [quantityUnit, setQuantityUnit] = useState<FoodQuantityUnit>(
-    existingFood?.quantityUnit ?? initialRegistrationDefaults.quantityUnit,
+    existingFood?.quantityUnit ?? templateFood?.quantityUnit ?? initialRegistrationDefaults.quantityUnit,
   );
-  const [quantityUnitEdited, setQuantityUnitEdited] = useState(Boolean(existingFood?.quantityUnit));
+  const [quantityUnitEdited, setQuantityUnitEdited] = useState(Boolean(existingFood?.quantityUnit ?? templateFood?.quantityUnit));
   const [expiryDate, setExpiryDate] = useState(
     existingFood?.expiryDate
       ?? route.params?.initialExpiryDate
@@ -83,8 +96,34 @@ export function AddFoodScreen({ navigation, route }: Props) {
   const [expiryDateEdited, setExpiryDateEdited] = useState(Boolean(existingFood?.expiryDate ?? route.params?.initialExpiryDate));
   const [purchaseDate, setPurchaseDate] = useState(initialPurchaseDate);
   const [memo, setMemo] = useState(existingFood?.memo ?? route.params?.initialMemo ?? '');
+  const [showPrevious, setShowPrevious] = useState(false);
+  const [previousQuery, setPreviousQuery] = useState(route.params?.initialName ?? '');
+  const [formEdited, setFormEdited] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const recentFoods = getRecentFoods(foods, previousQuery);
   const [submitted, setSubmitted] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const savingLock = useRef(false);
+  const [shareSelected, setShareSelected] = useState(false);
+  const [savedSharedProduct, setSavedSharedProduct] = useState<SharedProduct | null>(null);
+  const [sharePending, setSharePending] = useState(false);
+  const sharingLock = useRef(false);
+  const [shareError, setShareError] = useState('');
+  const [shareNotice, setShareNotice] = useState('');
+  const canOfferSharing = !isEditing && route.params?.allowProductSharing && Boolean(normalizeSharedBarcode(route.params?.initialBarcode));
+  const sharingConfigured = isSharedProductsConfigured();
+  const submitSharedProduct = async (product: SharedProduct) => {
+    if (sharingLock.current) return;
+    sharingLock.current = true;
+    setSharePending(true);
+    setShareError('');
+    try {
+      const result = await shareProduct(product);
+      setShareNotice(result === 'already_exists' ? 'このバーコードは共有先に登録済みです。既存の商品情報を保持しました。' : '商品情報を共有しました。他のユーザーも検索できます。');
+    } catch {
+      setShareError('食材は登録できましたが、商品情報を共有できませんでした。通信状況を確認して再試行できます。');
+    } finally { sharingLock.current = false; setSharePending(false); }
+  };
 
   const nameError = submitted && !name.trim() ? '食材名を入力してください。' : undefined;
   const ingredientNameError = submitted && !ingredientName.trim() ? 'レシピ用分類を入力してください。' : undefined;
@@ -123,6 +162,7 @@ export function AddFoodScreen({ navigation, route }: Props) {
   };
 
   const handleNameChange = (value: string) => {
+    setFormEdited(true);
     setName(value);
     let nextIngredientName = ingredientName;
     let nextCategory = category;
@@ -151,6 +191,7 @@ export function AddFoodScreen({ navigation, route }: Props) {
   };
 
   const handleIngredientNameChange = (value: string) => {
+    setFormEdited(true);
     setIngredientName(value);
     setIngredientEdited(true);
     const normalized = normalizeProductToIngredient(value);
@@ -171,6 +212,7 @@ export function AddFoodScreen({ navigation, route }: Props) {
   };
 
   const handleCategoryChange = (value: FoodCategory) => {
+    setFormEdited(true);
     setCategory(value);
     if (!imageEdited) {
       setImage(getFoodFallbackImage({
@@ -184,6 +226,7 @@ export function AddFoodScreen({ navigation, route }: Props) {
   };
 
   const handleStorageChange = (value: StorageLocation) => {
+    setFormEdited(true);
     setStorage(value);
     setStorageEdited(true);
     if (!expiryDateEdited) {
@@ -199,33 +242,43 @@ export function AddFoodScreen({ navigation, route }: Props) {
   };
 
   const handleQuantityUnitChange = (value: FoodQuantityUnit) => {
+    setFormEdited(true);
     setQuantityUnit(value);
     setQuantityUnitEdited(true);
   };
 
   const handleQuantityChange = (value: string) => {
+    setFormEdited(true);
     setQuantity(value);
     setQuantityEdited(true);
   };
 
   const handleExpiryDateChange = (value: string) => {
+    setFormEdited(true);
     setExpiryDate(value);
     setExpiryDateEdited(true);
   };
 
   const handlePurchaseDateChange = (value: string) => {
+    setFormEdited(true);
     setPurchaseDate(value);
     applyRegistrationDefaults({ nextPurchaseDate: value });
   };
 
   const handleImageChange = (value: string) => {
+    setFormEdited(true);
     setImage(value);
     setImageEdited(true);
   };
 
   const handleSave = async () => {
     setSubmitted(true);
-    if (!name.trim() || !ingredientName.trim() || !isQuantityValid || isSaving) return;
+    if (!name.trim() || !ingredientName.trim() || !isQuantityValid || savingLock.current || savedSharedProduct) return;
+    if (canOfferSharing && sharingConfigured && shareSelected && !validateSharedProduct({ barcode: route.params?.initialBarcode, name, ingredientName, category })) {
+      alert('共有する商品情報を確認してください', '商品名は120文字以内、食材分類は60文字以内で、改行せず入力してください。共有を外して食材だけ登録することもできます。');
+      return;
+    }
+    savingLock.current = true;
     setIsSaving(true);
 
     let savedImage = image;
@@ -233,8 +286,9 @@ export function AddFoodScreen({ navigation, route }: Props) {
       if (image !== existingFood?.image) savedImage = persistFoodImage(image);
     } catch (error) {
       console.warn('写真を保存できませんでした。', error);
-      Alert.alert('写真を保存できませんでした', '別の写真を選ぶか、もう一度お試しください。');
+      alert('写真を保存できませんでした', '別の写真を選ぶか、もう一度お試しください。');
       setIsSaving(false);
+      savingLock.current = false;
       return;
     }
 
@@ -246,6 +300,7 @@ export function AddFoodScreen({ navigation, route }: Props) {
       category,
       tags: Array.from(new Set([
         ingredientName.trim(),
+        ...(templateFood?.tags ?? []),
         ...(route.params?.initialTags ?? []),
         ...normalizeProductToIngredient(initialProductName || name).tags,
       ].filter(Boolean))),
@@ -279,12 +334,29 @@ export function AddFoodScreen({ navigation, route }: Props) {
         console.warn('バーコード商品を端末へ保存できませんでした。', error);
       }
     }
+    if (canOfferSharing && sharingConfigured && shareSelected) {
+      const shared: SharedProduct = { barcode: normalizeSharedBarcode(route.params?.initialBarcode)!, name: name.trim(), ingredientName: ingredientName.trim(), category };
+      setSavedSharedProduct(shared);
+      await submitSharedProduct(shared);
+      setIsSaving(false);
+      return;
+    }
     navigation.navigate('MainTabs', { screen: 'Home' });
   };
 
+  if (savedSharedProduct) return <Screen bottomSafe>
+    <ScreenHeader title="食材を登録しました" onBack={() => navigation.navigate('MainTabs', { screen: 'Home' })} />
+    <View style={styles.shareResult}>
+      <Text style={styles.reuseName}>{savedSharedProduct.name}</Text>
+      <Text accessibilityLiveRegion="polite" style={styles.reuseHint}>{sharePending ? '商品情報を共有しています...' : shareError || shareNotice}</Text>
+      {shareError ? <PrimaryButton label="商品情報の共有を再試行" disabled={sharePending} onPress={() => void submitSharedProduct(savedSharedProduct)} variant="outline" /> : null}
+      <PrimaryButton label="ホームへ" onPress={() => navigation.navigate('MainTabs', { screen: 'Home' })} />
+    </View>
+  </Screen>;
+
   return (
     <Screen bottomSafe>
-      <ScreenHeader onBack={navigation.goBack} title={isEditing ? '食材を編集' : '食材を追加'} />
+      <ScreenHeader onBack={navigation.goBack} title={isEditing ? '食材を編集' : templateFood ? 'もう一度登録' : '食材を追加'} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {route.params?.initialBarcode && !isEditing ? (
@@ -295,6 +367,37 @@ export function AddFoodScreen({ navigation, route }: Props) {
               </Text>
             </View>
           ) : null}
+          {!isEditing && !templateFood && !route.params?.initialBarcode && !formEdited && foods.length > 0 ? (
+            <View style={styles.reusePanel}>
+              <Pressable accessibilityRole="button" accessibilityState={{ expanded: showPrevious }} onPress={() => setShowPrevious((value) => !value)} style={styles.reuseToggle}>
+                <Text style={styles.reuseTitle}>前の登録から選ぶ</Text>
+                <Ionicons name={showPrevious ? 'chevron-up' : 'chevron-down'} size={19} color={colors.primaryDark} />
+              </Pressable>
+              {showPrevious ? <>
+                <TextInput accessibilityLabel="前の登録を検索" placeholder="食材名・商品名で検索" value={previousQuery} onChangeText={setPreviousQuery} style={styles.reuseSearch} />
+                {recentFoods.length === 0 ? <Text style={styles.reuseHint}>一致する登録はありません。下のフォームから登録できます。</Text> : recentFoods.map((food) => (
+                  <Pressable key={food.id} accessibilityRole="button" accessibilityLabel={`${getFoodDisplayName(food)}の前回の設定を使う`} onPress={() => onReuse(food.id)} style={styles.reuseChoice}>
+                    <View style={styles.reuseCopy}>
+                      <Text style={styles.reuseName}>{getFoodDisplayName(food)}</Text>
+                      <Text style={styles.reuseHint}>{foodCategoryLabels[food.category]}・{storageLabels[food.storage]}・{foodQuantityUnitLabels[food.quantityUnit]}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={19} color={colors.primaryDark} />
+                  </Pressable>
+                ))}
+                <Text style={styles.reuseHint}>最近の登録を最大8件表示しています。</Text>
+              </> : <Text style={styles.reuseHint}>保存場所や単位を引き継いで入力を省略できます。</Text>}
+            </View>
+          ) : null}
+          {templateFood ? <View style={styles.reusePanel}>
+            <Text style={styles.reuseName}>{initialProductName || name}</Text>
+            <Text style={styles.reuseHint}>{foodCategoryLabels[category]}・{storageLabels[storage]}・{foodQuantityUnitLabels[quantityUnit]}</Text>
+            <Text style={styles.reuseHint}>前回の設定を引き継ぎました。今回の購入量と期限を確認してください。</Text>
+            <Pressable accessibilityRole="button" accessibilityState={{ expanded: showDetails }} onPress={() => setShowDetails((value) => !value)} style={styles.reuseToggle}>
+              <Text style={styles.reuseTitle}>{showDetails ? 'その他の項目を閉じる' : 'その他の項目を編集'}</Text>
+              <Ionicons name={showDetails ? 'chevron-up' : 'chevron-down'} size={19} color={colors.primaryDark} />
+            </Pressable>
+          </View> : null}
+          {!templateFood || showDetails ? <>
           <FoodImagePicker image={image} onChange={handleImageChange} />
           {initialProductName ? (
             <View style={styles.productInfoCard}>
@@ -304,7 +407,7 @@ export function AddFoodScreen({ navigation, route }: Props) {
             </View>
           ) : null}
           <FormField
-            autoFocus={!isEditing}
+            autoFocus={!isEditing && !templateFood && foods.length === 0}
             error={nameError}
             label="表示名"
             onChangeText={handleNameChange}
@@ -314,7 +417,7 @@ export function AddFoodScreen({ navigation, route }: Props) {
           <FormField
             error={ingredientNameError}
             label="レシピ用分類"
-            hint="例：明治おいしい牛乳 → 牛乳。レシピ判定ではこの名前とタグを使います。"
+            hint="例：明治おいしい牛乳 → 牛乳。レシピの材料と照合する名前です。"
             onChangeText={handleIngredientNameChange}
             placeholder="例：牛乳"
             value={ingredientName}
@@ -325,17 +428,19 @@ export function AddFoodScreen({ navigation, route }: Props) {
           <FormField label="保存場所">
             <StorageSelector onChange={handleStorageChange} value={storage} />
           </FormField>
+          </> : null}
           <FormField
             error={quantityError}
-            label="残量"
+            label={templateFood ? '今回の購入量' : '残量'}
             hint={`例：牛乳なら「1000」+「ml」、卵なら「10」+「個」`}
           >
             <View style={styles.quantityRow}>
               <TextInput
+                accessibilityLabel={templateFood ? '今回の購入量' : '残量'}
                 keyboardType="decimal-pad"
                 maxLength={8}
                 onChangeText={handleQuantityChange}
-                placeholder="1"
+                placeholder={templateFood ? '購入量' : '1'}
                 placeholderTextColor={colors.textMuted}
                 style={[styles.quantityInput, quantityError && styles.quantityInputError]}
                 value={quantity}
@@ -343,18 +448,30 @@ export function AddFoodScreen({ navigation, route }: Props) {
               <Text style={styles.quantityUnit}>{foodQuantityUnitLabels[quantityUnit]}</Text>
             </View>
           </FormField>
-          <FormField label="単位">
+          {!templateFood || showDetails ? <FormField label="単位">
             <QuantityUnitSelector onChange={handleQuantityUnitChange} value={quantityUnit} />
-          </FormField>
+          </FormField> : null}
           <DatePickerField label="期限日" onChange={handleExpiryDateChange} value={expiryDate} />
+          {!isEditing && !expiryDateEdited ? (
+            <Text style={styles.expiryHint}>自動入力した期限は目安です。パッケージに記載の期限を確認して変更してください。</Text>
+          ) : null}
           <DatePickerField label="購入日" onChange={handlePurchaseDateChange} value={purchaseDate} />
           <FormField
             label="メモ（任意）"
             multiline
-            onChangeText={setMemo}
+            onChangeText={(value) => { setFormEdited(true); setMemo(value); }}
             placeholder="使い道や補足情報など"
             value={memo}
           />
+          {canOfferSharing ? <View style={styles.reusePanel}>
+            <Text style={styles.reuseTitle}>商品情報の共有（任意）</Text>
+            <Text style={styles.reuseHint}>共有するのは次の4項目です。個人の在庫・数量・期限・購入日・保存場所・メモ・写真は送信しません。</Text>
+            <Text style={styles.reuseHint}>バーコード：{route.params?.initialBarcode}{'\n'}商品名：{name.trim() || '未入力'}{'\n'}食材分類：{ingredientName.trim() || '未入力'}{'\n'}カテゴリ：{foodCategoryLabels[category]}</Text>
+            {sharingConfigured ? <Pressable accessibilityRole="checkbox" accessibilityLabel="この商品情報を他のユーザーと共有する" accessibilityState={{ checked: shareSelected }} onPress={() => setShareSelected((value) => !value)} style={styles.shareChoice}>
+              <Ionicons name={shareSelected ? 'checkbox' : 'square-outline'} color={colors.primaryDark} size={25} />
+              <Text style={styles.shareChoiceText}>この商品情報を他のユーザーと共有する</Text>
+            </Pressable> : <Text style={styles.reuseHint}>共有機能は準備中です。今回はこの端末に商品情報を保存します。</Text>}
+          </View> : null}
           <View style={styles.buttonArea}>
             <PrimaryButton
               icon="checkmark"
@@ -369,7 +486,20 @@ export function AddFoodScreen({ navigation, route }: Props) {
   );
 }
 
+const storageLabels: Record<StorageLocation, string> = { refrigerated: '冷蔵', frozen: '冷凍', room: '常温' };
+
 const styles = StyleSheet.create({
+  shareResult: { padding: spacing.lg, gap: spacing.lg },
+  shareChoice: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 48 },
+  shareChoiceText: { flex: 1, color: colors.primaryDark, fontSize: 14, lineHeight: 22, fontWeight: '700' },
+  reusePanel: { backgroundColor: colors.primarySoft, borderRadius: radius.md, padding: spacing.md, gap: spacing.sm },
+  reuseToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, minHeight: 44 },
+  reuseTitle: { color: colors.primaryDark, fontSize: 15, fontWeight: '700', flexShrink: 1 },
+  reuseName: { color: colors.text, fontSize: 17, fontWeight: '700', lineHeight: 24 },
+  reuseHint: { color: colors.textMuted, fontSize: 13, lineHeight: 20 },
+  reuseCopy: { flex: 1, gap: 4 },
+  reuseChoice: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.sm, padding: 12, minHeight: 56 },
+  reuseSearch: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.sm, padding: 12, fontSize: 16, color: colors.text, minHeight: 48 },
   flex: { flex: 1 },
   content: { gap: 22, padding: spacing.md, paddingBottom: spacing.xl },
   barcodeNotice: { alignItems: 'flex-start', backgroundColor: colors.primarySoft, borderRadius: radius.md, flexDirection: 'row', gap: spacing.sm, padding: 13 },
@@ -382,5 +512,6 @@ const styles = StyleSheet.create({
   quantityInput: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.sm, borderWidth: 1, color: colors.text, fontSize: 16, height: 48, paddingHorizontal: 14, textAlign: 'center', width: 100 },
   quantityInputError: { borderColor: colors.danger },
   quantityUnit: { color: colors.text, fontSize: 15, fontWeight: '600' },
+  expiryHint: { color: colors.primaryDark, fontSize: 13, lineHeight: 20, marginTop: -14 },
   buttonArea: { marginTop: spacing.sm },
 });

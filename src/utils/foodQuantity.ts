@@ -41,24 +41,31 @@ export function subtractQuantity(current: number, used: number): number {
   return Math.max(0, Number((current - used).toFixed(2)));
 }
 
-function parseSimpleFraction(value: string): number | null {
-  const match = value.match(/(\d+)\s*\/\s*(\d+)/);
+export function parseRecipeAmountForUnit(amount: string, unit: FoodQuantityUnit): number | null {
+  const normalized = amount.normalize('NFKC').toLowerCase().replace(',', '.').replace(/\s+/g, '');
+  const match = normalized.match(/^(?:約)?(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)(個|玉|kg|g|ml|l|本|袋|パック)$/);
   if (!match) return null;
-  const numerator = Number(match[1]);
-  const denominator = Number(match[2]);
-  if (!denominator) return null;
-  return numerator / denominator;
+  const units: Record<string, { unit: FoodQuantityUnit; factor: number }> = {
+    個: { unit: 'piece', factor: 1 }, 玉: { unit: 'piece', factor: 1 },
+    g: { unit: 'g', factor: 1 }, kg: { unit: 'g', factor: 1000 },
+    ml: { unit: 'ml', factor: 1 }, l: { unit: 'ml', factor: 1000 },
+    本: { unit: 'bottle', factor: 1 }, 袋: { unit: 'bag', factor: 1 },
+    パック: { unit: 'pack', factor: 1 },
+  };
+  const sourceUnit = units[match[2]];
+  if (sourceUnit.unit !== unit) return null;
+  const [numerator, denominator = 1] = match[1].split('/').map(Number);
+  const parsed = numerator / denominator * sourceUnit.factor;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-export function parseRecipeAmountForUnit(amount: string, unit: FoodQuantityUnit): number | null {
-  const label = foodQuantityUnitLabels[unit];
-  const normalized = amount.replace(',', '.').replace(/\s+/g, '');
-  const fraction = parseSimpleFraction(normalized);
-  if (fraction !== null && normalized.includes(label)) return fraction;
-
-  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = normalized.match(new RegExp(`(\\d+(?:\\.\\d+)?)${escapedLabel}`));
-  if (!match) return null;
-  const parsed = Number(match[1]);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+export function getSuggestedUseQuantity(amounts: string[], unit: FoodQuantityUnit, available: number, multiplier = 1): number | null {
+  if (amounts.length === 0 || !Number.isFinite(multiplier) || multiplier <= 0) return null;
+  const parsed = amounts.map((amount) => parseRecipeAmountForUnit(amount, unit));
+  if (parsed.some((amount) => amount === null)) return null;
+  const total = parsed.reduce<number>((sum, amount) => sum + amount!, 0) * multiplier;
+  // The inventory stores at most two decimal places. Do not guess when units differ
+  // or the recipe needs more than the registered stock.
+  const rounded = Number(total.toFixed(2));
+  return total <= available && rounded > 0 ? rounded : null;
 }

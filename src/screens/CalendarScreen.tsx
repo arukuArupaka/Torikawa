@@ -1,9 +1,11 @@
+import { useCurrentDay } from '../hooks/useCurrentDay';
+import { useAppAlert } from '../context/AppAlertContext';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { CompositeScreenProps } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { FoodCard } from '../components/FoodCard';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Screen } from '../components/Screen';
@@ -11,7 +13,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { colors, radius, spacing } from '../constants/theme';
 import { useAppData } from '../context/AppDataContext';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
-import { daysUntil, parseDate, toDateString } from '../utils/date';
+import { daysUntil, getRemainingLabel, parseDate, toDateString } from '../utils/date';
 import { getFoodDisplayName } from '../utils/ingredientNormalizer';
 
 const weekDays = ['日', '月', '火', '水', '木', '金', '土'];
@@ -22,6 +24,8 @@ type Props = CompositeScreenProps<
 >;
 
 export function CalendarScreen({ navigation }: Props) {
+  const alert = useAppAlert();
+  const currentDay = useCurrentDay();
   const { foods, updateFood } = useAppData();
   const [selectedDate, setSelectedDate] = useState<string | null>(() => toDateString(new Date()));
   const [movingFoodId, setMovingFoodId] = useState<string | null>(null);
@@ -61,6 +65,13 @@ export function CalendarScreen({ navigation }: Props) {
     setSelectedDate(null);
   };
 
+  const showToday = () => {
+    const today = parseDate(currentDay);
+    setVisibleMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+    setSelectedDate(currentDay);
+    setMovingFoodId(null);
+  };
+
   const selectDate = (dateString: string) => {
     if (!movingFood) {
       setSelectedDate((current) => current === dateString ? null : dateString);
@@ -75,7 +86,7 @@ export function CalendarScreen({ navigation }: Props) {
 
     const date = parseDate(dateString);
     const displayName = getFoodDisplayName(movingFood);
-    Alert.alert(
+    alert(
       '期限日を変更',
       `「${displayName}」の期限を${date.getMonth() + 1}月${date.getDate()}日に変更しますか？`,
       [
@@ -111,23 +122,27 @@ export function CalendarScreen({ navigation }: Props) {
               <Text style={styles.movingTitle}>「{getFoodDisplayName(movingFood)}」の移動先を選択</Text>
               <Text style={styles.movingDescription}>新しい期限日をカレンダーからタップしてください。</Text>
             </View>
-            <Pressable hitSlop={10} onPress={() => setMovingFoodId(null)}>
+            <Pressable accessibilityRole="button" accessibilityLabel="期限日の変更をやめる" hitSlop={10} onPress={() => setMovingFoodId(null)}>
               <Ionicons color={colors.textMuted} name="close" size={23} />
             </Pressable>
           </View>
         ) : null}
         <View style={styles.calendarCard}>
           <View style={styles.monthHeader}>
-            <Pressable hitSlop={12} onPress={() => changeMonth(-1)}>
+            <Pressable accessibilityRole="button" accessibilityLabel="前の月" style={styles.monthArrow} onPress={() => changeMonth(-1)}>
               <Ionicons color={colors.text} name="chevron-back" size={24} />
             </Pressable>
             <Text style={styles.monthTitle}>
               {visibleMonth.getFullYear()}年 {visibleMonth.getMonth() + 1}月
             </Text>
-            <Pressable hitSlop={12} onPress={() => changeMonth(1)}>
+            <Pressable accessibilityRole="button" accessibilityLabel="次の月" style={styles.monthArrow} onPress={() => changeMonth(1)}>
               <Ionicons color={colors.text} name="chevron-forward" size={24} />
             </Pressable>
           </View>
+
+          <Pressable accessibilityRole="button" accessibilityLabel="今日の日付を表示" onPress={showToday} style={styles.todayButton}>
+            <Text style={styles.todayButtonText}>今日に戻る</Text>
+          </Pressable>
 
           <View style={styles.weekRow}>
             {weekDays.map((day, index) => (
@@ -143,7 +158,7 @@ export function CalendarScreen({ navigation }: Props) {
                 ? toDateString(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), day))
                 : '';
               const dayFoods = day ? activeFoods.filter((food) => food.expiryDate === dateString) : [];
-              const isToday = dateString === toDateString(new Date());
+              const isToday = dateString === currentDay;
               const isSelected = dateString === selectedDate;
               return (
                 <View key={`${day ?? 'empty'}-${index}`} style={styles.dayCellSlot}>
@@ -239,7 +254,7 @@ export function CalendarScreen({ navigation }: Props) {
                     </View>
                     <View style={styles.upcomingText}>
                       <Text style={styles.foodName}>{getFoodDisplayName(food)}の期限</Text>
-                      <Text style={styles.remaining}>あと{daysUntil(food.expiryDate)}日</Text>
+                      <Text style={styles.remaining}>{getRemainingLabel(food.expiryDate)}</Text>
                     </View>
                   </View>
                 );
@@ -261,6 +276,9 @@ const styles = StyleSheet.create({
   calendarCard: { backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.sm },
   monthHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', padding: spacing.md },
   monthTitle: { color: colors.text, fontSize: 18, fontWeight: '800' },
+  monthArrow: { alignItems: 'center', justifyContent: 'center', minWidth: 44, minHeight: 44 },
+  todayButton: { alignSelf: 'center', justifyContent: 'center', minHeight: 44, paddingHorizontal: spacing.md, marginBottom: spacing.sm },
+  todayButtonText: { color: colors.primaryDark, fontSize: 14, fontWeight: '700' },
   weekRow: { flexDirection: 'row' },
   weekDay: { color: colors.textMuted, flex: 1, fontSize: 12, fontWeight: '700', paddingBottom: spacing.sm, textAlign: 'center' },
   sunday: { color: colors.danger },

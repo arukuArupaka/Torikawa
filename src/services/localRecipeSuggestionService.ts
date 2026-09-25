@@ -1,6 +1,7 @@
 import { FoodItem, NewRecipe, RecipeCategory } from '../types';
 import { daysUntil } from '../utils/date';
-import { getFoodIngredientName, getFoodSearchTerms } from '../utils/ingredientNormalizer';
+import { getFoodIngredientName } from '../utils/ingredientNormalizer';
+import { findMatchingFood } from '../utils/recipeMatching';
 import { getRecipeFallbackImage } from '../utils/recipeImages';
 
 export type LocalRecipeIdea = NewRecipe & {
@@ -19,13 +20,8 @@ type IdeaSeed = {
   usedFoodNames: string[];
 };
 
-function includesAny(value: string, keywords: string[]) {
-  const normalizedValue = value.toLocaleLowerCase('ja-JP');
-  return keywords.some((keyword) => normalizedValue.includes(keyword.toLocaleLowerCase('ja-JP')));
-}
-
 function findFood(foods: FoodItem[], keywords: string[]) {
-  return foods.find((food) => getFoodSearchTerms(food).some((term) => includesAny(term, keywords)));
+  return foods.find((food) => keywords.some((keyword) => findMatchingFood(keyword, [food])));
 }
 
 function ingredientLabel(food: FoodItem): string {
@@ -90,11 +86,11 @@ export function generateLocalRecipeIdeas(foods: FoodItem[]): LocalRecipeIdea[] {
     addIdea({
       category: 'breakfast',
       name: `${eggName}と${milkName}のふわっとオムレツ`,
-      ingredients: [eggName, milkName, '塩こしょう'],
-      ingredientAmounts: { [eggName]: '2個', [milkName]: '大さじ2', 塩こしょう: '少々' },
+      ingredients: [eggName, milkName, '塩こしょう', '油'],
+      ingredientAmounts: { [eggName]: '2個', [milkName]: '大さじ2', 塩こしょう: '少々', 油: '小さじ1' },
       steps: [
-        `${eggName}と${milkName}をよく混ぜます。`,
-        'フライパンで弱めの中火にし、ゆっくり火を通します。',
+        `${eggName}、${milkName}、塩こしょうをよく混ぜます。`,
+        'フライパンに油を熱して卵液を流し入れ、弱めの中火でゆっくり火を通します。',
         '半熟になったら形を整えて盛り付けます。',
       ],
       minutes: 10,
@@ -109,11 +105,11 @@ export function generateLocalRecipeIdeas(foods: FoodItem[]): LocalRecipeIdea[] {
     addIdea({
       category: 'quick',
       name: `${cabbageName}と${eggName}のさっと炒め`,
-      ingredients: [cabbageName, eggName, '醤油'],
-      ingredientAmounts: { [cabbageName]: '2枚', [eggName]: '1個', 醤油: '小さじ2' },
+      ingredients: [cabbageName, eggName, '醤油', '油'],
+      ingredientAmounts: { [cabbageName]: '2枚', [eggName]: '1個', 醤油: '小さじ2', 油: '小さじ2' },
       steps: [
         `${cabbageName}を食べやすい大きさに切ります。`,
-        `${eggName}を先に炒めて取り出します。`,
+        `フライパンに油を熱し、${eggName}を先に炒めて取り出します。`,
         `${cabbageName}を炒め、${eggName}を戻して醤油で味を整えます。`,
       ],
       minutes: 10,
@@ -127,11 +123,11 @@ export function generateLocalRecipeIdeas(foods: FoodItem[]): LocalRecipeIdea[] {
     addIdea({
       category: 'side',
       name: `${tofuName}の照り焼きステーキ`,
-      ingredients: [tofuName, '片栗粉', '醤油'],
-      ingredientAmounts: { [tofuName]: '1丁', 片栗粉: '適量', 醤油: '大さじ1' },
+      ingredients: [tofuName, '片栗粉', '醤油', '油'],
+      ingredientAmounts: { [tofuName]: '1丁', 片栗粉: '適量', 醤油: '大さじ1', 油: '小さじ2' },
       steps: [
         `${tofuName}の水気を切って食べやすく切ります。`,
-        '片栗粉をまぶして両面を焼きます。',
+        '片栗粉をまぶし、油を熱したフライパンで両面を焼きます。',
         '醤油をからめて香ばしく仕上げます。',
       ],
       minutes: 12,
@@ -146,11 +142,11 @@ export function generateLocalRecipeIdeas(foods: FoodItem[]): LocalRecipeIdea[] {
     addIdea({
       category: 'main',
       name: `${chickenName}と${onionName}の照り焼き炒め`,
-      ingredients: [chickenName, onionName, '醤油', '砂糖'],
-      ingredientAmounts: { [chickenName]: '食べやすい量', [onionName]: '1/2個', 醤油: '大さじ1', 砂糖: '小さじ1' },
+      ingredients: [chickenName, onionName, '醤油', '砂糖', '油'],
+      ingredientAmounts: { [chickenName]: '食べやすい量', [onionName]: '1/2個', 醤油: '大さじ1', 砂糖: '小さじ1', 油: '小さじ1' },
       steps: [
         `${chickenName}と${onionName}を食べやすい大きさに切ります。`,
-        `${chickenName}に火が通るまで炒め、${onionName}を加えます。`,
+        `フライパンに油を熱し、${chickenName}に火が通るまで炒め、${onionName}を加えます。`,
         '醤油と砂糖をからめて照りが出るまで炒めます。',
       ],
       minutes: 15,
@@ -165,11 +161,11 @@ export function generateLocalRecipeIdeas(foods: FoodItem[]): LocalRecipeIdea[] {
     addIdea({
       category: 'main',
       name: `${porkName}と${cabbageName}のみそ炒め`,
-      ingredients: [porkName, cabbageName, '味噌', '醤油'],
-      ingredientAmounts: { [porkName]: '食べやすい量', [cabbageName]: '2枚', 味噌: '大さじ1', 醤油: '小さじ1' },
+      ingredients: [porkName, cabbageName, '味噌', '醤油', '油'],
+      ingredientAmounts: { [porkName]: '食べやすい量', [cabbageName]: '2枚', 味噌: '大さじ1', 醤油: '小さじ1', 油: '小さじ1' },
       steps: [
         `${porkName}と${cabbageName}を食べやすい大きさに切ります。`,
-        `${porkName}を炒め、色が変わったら${cabbageName}を加えます。`,
+        `フライパンに油を熱して${porkName}を炒め、火が通ったら${cabbageName}を加えます。`,
         '味噌と醤油をからめて、全体になじませます。',
       ],
       minutes: 12,
@@ -203,11 +199,11 @@ export function generateLocalRecipeIdeas(foods: FoodItem[]): LocalRecipeIdea[] {
     addIdea({
       category: 'mealPrep',
       name: `${potatoName}と${onionName}のカレー炒め`,
-      ingredients: [potatoName, onionName, 'カレー粉', '塩'],
-      ingredientAmounts: { [potatoName]: '1個', [onionName]: '1/2個', カレー粉: '小さじ1', 塩: '少々' },
+      ingredients: [potatoName, onionName, 'カレー粉', '塩', '油'],
+      ingredientAmounts: { [potatoName]: '1個', [onionName]: '1/2個', カレー粉: '小さじ1', 塩: '少々', 油: '小さじ1' },
       steps: [
         `${potatoName}を細めに切り、${onionName}は薄切りにします。`,
-        `${potatoName}に火が通るまで炒め、${onionName}を加えます。`,
+        `フライパンに油を熱し、${potatoName}に火が通るまで炒め、${onionName}を加えます。`,
         'カレー粉と塩で味を整えます。',
       ],
       minutes: 15,
@@ -222,12 +218,12 @@ export function generateLocalRecipeIdeas(foods: FoodItem[]): LocalRecipeIdea[] {
     addIdea({
       category: 'side',
       name: `${tomatoName}と${cheeseName}のさっぱりサラダ`,
-      ingredients: [tomatoName, cheeseName, 'オリーブオイル', '塩'],
-      ingredientAmounts: { [tomatoName]: '1個', [cheeseName]: '食べやすい量', オリーブオイル: '小さじ1', 塩: '少々' },
+      ingredients: [tomatoName, cheeseName, 'オリーブオイル', '塩', '黒こしょう'],
+      ingredientAmounts: { [tomatoName]: '1個', [cheeseName]: '食べやすい量', オリーブオイル: '小さじ1', 塩: '少々', 黒こしょう: '少々' },
       steps: [
         `${tomatoName}と${cheeseName}を食べやすい大きさに切ります。`,
         '器に盛り、オリーブオイルと塩をかけます。',
-        '好みで黒こしょうをふります。',
+        '黒こしょうをふって仕上げます。',
       ],
       minutes: 5,
       reason: '火を使わず、早めに食べたいトマトを使えます。',
@@ -241,10 +237,10 @@ export function generateLocalRecipeIdeas(foods: FoodItem[]): LocalRecipeIdea[] {
     addIdea({
       category: 'breakfast',
       name: `${breadName}のたまごトースト`,
-      ingredients: [breadName, eggName, 'マヨネーズ'],
-      ingredientAmounts: { [breadName]: '1枚', [eggName]: '1個', マヨネーズ: '適量' },
+      ingredients: [breadName, eggName, 'マヨネーズ', '水'],
+      ingredientAmounts: { [breadName]: '1枚', [eggName]: '1個', マヨネーズ: '適量', 水: '卵が浸る量（ゆで用）' },
       steps: [
-        `${eggName}をゆでるか炒り卵にします。`,
+        `鍋に${eggName}と卵が浸る量の水を入れてゆで卵を作り、粗くつぶします。`,
         `${breadName}に${eggName}とマヨネーズをのせます。`,
         'トースターで軽く焼きます。',
       ],
@@ -258,15 +254,15 @@ export function generateLocalRecipeIdeas(foods: FoodItem[]): LocalRecipeIdea[] {
     const riceName = ingredientLabel(rice);
     const eggName = ingredientLabel(egg);
     const vegetableName = ingredientLabel(vegetable);
-    const titleRiceName = includesAny(riceName, ['米']) ? 'ごはん' : riceName;
+    const titleRiceName = riceName === '米' ? 'ごはん' : riceName;
     addIdea({
       category: 'quick',
       name: `${titleRiceName}と${eggName}のぱらっとチャーハン`,
-      ingredients: [riceName, eggName, vegetableName, '醤油'],
-      ingredientAmounts: { [riceName]: '茶碗1杯分', [eggName]: '1個', [vegetableName]: '食べやすい量', 醤油: '小さじ2' },
+      ingredients: [riceName, eggName, vegetableName, '醤油', '油'],
+      ingredientAmounts: { [riceName]: '茶碗1杯分', [eggName]: '1個', [vegetableName]: '食べやすい量', 醤油: '小さじ2', 油: '小さじ2' },
       steps: [
         `${vegetableName}を細かく切ります。`,
-        `${eggName}と${riceName}を炒め、${vegetableName}を加えます。`,
+        `フライパンに油を熱し、${eggName}と${riceName}を炒め、${vegetableName}を加えます。`,
         '醤油で香りをつけて仕上げます。',
       ],
       minutes: 10,
@@ -281,11 +277,11 @@ export function generateLocalRecipeIdeas(foods: FoodItem[]): LocalRecipeIdea[] {
     addIdea({
       category: 'main',
       name: `${noodlesName}と${vegetableName}の具だくさん炒め`,
-      ingredients: [noodlesName, vegetableName, '醤油'],
-      ingredientAmounts: { [noodlesName]: '1人分', [vegetableName]: '食べやすい量', 醤油: '小さじ2' },
+      ingredients: [noodlesName, vegetableName, '醤油', '油'],
+      ingredientAmounts: { [noodlesName]: '1人分', [vegetableName]: '食べやすい量', 醤油: '小さじ2', 油: '小さじ1' },
       steps: [
         `${vegetableName}を食べやすい大きさに切ります。`,
-        `${vegetableName}を炒め、${noodlesName}を加えます。`,
+        `フライパンに油を熱して${vegetableName}を炒め、${noodlesName}を加えます。`,
         '醤油で味を整えます。',
       ],
       minutes: 12,
@@ -299,26 +295,26 @@ export function generateLocalRecipeIdeas(foods: FoodItem[]): LocalRecipeIdea[] {
       ? onion
       : carrot && carrot.id !== vegetable.id
         ? carrot
-        : usableFoods.find((food) => food.id !== vegetable.id);
+        : usableFoods.find((food) => food.id !== vegetable.id && food.category === 'vegetables');
     const vegetableName = ingredientLabel(vegetable);
     const secondVegetableName = secondVegetable ? ingredientLabel(secondVegetable) : null;
-    const ingredients = secondVegetableName ? [vegetableName, secondVegetableName, 'コンソメ'] : [vegetableName, 'コンソメ'];
+    const vegetableNames = secondVegetableName ? [vegetableName, secondVegetableName] : [vegetableName];
     addIdea({
       category: 'soup',
       name: `${vegetableName}のあったかスープ`,
-      ingredients,
-      ingredientAmounts: Object.fromEntries(ingredients.map((ingredient, index) => [
-        ingredient,
-        index === ingredients.length - 1 ? '適量' : '食べやすい量',
-      ])),
+      ingredients: [...vegetableNames, 'コンソメ', '塩こしょう', '油', '水'],
+      ingredientAmounts: {
+        ...Object.fromEntries(vegetableNames.map((ingredient) => [ingredient, '食べやすい量'])),
+        コンソメ: '小さじ2', 塩こしょう: '少々', 油: '小さじ1', 水: '400ml',
+      },
       steps: [
         '食材を食べやすい大きさに切ります。',
-        '鍋で軽く炒め、水を加えて煮込みます。',
-        'コンソメや塩こしょうで味を整えます。',
+        '鍋に油を熱して食材を軽く炒め、水を加えて煮込みます。',
+        'コンソメを加え、塩こしょうで味を整えます。',
       ],
       minutes: 18,
       reason: '余りがちな野菜をまとめて使えます。',
-      usedFoodNames: ingredients.filter((ingredient) => ingredient !== 'コンソメ'),
+      usedFoodNames: vegetableNames,
     });
   }
 
@@ -334,7 +330,7 @@ export function generateLocalRecipeIdeas(foods: FoodItem[]): LocalRecipeIdea[] {
       ingredientAmounts: { [foodName]: '使いたい分', 油: '小さじ1', 塩こしょう: '少々' },
       steps: [
         `${foodName}を食べやすい大きさに切ります。`,
-        'フライパンで焼き、火を通します。',
+        'フライパンに油を熱して焼き、火を通します。',
         '塩こしょうで味を整えます。',
       ],
       minutes: 8,

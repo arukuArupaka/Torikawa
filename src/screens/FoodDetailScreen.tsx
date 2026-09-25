@@ -1,6 +1,8 @@
+import { useCurrentDay } from '../hooks/useCurrentDay';
+import { useAppAlert } from '../context/AppAlertContext';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Alert, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -28,6 +30,8 @@ const statusLabels: Record<FoodStatus, string> = {
 };
 
 export function FoodDetailScreen({ navigation, route }: Props) {
+  const alert = useAppAlert();
+  useCurrentDay();
   const { foods, addShoppingItem, deleteFood, markFoodDisposed, markFoodUsed, restoreFood } = useAppData();
   const food = foods.find((item) => item.id === route.params.foodId);
 
@@ -50,12 +54,12 @@ export function FoodDetailScreen({ navigation, route }: Props) {
   const addToShoppingList = () => {
     const added = addShoppingItem(displayName, '使い切った食材から追加');
     if (!added) {
-      Alert.alert('追加済みです', `「${displayName}」は未完了の買い物リストにあります。`);
+      alert('追加済みです', `「${displayName}」は未完了の買い物リストにあります。`);
     }
   };
 
   const confirmMarkUsed = () => {
-    Alert.alert('使い切ったとして記録', 'この食材を使い切ったとして記録しますか？', [
+    alert('使い切ったとして記録', 'この食材を使い切ったとして記録しますか？', [
       { text: 'キャンセル', style: 'cancel' },
       {
         text: '記録だけ',
@@ -76,7 +80,7 @@ export function FoodDetailScreen({ navigation, route }: Props) {
   };
 
   const confirmMarkDisposed = () => {
-    Alert.alert('捨てたとして記録', 'この食材を捨てたとして記録しますか？', [
+    alert('捨てたとして記録', 'この食材を捨てたとして記録しますか？', [
       { text: 'キャンセル', style: 'cancel' },
       {
         text: 'OK',
@@ -90,7 +94,7 @@ export function FoodDetailScreen({ navigation, route }: Props) {
   };
 
   const confirmRestore = () => {
-    Alert.alert('記録を取り消す', 'この食材を管理中に戻しますか？', [
+    alert('記録を取り消す', 'この食材を管理中に戻しますか？', [
       { text: 'キャンセル', style: 'cancel' },
       {
         text: '管理中に戻す',
@@ -103,7 +107,7 @@ export function FoodDetailScreen({ navigation, route }: Props) {
   };
 
   const confirmDelete = () => {
-    Alert.alert(
+    alert(
       '登録データを完全に削除',
       `「${displayName}」を完全に削除しますか？この操作は取り消せません。`,
       [
@@ -171,6 +175,7 @@ export function FoodDetailScreen({ navigation, route }: Props) {
         ) : (
           <PrimaryButton icon="arrow-undo-outline" label="記録を取り消す" onPress={confirmRestore} variant="outline" />
         )}
+        <PrimaryButton icon="add-circle-outline" label="もう一度登録する" onPress={() => navigation.navigate('AddFood', { reuseFoodId: food.id })} variant="outline" />
         <PrimaryButton label="登録データを完全に削除する" onPress={confirmDelete} variant="danger" />
       </ScrollView>
     </Screen>

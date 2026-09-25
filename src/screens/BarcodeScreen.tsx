@@ -1,10 +1,11 @@
+import { normalizeSharedBarcode } from '../../shared/productContract';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { CompositeScreenProps, useIsFocused } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { BarcodeScanningResult } from 'expo-camera';
-import { useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BarcodeScanner } from '../components/BarcodeScanner';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Screen } from '../components/Screen';
@@ -34,6 +35,7 @@ type ScanResult = {
 
 const productSourceLabels: Record<ProductLookupSource, string> = {
   learned: '以前の登録内容',
+  shared: 'みんなの商品情報（利用者が登録）',
   local: '端末内サンプル',
   'yahoo-shopping': 'Yahoo!ショッピング',
   'open-food-facts': 'Open Food Facts',
@@ -45,10 +47,13 @@ export function BarcodeScreen({ navigation }: Props) {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [lookupFailed, setLookupFailed] = useState(false);
+  const [manualBarcode, setManualBarcode] = useState('');
+  const scanBusy = useRef(false);
 
   const handleScan = async (result: BarcodeScanningResult) => {
     const barcode = result.data.trim();
-    if (!barcode) return;
+    if (!barcode || scanBusy.current) return;
+    scanBusy.current = true;
     setIsLookingUp(true);
     setLookupFailed(false);
     try {
@@ -60,6 +65,7 @@ export function BarcodeScreen({ navigation }: Props) {
       setScanResult({ barcode, type: result.type, product: null, source: 'none' });
     } finally {
       setIsLookingUp(false);
+      scanBusy.current = false;
     }
   };
 
@@ -81,6 +87,7 @@ export function BarcodeScreen({ navigation }: Props) {
       initialImage: scanResult.product?.image,
       initialMemo: `バーコード: ${scanResult.barcode}`,
       initialBarcode: scanResult.barcode,
+      allowProductSharing: scanResult.source === 'none' && ['ean13', 'ean8'].includes(scanResult.type),
       initialCategory: scanResult.product?.category,
       initialTags: scanResult.product?.tags,
       initialStorage: scanResult.product?.storage,
@@ -102,7 +109,7 @@ export function BarcodeScreen({ navigation }: Props) {
             <ActivityIndicator color={colors.primary} size="small" />
             <View style={styles.lookupTextArea}>
               <Text style={styles.lookupTitle}>商品情報を検索しています</Text>
-              <Text style={styles.lookupText}>Yahoo!ショッピングとOpen Food Factsへ問い合わせ中...</Text>
+              <Text style={styles.lookupText}>端末・共有データベース・外部サービスを確認中...</Text>
             </View>
           </View>
         ) : scanResult ? (
@@ -134,7 +141,7 @@ export function BarcodeScreen({ navigation }: Props) {
                       {lookupFailed ? '商品情報を検索できませんでした' : '商品情報が見つかりません'}
                     </Text>
                     <Text style={styles.productCategory}>
-                      {lookupFailed ? '通信状況を確認するか、手入力してください' : 'Open Food Factsに未登録のため、手入力できます'}
+                      {lookupFailed ? '通信状況を確認するか、手入力してください' : '検索先に商品情報がないため、手入力できます'}
                     </Text>
                     <Text style={styles.barcodeText}>{scanResult.barcode}</Text>
                   </View>
@@ -169,10 +176,15 @@ export function BarcodeScreen({ navigation }: Props) {
           </View>
         )}
 
+        {!scanResult ? <View style={styles.manualArea}>
+          <Text style={styles.waitingTitle}>番号を入力して検索</Text>
+          <TextInput accessibilityLabel="バーコード番号" value={manualBarcode} onChangeText={setManualBarcode} keyboardType="number-pad" maxLength={13} placeholder="8桁または13桁のJAN・EAN" style={styles.manualInput} />
+          <PrimaryButton label="番号で検索" disabled={isLookingUp || !normalizeSharedBarcode(manualBarcode)} onPress={() => void handleScan({ data: normalizeSharedBarcode(manualBarcode)!, type: manualBarcode.trim().length === 8 ? 'ean8' : 'ean13' } as BarcodeScanningResult)} />
+        </View> : null}
         <View style={styles.note}>
           <Ionicons color={colors.textMuted} name="information-circle-outline" size={20} />
           <Text style={styles.noteText}>
-            商品検索には端末内カタログ、Yahoo!ショッピング、Open Food Factsを使用します。データベースにない商品も、バーコード番号を引き継いで手入力できます。
+            商品検索には端末内カタログ、共有商品データベース、Yahoo!ショッピング、Open Food Factsを使用します。共有の商品情報は利用者が登録した内容です。商品名を確認してご利用ください。データベースにない商品も、バーコード番号を引き継いで手入力できます。
           </Text>
         </View>
       </ScrollView>
@@ -181,6 +193,8 @@ export function BarcodeScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
+  manualArea: { marginHorizontal: spacing.md, gap: spacing.sm },
+  manualInput: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.sm, padding: 12, minHeight: 48, fontSize: 16, color: colors.text },
   content: { gap: spacing.md, paddingBottom: spacing.xl },
   inactiveCamera: { backgroundColor: '#111', height: 300 },
   resultLabel: { color: colors.textMuted, fontSize: 13, fontWeight: '700', marginBottom: spacing.sm, marginHorizontal: spacing.md },
