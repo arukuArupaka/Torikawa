@@ -1,9 +1,10 @@
-import { getRecipeStock, getStockLabel } from '../utils/recipeStock';
+import { FoodImage } from '../components/FoodImage';
+import { allocateRecipeStock, getRecipeStock, getStockLabel } from '../utils/recipeStock';
 import { useAppAlert } from '../context/AppAlertContext';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type AlertButton } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type AlertButton } from 'react-native';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -12,13 +13,13 @@ import { useAppData } from '../context/AppDataContext';
 import { useCurrentDay } from '../hooks/useCurrentDay';
 import { RootStackParamList } from '../navigation/types';
 import { FoodItem } from '../types';
+import { createId } from '../utils/id';
 import { daysUntil, getRemainingLabel } from '../utils/date';
 import {
   foodQuantityUnitLabels,
   formatFoodQuantity,
   isValidQuantity,
   parseQuantityInput,
-  getSuggestedUseQuantity,
   subtractQuantity,
 } from '../utils/foodQuantity';
 import { getFoodDisplayName } from '../utils/ingredientNormalizer';
@@ -37,7 +38,7 @@ type MatchedFood = {
 
 export function RecipeDetailScreen({ navigation, route }: Props) {
   const alert = useAppAlert();
-  const { addShoppingItem, deleteRecipe, foods, markFoodUsed, recipes, shoppingItems, toggleRecipeFavorite, updateFood } = useAppData();
+  const { addShoppingItem, deleteRecipe, foods, recordConsumption, recipes, shoppingItems, toggleRecipeFavorite } = useAppData();
   useCurrentDay();
   const recipe = recipes.find((item) => item.id === route.params.recipeId);
   const [selectedServings, setSelectedServings] = useState<number | null>(null);
@@ -64,19 +65,24 @@ export function RecipeDetailScreen({ navigation, route }: Props) {
     };
   }) ?? [];
   const matchedFoodMap = new Map<string, MatchedFood>();
-  ingredientRows.forEach(({ food, ingredient }) => {
-    if (!food) return;
-    const current = matchedFoodMap.get(food.id);
-    matchedFoodMap.set(food.id, {
-      food,
-      ingredients: [...(current?.ingredients ?? []), ingredient],
+  stockRows.forEach(({ foods: lots, ingredient, status }) => {
+    if (status === 'preparation') return;
+    lots.forEach((food) => {
+      const current = matchedFoodMap.get(food.id);
+      matchedFoodMap.set(food.id, {
+        food,
+        ingredients: [...(current?.ingredients ?? []), ingredient],
+      });
     });
   });
-  const matchedFoods = [...matchedFoodMap.values()];
+  const matchedFoods = [...matchedFoodMap.values()].sort((a, b) => a.food.expiryDate.localeCompare(b.food.expiryDate));
+  const suggestedAmounts = allocateRecipeStock(stockRows);
+  const operationId = useRef(createId('cooking'));
   const [actions, setActions] = useState<Record<string, ConsumptionAction>>({});
   const [usedAmounts, setUsedAmounts] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    operationId.current = createId('cooking');
     setSelectedServings(null);
     setServingsNotice('');
     setShoppingNotice('');
@@ -95,18 +101,11 @@ export function RecipeDetailScreen({ navigation, route }: Props) {
     setUsedAmounts({});
   };
 
-  const getSuggestedUseAmount = (food: FoodItem, ingredients: string[]) => {
-    return getSuggestedUseQuantity(
-      ingredients.map((ingredient) => recipe?.ingredientAmounts[ingredient] ?? ''),
-      food.quantityUnit,
-      food.quantity,
-      servingsMultiplier,
-    );
-  };
+  const getSuggestedUseAmount = (food: FoodItem) => suggestedAmounts[food.id] ?? null;
 
-  const selectPartialAction = (food: FoodItem, ingredients: string[]) => {
+  const selectPartialAction = (food: FoodItem) => {
     setServingsNotice('');
-    const suggestedAmount = getSuggestedUseAmount(food, ingredients);
+    const suggestedAmount = getSuggestedUseAmount(food);
     setActions((current) => ({ ...current, [food.id]: 'partial' }));
     setUsedAmounts((current) => ({
       ...current,
@@ -128,9 +127,13 @@ export function RecipeDetailScreen({ navigation, route }: Props) {
     setServingsNotice('');
     const nextActions: Record<string, ConsumptionAction> = {};
     const nextAmounts: Record<string, string> = {};
-    matchedFoods.forEach(({ food, ingredients }) => {
-      const suggestedAmount = getSuggestedUseAmount(food, ingredients);
+    matchedFoods.forEach(({ food }) => {
+      const suggestedAmount = getSuggestedUseAmount(food);
       if (!suggestedAmount) {
+        if (stockRows.some((row) => row.status === 'sufficient' && row.foods.some((lot) => lot.id === food.id))) {
+          nextActions[food.id] = 'none';
+          return;
+        }
         nextActions[food.id] = 'partial';
         nextAmounts[food.id] = '';
         return;
@@ -214,15 +217,16 @@ export function RecipeDetailScreen({ navigation, route }: Props) {
 
     const usedNames = updates
       .filter((update) => update.action === 'used')
-      .map(({ food }) => getFoodDisplayName(food));
+      .map(({ food }) => `${getFoodDisplayName(food)}（期限${food.expiryDate}・${formatFoodQuantity(food.quantity, food.quantityUnit)}）`);
     const partialSummaries = updates
       .filter((update): update is { food: FoodItem; action: 'partial'; amount: number } => update.action === 'partial')
-      .map(({ food, amount }) => `${getFoodDisplayName(food)}：${formatFoodQuantity(amount, food.quantityUnit)}使用`);
+      .map(({ food, amount }) => `${getFoodDisplayName(food)}（期限${food.expiryDate}）：${formatFoodQuantity(amount, food.quantityUnit)}使用 → 残り${formatFoodQuantity(subtractQuantity(food.quantity, amount), food.quantityUnit)}`);
     const summary = [
       usedNames.length > 0 ? `使い切る：${usedNames.join('、')}` : '',
       partialSummaries.length > 0 ? `残量を減らす：\n${partialSummaries.join('\n')}` : '',
     ].filter(Boolean).join('\n');
 
+    const confirmedOperationId = operationId.current;
     const applyUpdates = (addUsedFoodsToShoppingList: boolean) => {
       // A confirmation can remain open across midnight or while the app is backgrounded.
       if (updates.some(({ food }) => daysUntil(food.expiryDate) < 0)) {
@@ -230,21 +234,32 @@ export function RecipeDetailScreen({ navigation, route }: Props) {
         alert('期限を確認してください', '確認中に期限を過ぎた食材があります。食材の状態を確認し、選び直してください。');
         return;
       }
-      updates.forEach((update) => {
-        if (update.action === 'used') {
-          const { food } = update;
-          markFoodUsed(food.id);
-          if (addUsedFoodsToShoppingList) {
+      try {
+        const applied = recordConsumption({
+          operationId: confirmedOperationId,
+          recipeId: recipe.id,
+          items: updates.map((update) => ({
+            foodId: update.food.id,
+            amount: update.action === 'partial' ? update.amount : update.food.quantity,
+            unit: update.food.quantityUnit,
+            expectedQuantity: update.food.quantity,
+            expectedExpiryDate: update.food.expiryDate,
+            expectedRevision: update.food.revision ?? 0,
+          })),
+        });
+        if (!applied) return;
+        if (addUsedFoodsToShoppingList) {
+          updates.filter((update) => update.action === 'used').forEach(({ food }) => {
             addShoppingItem(getFoodDisplayName(food), `「${recipe.name}」で使い切り`);
-          }
-          return;
+          });
         }
-        if (update.action === 'partial') {
-          const { food, amount } = update;
-          const { id, createdAt, status, usedAt, disposedAt, ...input } = food;
-          updateFood(id, { ...input, quantity: subtractQuantity(food.quantity, amount) });
-        }
-      });
+      } catch (error) {
+        clearActions();
+        alert('在庫を確認してください', error instanceof Error ? error.message : '使用量を選び直してください。');
+        return;
+      }
+      operationId.current = createId('cooking');
+      clearActions();
       navigation.navigate('MainTabs', { screen: 'Home' });
     };
     const buttons: AlertButton[] = [
@@ -290,7 +305,7 @@ export function RecipeDetailScreen({ navigation, route }: Props) {
         title="レシピ詳細"
       />
       <ScrollView contentContainerStyle={styles.content}>
-        <Image source={{ uri: recipe.image }} style={styles.heroImage} />
+        <FoodImage source={{ uri: recipe.image }} style={styles.heroImage} />
         <View>
           <Text style={styles.recipeName}>{recipe.name}</Text>
           <View style={styles.metaRow}>
@@ -442,7 +457,7 @@ export function RecipeDetailScreen({ navigation, route }: Props) {
         <View>
           <Text style={styles.sectionTitle}>使用した食材を記録</Text>
           <Text style={styles.sectionDescription}>
-            調理後の在庫に合わせて選んでください。自動入力は目安です。換算できない分量は、実際の使用量を入力してください。
+            期限が近い在庫から使用量を割り当てます。使用後の残量を確認してください。単位を換算できない場合や分量不足の場合は、実際の使用量を入力してください。
           </Text>
           {matchedFoods.length === 0 ? (
             <View style={styles.noMatchedFoods}>
@@ -463,15 +478,26 @@ export function RecipeDetailScreen({ navigation, route }: Props) {
                 </Pressable>
               </View>
               <View style={styles.consumptionList}>
-                {matchedFoods.map(({ food, ingredients }) => {
+                {matchedFoods.map(({ food, ingredients }, lotIndex) => {
                   const selectedAction = actions[food.id] ?? 'none';
                   return (
-                    <View key={food.id} style={styles.consumptionCard}>
+                    <View key={food.id} testID={`consumption-${food.id}`} style={styles.consumptionCard}>
                       <View style={styles.consumptionHeader}>
                         <View>
                           <Text style={styles.consumptionName}>{getFoodDisplayName(food)}</Text>
                           <Text style={styles.consumptionMeta}>
                             {ingredients.join('・')}として使用／現在{formatFoodQuantity(food.quantity, food.quantityUnit)}
+                          </Text>
+                          <Text style={styles.consumptionMeta}>
+                            在庫{lotIndex + 1}・期限 {food.expiryDate}・{food.storage === 'refrigerated' ? '冷蔵' : food.storage === 'frozen' ? '冷凍' : '常温'}
+                          </Text>
+                          <Text accessibilityLiveRegion="polite" style={styles.stockAssessment}>
+                            使用後：{selectedAction === 'used' ? formatFoodQuantity(0, food.quantityUnit)
+                              : selectedAction === 'partial'
+                                ? isValidQuantity(usedAmounts[food.id] ?? '') && parseQuantityInput(usedAmounts[food.id]) <= food.quantity
+                                  ? formatFoodQuantity(subtractQuantity(food.quantity, parseQuantityInput(usedAmounts[food.id])), food.quantityUnit)
+                                  : '使用量を確認してください'
+                                : formatFoodQuantity(food.quantity, food.quantityUnit)}
                           </Text>
                         </View>
                       </View>
@@ -484,7 +510,7 @@ export function RecipeDetailScreen({ navigation, route }: Props) {
                         />
                         <ActionOption
                           label="使用量を入力"
-                          onPress={() => selectPartialAction(food, ingredients)}
+                          onPress={() => selectPartialAction(food)}
                           selected={selectedAction === 'partial'}
                           tone="warning"
                         />
@@ -498,7 +524,7 @@ export function RecipeDetailScreen({ navigation, route }: Props) {
                       {selectedAction === 'partial' ? (
                         <View style={styles.usageInputRow}>
                           <TextInput
-                            accessibilityLabel={`${getFoodDisplayName(food)}の使用量`}
+                            accessibilityLabel={`${getFoodDisplayName(food)}の使用量${matchedFoods.filter((item) => getFoodDisplayName(item.food) === getFoodDisplayName(food)).length > 1 ? `（在庫${lotIndex + 1}・期限${food.expiryDate}）` : ''}`}
                             keyboardType="decimal-pad"
                             maxLength={8}
                             onChangeText={(value) => setUsedAmounts((current) => ({ ...current, [food.id]: value }))}

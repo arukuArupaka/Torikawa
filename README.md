@@ -84,8 +84,13 @@ Yahoo!ショッピング検索や共有商品DBを利用する場合は、リポ
 
 | 目的 | 読むページ |
 | --- | --- |
+| Phase 1〜4の確認結果と残る作業を見る | [横断確認の結果](docs/phases1-4-verification.md) |
 | 食材・バーコード・レシピ・買い物を使う | [使い方ガイド](docs/USAGE.md) |
 | 通知やバックアップを設定する | [使い方ガイド](docs/USAGE.md#期限通知) |
+| 保存エラー・読み込み失敗から復旧する | [データ保護と復旧](docs/data-protection.md) |
+| 商品訂正・在庫の使用記録の改善内容を確認する | [Phase 2の変更と検証](docs/phase2-registration-inventory.md) |
+| 通知の再同期・写真付きバックアップの改善内容を確認する | [Phase 3の変更と実機確認項目](docs/phase3-notifications-backup.md) |
+| 入力・買い物・表示速度の改善内容を確認する | [Phase 4の変更と計測結果](docs/phase4-input-performance.md) |
 | 開発環境・ファイル構成・検証方法を確認する | [開発ガイド](docs/DEVELOPMENT.md) |
 | 共有APIを起動・公開・管理する | [共有商品DB](server/README.md) |
 

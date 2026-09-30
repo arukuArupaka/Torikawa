@@ -1,6 +1,5 @@
 import { BarcodeProduct } from '../data/productCatalog';
-import { StorageLocation } from '../types';
-import { inferFoodCategory } from '../utils/foodCategory';
+import { getFoodRegistrationDefaults } from '../utils/foodRegistrationDefaults';
 import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
 
 type YahooShoppingHit = {
@@ -31,19 +30,6 @@ const fallbackImage = 'https://images.unsplash.com/photo-1542838132-92c53300491e
 
 function getYahooShoppingAppId() {
   return process.env.EXPO_PUBLIC_YAHOO_SHOPPING_APP_ID?.trim() ?? '';
-}
-
-function inferStorage(name: string, category: string): StorageLocation {
-  const foodCategory = inferFoodCategory(name, category);
-  if (
-    foodCategory === 'dairy'
-    || foodCategory === 'eggs'
-    || foodCategory === 'meat'
-    || foodCategory === 'seafood'
-  ) {
-    return 'refrigerated';
-  }
-  return 'room';
 }
 
 function toQueryString(params: Record<string, string>) {
@@ -87,7 +73,7 @@ export async function lookupYahooProductByBarcode(barcode: string): Promise<Barc
     if (!hit?.name) return null;
 
     const normalized = normalizeProductToIngredient(hit.name);
-    const category = normalized.category === 'other'
+    const category = normalized.needsReview
       ? hit.genreCategory?.name || hit.brand?.name || normalized.categoryLabel
       : normalized.categoryLabel;
     const image = hit.exImage?.url
@@ -102,7 +88,7 @@ export async function lookupYahooProductByBarcode(barcode: string): Promise<Barc
       category,
       ingredientName: normalized.ingredientName,
       tags: normalized.tags,
-      storage: inferStorage(hit.name, category),
+      storage: getFoodRegistrationDefaults({ ingredientName: normalized.ingredientName, category: normalized.category }).storage,
     };
   } finally {
     clearTimeout(timeout);

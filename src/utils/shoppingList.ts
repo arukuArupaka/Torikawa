@@ -1,5 +1,6 @@
 import { FoodItem, ShoppingItem } from '../types';
-import { getFoodIngredientName } from './ingredientNormalizer';
+import { getFoodDisplayName } from './ingredientNormalizer';
+import { ingredientKey } from './recipeMatching';
 
 export type FrequentShoppingSuggestion = {
   name: string;
@@ -7,7 +8,7 @@ export type FrequentShoppingSuggestion = {
 };
 
 export function normalizeShoppingName(name: string): string {
-  return name.trim().toLocaleLowerCase('ja-JP');
+  return ingredientKey(name);
 }
 
 export function hasPendingShoppingItem(items: ShoppingItem[], name: string): boolean {
@@ -42,8 +43,9 @@ export function getFrequentShoppingSuggestions(
     suggestions.set(normalizedName, { name: trimmedName, count: 1 });
   };
 
-  foods.forEach((food) => addCandidate(getFoodIngredientName(food)));
-  shoppingItems.filter((item) => item.checked).forEach((item) => addCandidate(item.name));
+  const linked = new Set(foods.map((food) => food.sourceShoppingItemId).filter(Boolean));
+  foods.forEach((food) => addCandidate(getFoodDisplayName(food)));
+  shoppingItems.filter((item) => item.checked && !linked.has(item.id)).forEach((item) => addCandidate(item.name));
 
   return [...suggestions.values()]
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'ja-JP'))

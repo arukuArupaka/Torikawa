@@ -6,6 +6,7 @@ export type NormalizedIngredientInfo = {
   category: FoodCategory;
   categoryLabel: string;
   tags: string[];
+  needsReview: boolean;
 };
 
 type NormalizeRule = {
@@ -16,7 +17,17 @@ type NormalizeRule = {
   tags: string[];
 };
 
+const specificRules: NormalizeRule[] = [
+  { keywords: ['焼きそば麺', 'やきそば麺'], ingredientName: '中華麺', category: 'staples', categoryLabel: '主食', tags: ['中華麺'] },
+  { keywords: ['米酢', '穀物酢'], ingredientName: '酢', category: 'seasonings', categoryLabel: '調味料', tags: ['酢'] },
+  { keywords: ['米粉'], ingredientName: '米粉', category: 'staples', categoryLabel: '主食', tags: ['米粉'] },
+  { keywords: ['ごはん', 'ご飯', '御飯', '炊飯済み'], ingredientName: 'ごはん', category: 'staples', categoryLabel: '主食', tags: ['ごはん'] },
+  { keywords: ['サラダチキン'], ingredientName: 'サラダチキン', category: 'meat', categoryLabel: '肉', tags: ['サラダチキン'] },
+  { keywords: ['プリン'], ingredientName: 'プリン', category: 'other', categoryLabel: 'その他', tags: ['プリン'] },
+];
+
 const rules: NormalizeRule[] = [
+  ...specificRules,
   {
     keywords: ['牛乳', 'ミルク'],
     ingredientName: '牛乳',
@@ -81,7 +92,7 @@ const rules: NormalizeRule[] = [
     tags: ['チーズ', '乳製品'],
   },
   {
-    keywords: ['鶏肉', '鶏もも', '鶏むね', '鶏胸', 'サラダチキン'],
+    keywords: ['鶏肉', '鶏もも', '鶏むね', '鶏胸'],
     ingredientName: '鶏肉',
     category: 'meat',
     categoryLabel: '肉',
@@ -228,11 +239,11 @@ const rules: NormalizeRule[] = [
     tags: ['パン', '主食'],
   },
   {
-    keywords: ['ごはん', '御飯', '白米', '米'],
+    keywords: ['白米', '米'],
     ingredientName: '米',
     category: 'staples',
     categoryLabel: '主食',
-    tags: ['米', 'ごはん', '主食'],
+    tags: ['米', '主食'],
   },
   {
     keywords: ['パスタ', 'スパゲッティ', 'スパゲティ'],
@@ -332,16 +343,21 @@ function unique(values: string[]): string[] {
 }
 
 export function normalizeProductToIngredient(productName: string): NormalizedIngredientInfo {
-  const normalizedName = productName.toLocaleLowerCase('ja-JP');
-  const rule = rules.find((item) =>
-    item.keywords.some((keyword) => normalizedName.includes(keyword.toLocaleLowerCase('ja-JP'))),
-  );
+  const normalizedName = productName.normalize('NFKC').toLocaleLowerCase('ja-JP');
+  // Specific processed foods take precedence over the names of their raw ingredients.
+  const specific = specificRules.find((item) => item.keywords.some((keyword) => normalizedName.includes(keyword)));
+  const matches = rules.flatMap((item) => item.keywords.filter((keyword) => normalizedName.includes(keyword.toLocaleLowerCase('ja-JP')))
+    .map((keyword) => ({ item, keyword })));
+  const strongest = matches.filter((match) => !matches.some((other) => other.keyword.length > match.keyword.length && other.keyword.includes(match.keyword)));
+  const distinct = new Set(strongest.map(({ item }) => item.ingredientName));
+  const rule = specific ?? (distinct.size === 1 ? strongest[0]?.item : undefined);
   if (rule) {
     return {
       ingredientName: rule.ingredientName,
       category: rule.category,
       categoryLabel: rule.categoryLabel,
       tags: unique(rule.tags),
+      needsReview: false,
     };
   }
 
@@ -352,6 +368,7 @@ export function normalizeProductToIngredient(productName: string): NormalizedIng
     category,
     categoryLabel: foodCategoryLabels[category],
     tags: unique([fallbackName]),
+    needsReview: true,
   };
 }
 

@@ -1,0 +1,260 @@
+✔ backup import accepts old or unset servings and rejects invalid serving counts (3.8158ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ phase 2 corrected product is the next barcode result, preserving catalog images and unrelated concurrent saves (12.5905ms)
+✔ phase 2 failed catalog correction preserves the previous product and can be retried (1.5943ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ phase 2 consumption history and barcode survive restore, and duplicate operations stay inert after hydration (25.2639ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ phase 2 migrates only exact old barcode memos and preserves user classifications (2.4105ms)
+✔ failure at every staging write or the head preserves the complete old snapshot after restart (87.4832ms)
+✔ successful restore switches all five collections, keeps old originals and routes later saves correctly (12.1429ms)
+✔ interrupted preparation never publishes staging; a later restore can succeed (11.6865ms)
+✔ a head write that throws after committing is recognized as success (8.9176ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+保存データを読み込めませんでした。元のデータを保持します。 Error: shoppingItems の内容が正しくありません。IDの重複、日付、数量、記録の状態を確認してください。
+    at validateStoredData (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\dataValidation.ts:124:15)
+    at C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\dataValidation.ts:132:29
+    at Array.forEach (<anonymous>)
+    at validateSnapshot (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\dataValidation.ts:132:11)
+    at normalizeAppData (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\appDataMigration.ts:77:43)
+    at hydrate (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\context\AppDataContext.tsx:85:70)
+✔ uncertain commit blocks old state writes until complete reload and retains new photos (4.4484ms)
+✔ image write failure removes only new partial files and preserves originals (4.6875ms)
+✔ missing or truncated photos abort restoration before switching generations (4.9821ms)
+✔ failed second restoration preserves the edited active generation and never falls back to legacy (13.9537ms)
+✔ Web recovery keeps embedded photos intact and rejects nonportable image references (2.0964ms)
+✔ shared validation rejects duplicate IDs, invalid dates, quantity, lifecycle and collection shapes (1.431ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+保存データを読み込めませんでした。元のデータを保持します。 Error: 保存データがnullになっています。原本を保護しています。
+    at readValue (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\storage.ts:64:15)
+    at async Promise.all (index 0)
+    at async C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\storage.ts:70:24
+    at async hydrate (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\context\AppDataContext.tsx:78:95)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+保存データを読み込めませんでした。元のデータを保持します。 Error: foods の内容が正しくありません。IDの重複、日付、数量、記録の状態を確認してください。
+    at validateStoredData (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\dataValidation.ts:124:15)
+    at C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\dataValidation.ts:132:29
+    at Array.forEach (<anonymous>)
+    at validateSnapshot (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\dataValidation.ts:132:11)
+    at normalizeAppData (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\appDataMigration.ts:77:43)
+    at hydrate (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\context\AppDataContext.tsx:85:70)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ invalid stored shopping, explicit null and duplicate food IDs never trigger writes (3.5054ms)
+変更を端末へ保存できませんでした。 Error: disk full
+    at Object.setItem (C:\Users\Kenka\Documents\ChatGPT\たべどき\tests\data-protection.test.cjs:42:31)
+    at async C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\storage.ts:89:9
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ deleting food during disk failure keeps its photo; successful retry collects it (1.838ms)
+変更を端末へ保存できませんでした。 Error: disk full
+    at Object.setItem (C:\Users\Kenka\Documents\ChatGPT\たべどき\tests\data-protection.test.cjs:42:31)
+    at async C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\storage.ts:89:9
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ replacing recipe and food photos retains the old files until all collections are saved (5.411ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ photo cleanup protects references from recipes, learned products and retained restore originals (2.6957ms)
+未使用の写真の削除を次回に延期します。 Error: photo busy
+    at File.delete (C:\Users\Kenka\Documents\ChatGPT\たべどき\tests\data-protection.test.cjs:34:36)
+    at deleteStoredFoodImage (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\imageStorage.ts:26:20)
+    at C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\storage.ts:208:17
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ photo deletion errors do not turn a durable save into failure and are retried (1.7899ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+保存データを読み込めませんでした。元のデータを保持します。 SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at readValue (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\storage.ts:62:24)
+    at async Promise.all (index 1)
+    at async C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\storage.ts:70:24
+    at async hydrate (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\context\AppDataContext.tsx:78:95)
+✔ ordinary pending writes finish before restore; UI mutations are locked and old effects cannot overwrite it (6.2514ms)
+✔ learned product read-modify-write is serialized and cannot cross a restore (0.3968ms)
+✔ recovery exports corrupt raw JSON unchanged and restores from the error screen without initialization (4.7263ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ Home counts today and days 1–3 once, excludes expired/used/disposed, and stays independent of search (25.3633ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ Home opens all recipes when no food is due soon; empty inventory has no summary (2.565ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ Home recipe entry clears old search/category, consumes its request, and works on repeated visits (21.661ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ Home counts and recipe eligibility refresh at local midnight with unchanged food data (8.2815ms)
+✔ returning from background refreshes the day and unmount removes its listener/timer (0.9913ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ Web skips unsupported notification response APIs; native keeps subscription and cleanup (34.3446ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ phase 2 cooking displays every lot, allocates by expiry and persists a single operation after double confirmation (35.5793ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ phase 2 confirmation rejects all lots after one has been edited, preserving new metadata (17.897ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ phase 2 product corrections unify display names and send only metadata to the local catalog, with retry (11.0088ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+保存データを読み込めませんでした。元のデータを保持します。 SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at readValue (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\storage.ts:62:24)
+    at async Promise.all (index 3)
+    at async C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\storage.ts:70:24
+    at async hydrate (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\context\AppDataContext.tsx:78:95)
+✔ phase 2 product correction can stay on inventory only and uncertain barcode names request classification review (7.9658ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+保存データを読み込めませんでした。元のデータを保持します。 Error: Temporary read failure
+    at Object.getItem (C:\Users\Kenka\Documents\ChatGPT\たべどき\tests\persistence-regressions.test.cjs:18:28)
+    at readGeneration (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\storage.ts:41:58)
+    at C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\storage.ts:69:61
+    at async hydrate (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\context\AppDataContext.tsx:78:95)
+✔ corrupt stored JSON is preserved; no sample data is written (0.7531ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+保存データを読み込めませんでした。元のデータを保持します。 Error: foods の内容が正しくありません。IDの重複、日付、数量、記録の状態を確認してください。
+    at validateStoredData (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\dataValidation.ts:124:15)
+    at C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\dataValidation.ts:132:29
+    at Array.forEach (<anonymous>)
+    at validateSnapshot (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\dataValidation.ts:132:11)
+    at normalizeAppData (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\appDataMigration.ts:77:43)
+    at hydrate (C:\Users\Kenka\Documents\ChatGPT\たべどき\src\context\AppDataContext.tsx:85:70)
+✔ transient read errors can be retried without resetting user data (1.3703ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ invalid stored food shape does not overwrite valid other collections (0.613ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ first launch still loads and persists initial data (1.5444ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ hydration persists corrected defaults, preserves edits and never restores deleted recipes (3.4099ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ restoring an old backup uses the same conservative recipe migration (2.7997ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ recipe shopping action adds missing seasonings with quantities and excludes water (10.0084ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ preparation water is shown in recipe detail but excluded from consumption controls (15.256ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ expired inventory is identified in materials but cannot be selected or consumed (12.362ms)
+変更を端末へ保存できませんでした。 Error: Disk full
+    at Object.setItem (C:\Users\Kenka\Documents\ChatGPT\たべどき\tests\persistence-regressions.test.cjs:23:29)
+    at C:\Users\Kenka\Documents\ChatGPT\たべどき\src\services\storage.ts:89:39
+✔ save failure is visible and retry persists the current changes (2.1728ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ rapid saves cannot finish in reverse order and restore old data (0.2215ms)
+✔ a rejected write does not block the next write for that key (0.3936ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ recording the actual recipe screen keeps remaining cabbage and eggs (19.2908ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ changing people updates visible quantities and usage, clears stale selections, and records scaled amounts (24.2236ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ recipe editor validates servings and preserves saved or explicitly unset values after reload (21.8195ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ old custom recipes remain unset and restoring backups preserves known serving counts (19.2558ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ detail adds scaled shopping memos directly, prevents duplicate additions and keeps the recipe base (19.486ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ shopping check is reversible without navigation, registration carries the memo, deletion requires confirmation (9.529ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ shopping duplicate feedback is visible on Web and does not clear the input or overwrite its memo (3.5806ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ a cooking confirmation held across midnight cannot consume newly expired food (19.392ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ web alerts support cancellation, queued messages, and execute a choice only once (1.7051ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ web dismiss respects noncancelable dialogs and never chooses a destructive action (1.1313ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ device alerts preserve native options and callbacks (0.6071ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ web cooking dialog cancels without changes and records a partial amount once after confirmation (6.5105ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ calendar refreshes at midnight and today returns from another month without changing stock (6.1433ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ detail recalculates shortage with servings and adds a quantity memo without altering stock (7.1479ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ recipe list distinguishes measured availability from shortages and offers the missing quantity (10.3228ms)
+✔ recent foods keep the newest same-name settings, search products, and include consumed history (0.248ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ repeat registration carries settings but starts fresh quantity, dates, memo, image and lifecycle (3.5265ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ choosing a previous registration retains incoming shopping memo and calendar date (4.192ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ editing a food retains its values and manual entry does not get replaced by previous registrations (5.0303ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ food detail reopens used history as a separate new registration (2.0263ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ sharing is opt-in; saving without consent never publishes a product (2.5676ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ failed sharing keeps food saved; retry and double taps never duplicate the inventory (3.5754ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ external product registration does not offer to republish provider data (2.0546ms)
+✔ invalid public product text is checked before any local save or publication (6.7074ms)
+✔ 100 + 200 ml uses earliest 100 then 100, persists lot history and leaves later spare lots intact (16.6919ms)
+✔ allocation shares availability units, skips an earlier bottle, respects servings and excludes expired lots (2.648ms)
+✔ shortages, qualitative amounts and overlapping aliases need manual quantities (0.4775ms)
+✔ any stale lot rejects the entire operation, including revisions changed back to the original quantity (2.6012ms)
+✔ invalid amounts, duplicate lots and empty operations never change stock; latest metadata is preserved (0.5973ms)
+✔ legacy foods remain valid and malformed barcode, revision or consumption history is rejected (0.9566ms)
+✔ processed food names produce distinct recipe ingredients and appropriate registration defaults (6.3269ms)
+✔ Yahoo and Open Food Facts use the same classification and storage suggestions as manual registration (19.3323ms)
+✔ unreadable learned catalog still permits external lookup (0.9921ms)
+✔ shopping suggestions use selected servings, exclude water and pending duplicates, and include expired stock (3.962ms)
+✔ shopping memo identifies unscaled ambiguous amounts and never guesses unknown servings (0.5534ms)
+✔ every built-in recipe lists the seasoning, oil and water used by its instructions (0.4236ms)
+✔ generated omelette lists every ingredient used in its steps (11.5924ms)
+✔ generated cabbage and egg lists every ingredient used in its steps (1.0477ms)
+✔ generated tofu steak lists every ingredient used in its steps (0.6146ms)
+✔ generated chicken stir fry lists every ingredient used in its steps (0.8682ms)
+✔ generated pork stir fry lists every ingredient used in its steps (1.0113ms)
+✔ generated steamed fish lists every ingredient used in its steps (0.914ms)
+✔ generated curry potatoes lists every ingredient used in its steps (4.6228ms)
+✔ generated salad lists every ingredient used in its steps (0.8929ms)
+✔ generated toast lists every ingredient used in its steps (1.007ms)
+✔ generated fried rice lists every ingredient used in its steps (1.1632ms)
+✔ generated noodles lists every ingredient used in its steps (0.7663ms)
+✔ generated soup lists every ingredient used in its steps (0.4049ms)
+✔ generated urgent saute lists every ingredient used in its steps (0.4732ms)
+✔ soup does not duplicate a seasoning or treat pantry items as spare vegetables (0.8087ms)
+✔ missing seasonings affect availability, while preparation water never does (0.3738ms)
+✔ bottled water is tracked and empty or water-only lists produce a finite score (0.1859ms)
+✔ unchanged legacy recipes gain complete content without losing personal metadata (0.5806ms)
+✔ only unchanged built-ins without a servings field gain a base serving count (0.3661ms)
+✔ any recipe content edit or a user recipe ID prevents automatic replacement (0.3508ms)
+✔ legacy records without a category still receive the ingredient correction (0.126ms)
+✔ generic search tags must not make pork satisfy beef (1.1542ms)
+✔ egg tofu must not satisfy egg or tofu (0.2705ms)
+✔ an empty ingredient must not match the first stock item (0.1465ms)
+✔ onions must not satisfy green onions (0.1242ms)
+✔ a branded product uses the user supplied ingredient classification (0.1538ms)
+✔ equivalent spelling still matches and the earliest expiry wins (13.3652ms)
+✔ a quarter cabbage leaves three quarters in stock (0.7177ms)
+✔ unknown or incompatible amounts require manual input (0.3197ms)
+✔ fraction units stay attached to their amount (0.3454ms)
+✔ explicit mass and volume conversions and full-width input (1.5266ms)
+✔ all ingredient rows using the same stock are added together (0.2085ms)
+✔ insufficient inventory does not silently select use all (0.0954ms)
+✔ suggestions fit the precision accepted by the inventory form (1.9121ms)
+✔ local recipe ideas do not use egg tofu as eggs or raw tofu (15.5157ms)
+✔ servings scale weights, volumes, fractions, mixed spoon measures and notes (2.2375ms)
+✔ qualitative amounts stay as written; ambiguous numeric prose is marked for review (0.2051ms)
+✔ unset/invalid servings never scale; selecting the base restores original text exactly (0.2046ms)
+✔ serving input accepts only 1–99 whole people, including full-width digits (0.1813ms)
+✔ usage suggestions scale the original value before rounding and never exceed inventory (0.3654ms)
+✔ shortage follows servings and shopping stores only the difference without overwriting pending notes (3.9326ms)
+✔ all usable lots and spelling aliases count, expired and consumed lots never count (11.7959ms)
+✔ weight, volume and fractional pieces compare before rounding and round shortages upward (0.5828ms)
+✔ qualitative or incompatible amounts remain reviewable and never trigger guessed purchases (0.7752ms)
+✔ water is preparation, unknown servings retain base amounts, and missing qualitative amounts ask for review (0.384ms)
+✔ two recipe aliases cannot both claim the same stock is sufficient (0.2349ms)
+✔ one client publishes and another reads only product data, which survives an API restart (137.7285ms)
+✔ server rejects every private field, including photos and personal storage, before persisting (138.9103ms)
+✔ duplicate or conflicting posts never overwrite an existing product and hidden products stay hidden (66.5173ms)
+✔ API validates barcode, sizes, CORS and write limits (42.216ms)
+✔ malformed, oversized and streamed oversized bodies are rejected without a database write (30.9065ms)
+✔ client builds a whitelist payload and a second client retrieves a shared lookup result (31.8712ms)
+✔ shared outages and invalid responses fall back to external providers; no endpoint sends no request (0.4761ms)
+✔ an external product 404 is a missing product, not a connection failure (0.2104ms)
+ℹ tests 134
+ℹ suites 0
+ℹ pass 134
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1060.0977

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { colors, radius, spacing } from '../constants/theme';
@@ -19,6 +19,7 @@ export function ShoppingListScreen({ navigation }: Props) {
   const [showChecked, setShowChecked] = useState(false);
   const [showFrequent, setShowFrequent] = useState(false);
   const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
+  const registeredFoods = useMemo(() => new Map(foods.filter((food) => food.sourceShoppingItemId).map((food) => [food.sourceShoppingItemId!, food])), [foods]);
   const pendingItems = shoppingItems.filter((item) => !item.checked);
   const checkedItems = shoppingItems.filter((item) => item.checked);
   const frequentItems = useMemo(
@@ -44,21 +45,25 @@ export function ShoppingListScreen({ navigation }: Props) {
   };
 
   const handleToggleItem = (item: ShoppingItem) => {
+    if (registeredFoods.has(item.id)) {
+      setNotice('この購入分は登録済みです。次の購入は「買うもの」に新しく追加してください。');
+      return;
+    }
     toggleShoppingItem(item.id);
     setDeleteItemId(null);
     setNotice(`「${item.name}」を${item.checked ? '買うものに戻しました' : '購入済みにしました'}。`);
   };
 
-  const renderItems = (items: ShoppingItem[]) => (
-    <View style={styles.listCard}>
-      {items.map((item, index) => (
-        <View key={item.id} style={[styles.itemGroup, index === items.length - 1 && styles.lastRow]}>
+  const renderItem = ({ item }: { item: ShoppingItem }) => {
+    const registered = registeredFoods.get(item.id);
+    return <View style={[styles.listCard, styles.itemGroup]}>
           <View style={styles.itemRow}>
             <Pressable
               accessibilityRole="checkbox"
-              accessibilityLabel={`${item.name}を${item.checked ? '未購入に戻す' : '購入済みにする'}`}
+              accessibilityLabel={registered ? `${item.name}は食材に登録済み` : `${item.name}を${item.checked ? '未購入に戻す' : '購入済みにする'}`}
               accessibilityHint={item.memo}
-              accessibilityState={{ checked: item.checked }}
+              accessibilityState={{ checked: item.checked, disabled: Boolean(registered) }} aria-checked={item.checked}
+              disabled={Boolean(registered)}
               onPress={() => handleToggleItem(item)}
               style={styles.checkArea}
             >
@@ -77,12 +82,12 @@ export function ShoppingListScreen({ navigation }: Props) {
           {item.checked ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`${item.name}を食材として登録`}
-              onPress={() => navigation.navigate('AddFood', { initialName: item.name, initialMemo: item.memo ?? '' })}
+              accessibilityLabel={registered ? `${item.name}の登録済み食材を確認` : `${item.name}を食材として登録`}
+              onPress={() => registered ? navigation.navigate('FoodDetail', { foodId: registered.id }) : navigation.navigate('AddFood', { initialName: item.name, initialMemo: item.memo ?? '', shoppingItemId: item.id })}
               style={styles.registerButton}
             >
               <Ionicons color={colors.primaryDark} name="add-circle-outline" size={18} />
-              <Text style={styles.registerText}>食材を登録</Text>
+              <Text style={styles.registerText}>{registered ? '登録済み · 食材を確認' : '食材を登録'}</Text>
             </Pressable>
           ) : null}
           {deleteItemId === item.id ? (
@@ -102,16 +107,32 @@ export function ShoppingListScreen({ navigation }: Props) {
               </View>
             </View>
           ) : null}
-        </View>
-      ))}
-    </View>
-  );
+        </View>;
+  };
 
   return (
     <Screen bottomSafe>
       <ScreenHeader onBack={navigation.goBack} subtitle={`未購入${pendingItems.length}件・購入済み${checkedItems.length}件`} title="買い物リスト" />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <View style={styles.purchaseTabs}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`買うもの${pendingItems.length}件`} accessibilityState={{ selected: !showChecked }} aria-pressed={!showChecked} onPress={() => setShowChecked(false)} style={[styles.purchaseTab, !showChecked && styles.selectedTab]}>
+            <Text style={styles.registerText}>買うもの {pendingItems.length}件</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={`購入済み${checkedItems.length}件`} accessibilityState={{ selected: showChecked }} aria-pressed={showChecked} onPress={() => setShowChecked(true)} style={[styles.purchaseTab, showChecked && styles.selectedTab]}>
+            <Text style={styles.registerText}>購入済み {checkedItems.length}件</Text>
+          </Pressable>
+        </View>
+        <SectionList key={showChecked ? 'checked' : 'pending'} style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"
+          sections={[{ key: showChecked ? 'checked' : 'pending', data: showChecked ? checkedItems : pendingItems }]}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          initialNumToRender={12} maxToRenderPerBatch={12} windowSize={7}
+          stickySectionHeadersEnabled={false}
+          renderSectionHeader={() => <Text accessibilityRole="header" style={styles.sectionTitle}>{showChecked ? '購入済み' : '買うもの'} {showChecked ? checkedItems.length : pendingItems.length}件</Text>}
+          renderSectionFooter={({ section }) => section.data.length === 0
+            ? <Text style={styles.emptyText}>{showChecked ? '購入済みの項目はありません。' : checkedItems.length > 0 ? '買うものはすべて購入済みです。' : '買うものを追加しましょう。'}</Text> : null}
+          ListHeaderComponent={<>
+
           <View style={styles.addRow}>
             <TextInput
               accessibilityLabel="買う食材名"
@@ -130,34 +151,16 @@ export function ShoppingListScreen({ navigation }: Props) {
 
           <View style={styles.purchaseHint}>
             <Ionicons color={colors.primary} name="checkmark-circle-outline" size={19} />
-            <Text style={styles.purchaseHintText}>チェックで購入済みに。食材の登録は購入済みの一覧から行えます。</Text>
+            <Text style={styles.purchaseHintText}>チェックで購入済みに。購入済みの一覧から食材を登録できます。登録後の次の購入は、新しい項目として追加してください。</Text>
           </View>
 
           {notice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
 
-          <View style={styles.section}>
-            <Text accessibilityRole="header" style={styles.sectionTitle}>買うもの {pendingItems.length}件</Text>
-            {pendingItems.length > 0 ? renderItems(pendingItems) : (
-              <View style={styles.empty}>
-                <Ionicons color={colors.primary} name={checkedItems.length > 0 ? 'checkmark-circle-outline' : 'basket-outline'} size={38} />
-                <Text style={styles.emptyText}>{checkedItems.length > 0 ? '買うものはすべて購入済みです。' : '買うものを追加しましょう。'}</Text>
-              </View>
-            )}
-          </View>
-
-          {checkedItems.length > 0 ? (
-            <View style={styles.section}>
-              <Pressable accessibilityRole="button" accessibilityLabel={`購入済み${checkedItems.length}件`} accessibilityState={{ expanded: showChecked }} onPress={() => setShowChecked((value) => !value)} style={styles.sectionToggle}>
-                <Text style={styles.sectionTitle}>購入済み {checkedItems.length}件</Text>
-                <Ionicons color={colors.textMuted} name={showChecked ? 'chevron-up' : 'chevron-down'} size={20} />
-              </Pressable>
-              {showChecked ? renderItems(checkedItems) : null}
-            </View>
-          ) : null}
-
+          </>}
+          ListFooterComponent={<>
           {frequentItems.length > 0 ? (
             <View style={styles.frequentCard}>
-              <Pressable accessibilityRole="button" accessibilityLabel="よく買うもの" accessibilityState={{ expanded: showFrequent }} onPress={() => setShowFrequent((value) => !value)} style={styles.sectionToggle}>
+              <Pressable accessibilityRole="button" accessibilityLabel="よく買うもの" accessibilityState={{ expanded: showFrequent }} aria-expanded={showFrequent} onPress={() => setShowFrequent((value) => !value)} style={styles.sectionToggle}>
                 <Text style={styles.frequentTitle}>よく買うもの</Text>
                 <Ionicons color={colors.textMuted} name={showFrequent ? 'chevron-up' : 'chevron-down'} size={20} />
               </Pressable>
@@ -177,7 +180,8 @@ export function ShoppingListScreen({ navigation }: Props) {
               </View> : null}
             </View>
           ) : null}
-        </ScrollView>
+          </>}
+        />
       </KeyboardAvoidingView>
     </Screen>
   );
@@ -185,6 +189,9 @@ export function ShoppingListScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  purchaseTabs: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.sm },
+  purchaseTab: { alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: 48, padding: spacing.sm, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  selectedTab: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   content: { gap: spacing.md, padding: spacing.md },
   addRow: { flexDirection: 'row', gap: spacing.sm },
   input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, color: colors.text, flex: 1, fontSize: 16, height: 50, paddingHorizontal: 14 },

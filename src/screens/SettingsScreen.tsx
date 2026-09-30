@@ -3,8 +3,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { CompositeScreenProps, useFocusEffect } from '@react-navigation/native';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -14,8 +14,7 @@ import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import {
   BackupPayload,
   pickBackup,
-  restoreBackup,
-  shareBackup,
+  prepareBackup, sharePreparedBackup,
 } from '../services/backupService';
 import {
   ensureNotificationPermission,
@@ -35,15 +34,20 @@ export function SettingsScreen({ navigation }: Props) {
     foods,
     notificationSettings,
     recipes,
-    replaceAppData,
+    restoreAppData,
     shoppingItems,
     updateNotificationSettings,
+    resyncNotifications, notificationSyncError, isNotificationSyncing,
   } = useAppData();
   const [enabled, setEnabled] = useState(notificationSettings.enabled);
   const [daysBeforeList, setDaysBeforeList] = useState(notificationSettings.daysBeforeList);
   const [dayInput, setDayInput] = useState('');
   const [time, setTime] = useState(notificationSettings.time);
   const [notificationStatus, setNotificationStatus] = useState<NotificationStatusSummary | null>(null);
+  const [statusError, setStatusError] = useState('');
+  const [savingNotifications, setSavingNotifications] = useState(false);
+  const notificationLock = useRef(false);
+  const web = Platform.OS === 'web';
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const firstActiveFood = foods.find((food) => food.status === 'active');
@@ -51,14 +55,19 @@ export function SettingsScreen({ navigation }: Props) {
   const refreshNotificationStatus = useCallback(async () => {
     try {
       setNotificationStatus(await getNotificationStatusSummary());
+      setStatusError('');
     } catch (error) {
       console.warn('通知状態を確認できませんでした。', error);
+      setStatusError('通知の状態を取得できませんでした。再試行してください。');
     }
   }, []);
 
   useFocusEffect(useCallback(() => {
     void refreshNotificationStatus();
   }, [refreshNotificationStatus]));
+  useEffect(() => {
+    if (!isNotificationSyncing) void refreshNotificationStatus();
+  }, [isNotificationSyncing, refreshNotificationStatus]);
 
   useEffect(() => {
     setEnabled(notificationSettings.enabled);
@@ -85,6 +94,7 @@ export function SettingsScreen({ navigation }: Props) {
   };
 
   const save = async () => {
+    if (web || notificationLock.current) return;
     const validTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
     if (!validTime) {
       alert('時刻を確認してください', '00:00〜23:59の形式で入力してください。');
@@ -95,6 +105,9 @@ export function SettingsScreen({ navigation }: Props) {
       return;
     }
 
+    notificationLock.current = true;
+    setSavingNotifications(true);
+    try {
     if (enabled) {
       try {
         const granted = await ensureNotificationPermission();
@@ -112,14 +125,17 @@ export function SettingsScreen({ navigation }: Props) {
       }
     }
 
-    updateNotificationSettings({ enabled, daysBeforeList, time });
-    setTimeout(() => void refreshNotificationStatus(), 800);
+    await updateNotificationSettings({ enabled, daysBeforeList, time });
+    await refreshNotificationStatus();
     alert(
       '保存しました',
       enabled
         ? '食材の期限通知を更新しました。'
-        : '期限通知をOFFにし、予約済みの通知を解除します。',
+        : '期限通知をOFFにし、予約済みの期限通知を解除しました。',
     );
+    } catch (error) {
+      alert('通知設定の反映が完了していません', error instanceof Error ? error.message : '設定と通知の状態を確認し、再試行してください。');
+    } finally { notificationLock.current = false; setSavingNotifications(false); }
   };
 
   const sendTestNotification = async () => {
@@ -147,11 +163,19 @@ export function SettingsScreen({ navigation }: Props) {
     if (isBackingUp || isRestoring) return;
     setIsBackingUp(true);
     try {
-      await shareBackup({ foods, recipes, shoppingItems, notificationSettings });
-      alert(
-        '共有画面を閉じました',
-        'ファイルアプリやクラウドストレージへJSONファイルを保存したことを確認してください。',
-      );
+      const prepared = await prepareBackup({ foods, recipes, shoppingItems, notificationSettings });
+      let sharing = false;
+      alert('バックアップの保存内容',
+        `容量：約${(prepared.bytes / 1024 / 1024).toFixed(2)}MB\n写真：${prepared.embeddedCount}枚（重複を除く）\n外部画像：${prepared.externalCount}件はURL参照です。表示には通信が必要です。\n\nこの内容をJSONファイルに保存します。`, [
+          { text: 'キャンセル', style: 'cancel' },
+          { text: '保存する', onPress: () => {
+            if (sharing) return;
+            sharing = true; setIsBackingUp(true);
+            void sharePreparedBackup(prepared).then(() => alert(web ? 'ダウンロードを開始しました' : '共有画面を閉じました', 'JSONファイルが保存されたことを確認してください。'))
+              .catch((error) => { sharing = false; alert('バックアップに失敗しました', error instanceof Error ? error.message : 'もう一度お試しください。'); })
+              .finally(() => setIsBackingUp(false));
+          } },
+        ]);
     } catch (error) {
       console.warn('バックアップを書き出せませんでした。', error);
       alert('バックアップに失敗しました', error instanceof Error ? error.message : 'もう一度お試しください。');
@@ -163,9 +187,8 @@ export function SettingsScreen({ navigation }: Props) {
   const executeRestore = async (payload: BackupPayload) => {
     setIsRestoring(true);
     try {
-      const snapshot = await restoreBackup(payload);
-      replaceAppData(snapshot);
-      setTimeout(() => void refreshNotificationStatus(), 1000);
+      await restoreAppData(payload);
+      await refreshNotificationStatus();
       alert('復元しました', '食材、履歴、買い物リスト、通知設定、レシピ、バーコード商品を復元しました。');
     } catch (error) {
       console.warn('バックアップを復元できませんでした。', error);
@@ -207,6 +230,7 @@ export function SettingsScreen({ navigation }: Props) {
       <ScreenHeader title="設定" />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.sectionLabel}>通知設定</Text>
+        {web ? <Text style={styles.settingDescription}>Web版では期限通知を利用できません。通知の設定・テストはスマートフォンで行ってください。</Text> : null}
         <View style={styles.card}>
           <View style={styles.settingRow}>
             <View style={styles.iconBox}>
@@ -217,6 +241,7 @@ export function SettingsScreen({ navigation }: Props) {
               <Text style={styles.settingDescription}>食材ごとに端末へローカル通知を予約</Text>
             </View>
             <Switch
+              disabled={web || savingNotifications}
               onValueChange={setEnabled}
               thumbColor={colors.surface}
               trackColor={{ false: '#C8CDC9', true: colors.primary }}
@@ -233,6 +258,7 @@ export function SettingsScreen({ navigation }: Props) {
                 daysBeforeList.map((day) => (
                   <Pressable
                     accessibilityLabel={`${day}日前の通知を削除`}
+                    disabled={web || savingNotifications}
                     key={day}
                     onPress={() => removeNotificationDay(day)}
                     style={styles.dayChip}
@@ -247,6 +273,8 @@ export function SettingsScreen({ navigation }: Props) {
             </View>
             <View style={styles.addDayRow}>
               <TextInput
+                editable={!web && !savingNotifications}
+                accessibilityLabel="通知を何日前に出すか"
                 keyboardType="number-pad"
                 maxLength={3}
                 onChangeText={setDayInput}
@@ -259,7 +287,7 @@ export function SettingsScreen({ navigation }: Props) {
               />
               <Text style={styles.daySuffix}>日前</Text>
               <Pressable
-                disabled={!dayInput}
+                disabled={web || savingNotifications || !dayInput}
                 onPress={addNotificationDay}
                 style={[styles.addDayButton, !dayInput && styles.disabledButton]}
               >
@@ -276,6 +304,8 @@ export function SettingsScreen({ navigation }: Props) {
               <Text style={styles.settingDescription}>24時間表記で入力</Text>
             </View>
             <TextInput
+              editable={!web && !savingNotifications}
+              accessibilityLabel="通知時刻"
               keyboardType="numbers-and-punctuation"
               maxLength={5}
               onChangeText={setTime}
@@ -297,18 +327,24 @@ export function SettingsScreen({ navigation }: Props) {
           <View style={styles.settingText}>
             <Text style={styles.settingTitle}>通知の状態</Text>
             <Text style={styles.settingDescription}>
-              {notificationStatus
+              {web ? 'Web版は通知非対応' : statusError || (notificationStatus
                 ? `${notificationStatus.permission === 'granted' ? '許可済み' : notificationStatus.permission === 'denied' ? '許可されていません' : '未確認'}・期限通知 ${notificationStatus.scheduledCount}件予約中`
-                : '確認中...'}
+                : '確認中...')}
             </Text>
+            {!web && isNotificationSyncing ? <Text accessibilityLiveRegion="polite" style={styles.settingDescription}>端末の通知予約を同期中...</Text> : null}
+            {!web && notificationSyncError ? <Text accessibilityRole="alert" style={styles.settingDescription}>{notificationSyncError}</Text> : null}
           </View>
           <Pressable accessibilityLabel="通知状態を更新" hitSlop={8} onPress={() => void refreshNotificationStatus()}>
             <Ionicons color={colors.textMuted} name="refresh" size={21} />
           </Pressable>
         </View>
 
-        <PrimaryButton icon="save-outline" label="通知設定を保存" onPress={() => void save()} />
+        <PrimaryButton disabled={web || savingNotifications} icon="save-outline" label={savingNotifications ? '保存・同期中...' : '通知設定を保存'} onPress={() => void save()} />
+        {!web ? <PrimaryButton disabled={isNotificationSyncing || savingNotifications} label="通知を再同期" variant="outline" onPress={() => {
+          void resyncNotifications().then(refreshNotificationStatus).catch((error) => alert('通知を再同期できませんでした', error instanceof Error ? error.message : 'もう一度お試しください。'));
+        }} /> : null}
         <PrimaryButton
+          disabled={web || savingNotifications}
           icon="notifications-outline"
           label="3秒後にテスト通知"
           onPress={() => void sendTestNotification()}
@@ -348,7 +384,7 @@ export function SettingsScreen({ navigation }: Props) {
           </View>
           <View style={styles.settingText}>
             <Text style={styles.settingTitle}>{isBackingUp ? '作成中...' : 'バックアップを書き出す'}</Text>
-            <Text style={styles.settingDescription}>画像を含むJSONファイルを保存・共有</Text>
+            <Text style={styles.settingDescription}>保存前に容量を確認。写真1枚5MB・合計10MBまで。外部画像はURL参照です。</Text>
           </View>
           <Ionicons color={colors.textMuted} name="chevron-forward" size={21} />
         </Pressable>
@@ -369,7 +405,7 @@ export function SettingsScreen({ navigation }: Props) {
         <View style={styles.backupNote}>
           <Ionicons color={colors.warning} name="information-circle-outline" size={18} />
           <Text style={styles.backupNoteText}>
-            復元すると現在のデータは置き換わります。先にバックアップを書き出してください。
+            復元すると現在のデータは置き換わります。先にバックアップを書き出してください。復元前の保存データは端末内にも退避します。
           </Text>
         </View>
 

@@ -1,8 +1,9 @@
+import { FoodImage } from '../components/FoodImage';
 import { useCurrentDay } from '../hooks/useCurrentDay';
 import { useAppAlert } from '../context/AppAlertContext';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -32,7 +33,7 @@ const statusLabels: Record<FoodStatus, string> = {
 export function FoodDetailScreen({ navigation, route }: Props) {
   const alert = useAppAlert();
   useCurrentDay();
-  const { foods, addShoppingItem, deleteFood, markFoodDisposed, markFoodUsed, restoreFood } = useAppData();
+  const { foods, recipes, addShoppingItem, deleteFood, markFoodDisposed, markFoodUsed, restoreFood } = useAppData();
   const food = foods.find((item) => item.id === route.params.foodId);
 
   if (!food) {
@@ -129,7 +130,7 @@ export function FoodDetailScreen({ navigation, route }: Props) {
       <ScreenHeader onBack={navigation.goBack} title="食材の詳細" />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.hero}>
-          <Image source={{ uri: food.image }} style={styles.image} />
+          <FoodImage source={{ uri: food.image }} style={styles.image} />
           <Text style={styles.name}>{displayName}</Text>
           {ingredientName !== displayName ? (
             <Text style={styles.ingredientName}>レシピ用分類：{ingredientName}</Text>
@@ -160,6 +161,18 @@ export function FoodDetailScreen({ navigation, route }: Props) {
           <DetailRow icon="bag-handle-outline" label="購入日" value={formatDateJa(food.purchaseDate)} />
           <DetailRow icon="document-text-outline" label="メモ" value={food.memo || 'メモはありません'} last />
         </View>
+
+        {food.consumptionHistory?.length ? (
+          <View style={styles.infoCard}>
+            <Text style={styles.ingredientName}>調理での使用履歴（新しい順）</Text>
+            {[...food.consumptionHistory].reverse().map((entry, index) => (
+              <DetailRow key={entry.operationId} icon="restaurant-outline"
+                label={new Date(entry.recordedAt).toLocaleDateString('ja-JP')}
+                value={`${recipes.find((recipe) => recipe.id === entry.recipeId)?.name ?? '削除済みレシピ'}：${formatFoodQuantity(entry.amount, entry.unit)}使用／当時の残量 ${formatFoodQuantity(entry.after, entry.unit)}`}
+                last={index === food.consumptionHistory!.length - 1} />
+            ))}
+          </View>
+        ) : null}
 
         {food.status === 'active' ? (
           <>

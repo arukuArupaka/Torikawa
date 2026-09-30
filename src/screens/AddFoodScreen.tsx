@@ -19,10 +19,10 @@ import { colors, radius, spacing } from '../constants/theme';
 import { useAppData } from '../context/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
 import { persistFoodImage } from '../services/imageStorage';
-import { saveLearnedProduct } from '../services/learnedProductService';
+import { correctLearnedProduct, saveLearnedProduct } from '../services/learnedProductService';
 import { FoodCategory, FoodItem, FoodQuantityUnit, NewFoodItem, StorageLocation } from '../types';
 import { toDateString } from '../utils/date';
-import { foodCategoryLabels, inferFoodCategory } from '../utils/foodCategory';
+import { foodCategoryLabels, foodCategoryOptions, inferFoodCategory } from '../utils/foodCategory';
 import { getFoodFallbackImage } from '../utils/foodImages';
 import { getDefaultExpiryDate, getFoodRegistrationDefaults } from '../utils/foodRegistrationDefaults';
 import { foodQuantityUnitLabels, isValidQuantity, parseQuantityInput } from '../utils/foodQuantity';
@@ -51,9 +51,11 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
     route.params?.initialName ?? initialProductName ?? '',
     route.params?.initialCategory,
   );
-  const initialName = existingFood?.name ?? templateFood?.name ?? route.params?.initialName ?? '';
+  const initialName = existingFood ? getFoodDisplayName(existingFood) : templateFood ? getFoodDisplayName(templateFood) : initialProductName ?? route.params?.initialName ?? '';
+  const barcode = existingFood?.barcode ?? templateFood?.barcode ?? route.params?.initialBarcode;
   const initialCategory = existingFood?.category ?? templateFood?.category
-    ?? (initialIngredientInfo.category === 'other' ? inferredInitialCategory : initialIngredientInfo.category);
+    ?? foodCategoryOptions.find((option) => option.label === route.params?.initialCategory)?.value
+    ?? (initialIngredientInfo.needsReview ? inferredInitialCategory : initialIngredientInfo.category);
   const initialPurchaseDate = existingFood?.purchaseDate ?? toDateString(new Date());
   const initialRegistrationDefaults = getFoodRegistrationDefaults({
     category: initialCategory,
@@ -104,6 +106,8 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
   const [submitted, setSubmitted] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const savingLock = useRef(false);
+  const correctionPending = useRef(false);
+  const [rememberCorrection, setRememberCorrection] = useState(true);
   const [shareSelected, setShareSelected] = useState(false);
   const [savedSharedProduct, setSavedSharedProduct] = useState<SharedProduct | null>(null);
   const [sharePending, setSharePending] = useState(false);
@@ -112,6 +116,9 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
   const [shareNotice, setShareNotice] = useState('');
   const canOfferSharing = !isEditing && route.params?.allowProductSharing && Boolean(normalizeSharedBarcode(route.params?.initialBarcode));
   const sharingConfigured = isSharedProductsConfigured();
+  const productChanged = Boolean(existingFood && (name.trim() !== getFoodDisplayName(existingFood)
+    || ingredientName.trim() !== existingFood.ingredientName || category !== existingFood.category));
+  const correctionAvailable = Boolean(isEditing && barcode && (productChanged || correctionPending.current));
   const submitSharedProduct = async (product: SharedProduct) => {
     if (sharingLock.current) return;
     sharingLock.current = true;
@@ -294,7 +301,8 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
 
     const input: NewFoodItem = {
       name: name.trim(),
-      productName: initialProductName?.trim() || null,
+      productName: initialProductName || barcode ? name.trim() : null,
+      ...(barcode ? { barcode } : {}),
       ingredientName: ingredientName.trim(),
       image: savedImage,
       category,
@@ -302,7 +310,7 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
         ingredientName.trim(),
         ...(templateFood?.tags ?? []),
         ...(route.params?.initialTags ?? []),
-        ...normalizeProductToIngredient(initialProductName || name).tags,
+        ...normalizeProductToIngredient(ingredientName).tags,
       ].filter(Boolean))),
       storage,
       quantity: parsedQuantity,
@@ -313,16 +321,35 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
     };
 
     if (existingFood) {
+      correctionPending.current = rememberCorrection && correctionAvailable;
       updateFood(existingFood.id, input);
+      if (correctionPending.current && barcode) {
+        try {
+          await correctLearnedProduct({ barcode, name: input.name, ingredientName: input.ingredientName, category: input.category });
+          correctionPending.current = false;
+        } catch (error) {
+          setIsSaving(false);
+          savingLock.current = false;
+          alert('次回の商品候補を更新できませんでした', '食材の変更は反映しました。もう一度保存すると端末の商品候補を再更新します。次回への反映を外して保存することもできます。');
+          return;
+        }
+      }
       navigation.goBack();
       return;
     }
 
-    addFood(input);
-    if (route.params?.initialBarcode) {
+    try {
+      addFood(input, route.params?.shoppingItemId);
+    } catch (error) {
+      alert('食材を登録できませんでした', error instanceof Error ? error.message : '内容を確認して再試行してください。');
+      setIsSaving(false);
+      savingLock.current = false;
+      return;
+    }
+    if (barcode) {
       try {
         await saveLearnedProduct({
-          barcode: route.params.initialBarcode,
+          barcode,
           name: input.name,
           image: input.image,
           category: foodCategoryLabels[input.category],
@@ -369,7 +396,7 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
           ) : null}
           {!isEditing && !templateFood && !route.params?.initialBarcode && !formEdited && foods.length > 0 ? (
             <View style={styles.reusePanel}>
-              <Pressable accessibilityRole="button" accessibilityState={{ expanded: showPrevious }} onPress={() => setShowPrevious((value) => !value)} style={styles.reuseToggle}>
+              <Pressable accessibilityRole="button" accessibilityState={{ expanded: showPrevious }} aria-expanded={showPrevious} onPress={() => setShowPrevious((value) => !value)} style={styles.reuseToggle}>
                 <Text style={styles.reuseTitle}>前の登録から選ぶ</Text>
                 <Ionicons name={showPrevious ? 'chevron-up' : 'chevron-down'} size={19} color={colors.primaryDark} />
               </Pressable>
@@ -392,43 +419,20 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
             <Text style={styles.reuseName}>{initialProductName || name}</Text>
             <Text style={styles.reuseHint}>{foodCategoryLabels[category]}・{storageLabels[storage]}・{foodQuantityUnitLabels[quantityUnit]}</Text>
             <Text style={styles.reuseHint}>前回の設定を引き継ぎました。今回の購入量と期限を確認してください。</Text>
-            <Pressable accessibilityRole="button" accessibilityState={{ expanded: showDetails }} onPress={() => setShowDetails((value) => !value)} style={styles.reuseToggle}>
-              <Text style={styles.reuseTitle}>{showDetails ? 'その他の項目を閉じる' : 'その他の項目を編集'}</Text>
-              <Ionicons name={showDetails ? 'chevron-up' : 'chevron-down'} size={19} color={colors.primaryDark} />
-            </Pressable>
           </View> : null}
-          {!templateFood || showDetails ? <>
-          <FoodImagePicker image={image} onChange={handleImageChange} />
-          {initialProductName ? (
-            <View style={styles.productInfoCard}>
-              <Text style={styles.productInfoLabel}>商品名</Text>
-              <Text style={styles.productInfoName}>{initialProductName}</Text>
-              <Text style={styles.productInfoMeta}>レシピ判定では下の「レシピ用分類」を優先します。</Text>
-            </View>
-          ) : null}
           <FormField
             autoFocus={!isEditing && !templateFood && foods.length === 0}
             error={nameError}
             label="表示名"
+            hint="商品名を修正すると、この名前で表示します。"
             onChangeText={handleNameChange}
             placeholder="例：牛乳"
             value={name}
           />
-          <FormField
-            error={ingredientNameError}
-            label="レシピ用分類"
-            hint="例：明治おいしい牛乳 → 牛乳。レシピの材料と照合する名前です。"
-            onChangeText={handleIngredientNameChange}
-            placeholder="例：牛乳"
-            value={ingredientName}
-          />
-          <FormField label="カテゴリ">
-            <CategorySelector onChange={handleCategoryChange} value={category} />
-          </FormField>
-          <FormField label="保存場所">
-            <StorageSelector onChange={handleStorageChange} value={storage} />
-          </FormField>
-          </> : null}
+          <DatePickerField label="期限日" onChange={handleExpiryDateChange} value={expiryDate} />
+          {!isEditing && !expiryDateEdited ? (
+            <Text style={styles.expiryHint}>自動入力した期限は目安です。パッケージに記載の期限を確認して変更してください。</Text>
+          ) : null}
           <FormField
             error={quantityError}
             label={templateFood ? '今回の購入量' : '残量'}
@@ -448,13 +452,34 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
               <Text style={styles.quantityUnit}>{foodQuantityUnitLabels[quantityUnit]}</Text>
             </View>
           </FormField>
-          {!templateFood || showDetails ? <FormField label="単位">
+          <FormField label="単位">
             <QuantityUnitSelector onChange={handleQuantityUnitChange} value={quantityUnit} />
-          </FormField> : null}
-          <DatePickerField label="期限日" onChange={handleExpiryDateChange} value={expiryDate} />
-          {!isEditing && !expiryDateEdited ? (
-            <Text style={styles.expiryHint}>自動入力した期限は目安です。パッケージに記載の期限を確認して変更してください。</Text>
-          ) : null}
+          </FormField>
+          <FormField label="保存場所">
+            <StorageSelector onChange={handleStorageChange} value={storage} />
+          </FormField>
+          <FormField
+            error={ingredientNameError}
+            label="レシピ用分類"
+            hint="例：明治おいしい牛乳 → 牛乳。レシピの材料と照合する名前です。"
+            onChangeText={handleIngredientNameChange}
+            placeholder="例：牛乳"
+            value={ingredientName}
+          />
+          {normalizeProductToIngredient(name).needsReview && name.trim() && ingredientName.trim() === name.trim() ? <Text style={styles.reuseHint}>分類を特定できませんでした。レシピ用分類を確認してください。加工品を原材料と同じ分類にしないでください。</Text> : null}
+          {correctionAvailable ? <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: rememberCorrection }} aria-checked={rememberCorrection} onPress={() => setRememberCorrection((value) => !value)} style={styles.reusePanel}>
+            <Text style={styles.reuseTitle}>{rememberCorrection ? '☑' : '☐'} 次回のスキャンにも商品名・分類を反映</Text>
+            <Text style={styles.reuseHint}>この端末の商品候補だけを更新します。今回の期限・残量・保存場所・メモは反映しません。</Text>
+          </Pressable> : null}
+          <Pressable accessibilityRole="button" accessibilityState={{ expanded: showDetails }} aria-expanded={showDetails} onPress={() => setShowDetails((value) => !value)} style={styles.reuseToggle}>
+            <Text style={styles.reuseTitle}>{showDetails ? 'その他の項目を閉じる' : '写真・カテゴリ・購入日・メモを編集'}</Text>
+            <Ionicons name={showDetails ? 'chevron-up' : 'chevron-down'} size={19} color={colors.primaryDark} />
+          </Pressable>
+          {showDetails ? <>
+            <FoodImagePicker image={image} onChange={handleImageChange} />
+          <FormField label="カテゴリ">
+            <CategorySelector onChange={handleCategoryChange} value={category} />
+          </FormField>
           <DatePickerField label="購入日" onChange={handlePurchaseDateChange} value={purchaseDate} />
           <FormField
             label="メモ（任意）"
@@ -463,11 +488,12 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
             placeholder="使い道や補足情報など"
             value={memo}
           />
+          </> : null}
           {canOfferSharing ? <View style={styles.reusePanel}>
             <Text style={styles.reuseTitle}>商品情報の共有（任意）</Text>
             <Text style={styles.reuseHint}>共有するのは次の4項目です。個人の在庫・数量・期限・購入日・保存場所・メモ・写真は送信しません。</Text>
             <Text style={styles.reuseHint}>バーコード：{route.params?.initialBarcode}{'\n'}商品名：{name.trim() || '未入力'}{'\n'}食材分類：{ingredientName.trim() || '未入力'}{'\n'}カテゴリ：{foodCategoryLabels[category]}</Text>
-            {sharingConfigured ? <Pressable accessibilityRole="checkbox" accessibilityLabel="この商品情報を他のユーザーと共有する" accessibilityState={{ checked: shareSelected }} onPress={() => setShareSelected((value) => !value)} style={styles.shareChoice}>
+            {sharingConfigured ? <Pressable accessibilityRole="checkbox" accessibilityLabel="この商品情報を他のユーザーと共有する" accessibilityState={{ checked: shareSelected }} aria-checked={shareSelected} onPress={() => setShareSelected((value) => !value)} style={styles.shareChoice}>
               <Ionicons name={shareSelected ? 'checkbox' : 'square-outline'} color={colors.primaryDark} size={25} />
               <Text style={styles.shareChoiceText}>この商品情報を他のユーザーと共有する</Text>
             </Pressable> : <Text style={styles.reuseHint}>共有機能は準備中です。今回はこの端末に商品情報を保存します。</Text>}

@@ -1,7 +1,6 @@
 import { FoodItem, FoodQuantityUnit, Recipe } from '../types';
-import { daysUntil } from './date';
 import { foodQuantityUnitOptions, formatFoodQuantity, parseRecipeAmountForUnit } from './foodQuantity';
-import { findMatchingFoods, normalizeIngredientName } from './recipeMatching';
+import { findMatchingFoods, getUsableFoods, normalizeIngredientName } from './recipeMatching';
 import { getServingsMultiplier, scaleRecipeAmount } from './recipeServings';
 
 export type RecipeStockRow = {
@@ -16,8 +15,10 @@ export type RecipeStockRow = {
 
 /** Compare original amounts before display rounding; never infer weight from a pack/piece. */
 export function getRecipeStock(recipe: Pick<Recipe, 'ingredients' | 'ingredientAmounts' | 'servings'>, foods: FoodItem[], targetServings = recipe.servings): RecipeStockRow[] {
-  const usable = foods.filter((food) => food.status === 'active' && daysUntil(food.expiryDate) >= 0);
+  const usable = getUsableFoods(foods);
   const matches = recipe.ingredients.map((ingredient) => findMatchingFoods(ingredient, usable));
+  const occurrences = new Map<string, number>();
+  matches.forEach((stock) => stock.forEach((food) => occurrences.set(food.id, (occurrences.get(food.id) ?? 0) + 1)));
   return recipe.ingredients.map((ingredient, index) => {
     const stock = matches[index];
     const row = { ingredient, foods: stock };
@@ -27,7 +28,7 @@ export function getRecipeStock(recipe: Pick<Recipe, 'ingredients' | 'ingredientA
     const required = unit ? parseRecipeAmountForUnit(amount, unit)! * getServingsMultiplier(recipe.servings, targetServings) : undefined;
     if (stock.length === 0) return { ...row, status: 'missing', unit, required };
     // Aliases in multiple recipe rows could spend the same stock twice. Request review.
-    const shared = matches.some((other, otherIndex) => otherIndex !== index && other.some((food) => stock.some((item) => item.id === food.id)));
+    const shared = stock.some((food) => occurrences.get(food.id)! > 1);
     if (!unit || required === undefined || shared || scaleRecipeAmount(amount, recipe.servings, targetServings).needsReview) return { ...row, status: 'review' };
     const comparable = stock.filter((food) => food.quantityUnit === unit && Number.isFinite(food.quantity) && food.quantity >= 0);
     const available = comparable.reduce((total, food) => total + food.quantity, 0);
@@ -45,4 +46,21 @@ export function getStockLabel(row: RecipeStockRow): string {
   if (row.status === 'review') return '分量は要確認（単位・登録内容を確認）';
   if (row.status === 'missing') return row.required === undefined ? '在庫なし・分量は要確認' : '使える在庫がありません';
   return '調理用に用意';
+}
+
+/** Same lots/units as the availability calculation, allocated earliest first. */
+export function allocateRecipeStock(rows: RecipeStockRow[]): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const row of rows) {
+    if (row.status !== 'sufficient' || !row.unit || row.required === undefined) continue;
+    let remaining = Number(row.required.toFixed(2));
+    if (remaining <= 0) continue;
+    for (const food of row.foods) {
+      if (food.quantityUnit !== row.unit || remaining <= 0) continue;
+      const amount = Math.min(food.quantity, remaining);
+      result[food.id] = amount;
+      remaining = Number((remaining - amount).toFixed(2));
+    }
+  }
+  return result;
 }

@@ -26,6 +26,7 @@ export type RootStackParamList = {
         initialStorage?: StorageLocation;
         foodId?: string;
         reuseFoodId?: string;
+        shoppingItemId?: string;
       }
     | undefined;
   FoodDetail: { foodId: string };

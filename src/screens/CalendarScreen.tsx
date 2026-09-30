@@ -11,7 +11,7 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { colors, radius, spacing } from '../constants/theme';
-import { useAppData } from '../context/AppDataContext';
+import { useFoodData } from '../context/AppDataContext';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { daysUntil, getRemainingLabel, parseDate, toDateString } from '../utils/date';
 import { getFoodDisplayName } from '../utils/ingredientNormalizer';
@@ -26,7 +26,7 @@ type Props = CompositeScreenProps<
 export function CalendarScreen({ navigation }: Props) {
   const alert = useAppAlert();
   const currentDay = useCurrentDay();
-  const { foods, updateFood } = useAppData();
+  const { foods, updateFood } = useFoodData();
   const [selectedDate, setSelectedDate] = useState<string | null>(() => toDateString(new Date()));
   const [movingFoodId, setMovingFoodId] = useState<string | null>(null);
   const [visibleMonth, setVisibleMonth] = useState(() => {
@@ -166,7 +166,7 @@ export function CalendarScreen({ navigation }: Props) {
                     <Pressable
                       accessibilityLabel={`${visibleMonth.getMonth() + 1}月${day}日、期限の食材${dayFoods.length}件`}
                       accessibilityRole="button"
-                      accessibilityState={{ selected: isSelected }}
+                      accessibilityState={{ selected: isSelected }} aria-pressed={isSelected}
                       onPress={() => selectDate(dateString)}
                       style={({ pressed }) => [
                         styles.dayCell,
@@ -178,12 +178,7 @@ export function CalendarScreen({ navigation }: Props) {
                       <View style={[styles.dayNumberWrap, isToday && styles.todayCircle]}>
                         <Text style={[styles.dayNumber, isToday && styles.todayText]}>{day}</Text>
                       </View>
-                      {dayFoods.slice(0, 2).map((food) => (
-                        <View key={food.id} style={styles.foodLabel}>
-                          <Text numberOfLines={1} style={styles.foodLabelText}>{getFoodDisplayName(food)}</Text>
-                        </View>
-                      ))}
-                      {dayFoods.length > 2 ? <Text style={styles.more}>+{dayFoods.length - 2}</Text> : null}
+                      {dayFoods.length > 0 ? <Text style={styles.foodLabelText}>{dayFoods.length}件</Text> : null}
                     </Pressable>
                   ) : null}
                 </View>
@@ -294,7 +289,7 @@ const styles = StyleSheet.create({
   dayNumber: { color: colors.text, fontSize: 12 },
   todayText: { color: colors.surface, fontWeight: '800' },
   foodLabel: { backgroundColor: colors.primarySoft, borderRadius: 4, marginTop: 2, maxWidth: '100%', paddingHorizontal: 3, paddingVertical: 2 },
-  foodLabelText: { color: colors.primaryDark, fontSize: 8, fontWeight: '700' },
+  foodLabelText: { color: colors.primaryDark, fontSize: 12, fontWeight: '700' },
   more: { color: colors.textMuted, fontSize: 8 },
   sectionTitle: { color: colors.text, fontSize: 18, fontWeight: '800' },
   selectedSectionHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm },

@@ -4,13 +4,13 @@ import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { CompositeScreenProps } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SectionHeader } from '../components/SectionHeader';
 import { SwipeableFoodCard } from '../components/SwipeableFoodCard';
 import { colors, radius, spacing } from '../constants/theme';
-import { useAppData } from '../context/AppDataContext';
+import { useFoodData } from '../context/AppDataContext';
 import { useCurrentDay } from '../hooks/useCurrentDay';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { loadStoredValue, saveStoredValue, storageKeys } from '../services/storage';
@@ -41,7 +41,8 @@ const viewModeOptions: { key: HomeViewMode; label: string }[] = [
 
 export function HomeScreen({ navigation }: Props) {
   const alert = useAppAlert();
-  const { foods, addShoppingItem, markFoodDisposed, markFoodUsed } = useAppData();
+  const { foods, addShoppingItem, markFoodDisposed, markFoodUsed } = useFoodData();
+  const [expiredOnly, setExpiredOnly] = useState(false);
   const [query, setQuery] = useState('');
   const [viewMode, setViewMode] = useState<HomeViewMode>('expiry');
   const currentDay = useCurrentDay();
@@ -54,10 +55,11 @@ export function HomeScreen({ navigation }: Props) {
     const today = parseDate(currentDay);
     return activeFoods.reduce((counts, food) => {
       const days = daysUntil(food.expiryDate, today);
-      if (days === 0) counts.today += 1;
+      if (days < 0) counts.expired += 1;
+      else if (days === 0) counts.today += 1;
       else if (days >= 1 && days <= 3) counts.soon += 1;
       return counts;
-    }, { today: 0, soon: 0 });
+    }, { expired: 0, today: 0, soon: 0 });
   }, [activeFoods, currentDay]);
   const hasUrgentFoods = expirySummary.today + expirySummary.soon > 0;
 
@@ -65,6 +67,7 @@ export function HomeScreen({ navigation }: Props) {
     const today = parseDate(currentDay);
     const normalizedQuery = query.trim().toLocaleLowerCase('ja-JP');
     const filtered = activeFoods
+      .filter((food) => !expiredOnly || daysUntil(food.expiryDate, today) < 0)
       .filter((food) =>
         !normalizedQuery
         || getFoodSearchTerms(food).some((term) => term.toLocaleLowerCase('ja-JP').includes(normalizedQuery)),
@@ -96,7 +99,7 @@ export function HomeScreen({ navigation }: Props) {
       }) },
       { key: 'other', title: 'その他', tone: 'green', foods: filtered.filter((food) => daysUntil(food.expiryDate, today) > 3) },
     ];
-  }, [activeFoods, currentDay, query, viewMode]);
+  }, [activeFoods, currentDay, query, viewMode, expiredOnly]);
 
   useEffect(() => {
     if (activeFoods.length === 0 || swipeGuideCheckStarted.current) return;
@@ -179,7 +182,28 @@ export function HomeScreen({ navigation }: Props) {
         subtitle={`${activeFoods.length}件の食材`}
         title="食材管理"
       />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <SectionList
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        sections={sections.filter((section) => section.foods.length > 0).map((section) => ({ ...section, data: section.foods }))}
+        keyExtractor={(food) => food.id}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={7}
+        stickySectionHeadersEnabled={false}
+        renderSectionHeader={({ section }) => <SectionHeader count={section.data.length} title={section.title} tone={section.tone} />}
+        renderItem={({ item: food }) => <View style={{ marginBottom: spacing.sm }}><SwipeableFoodCard food={food}
+          onMarkDisposed={() => confirmStatusChange(food, 'disposed')}
+          onMarkUsed={() => confirmStatusChange(food, 'used')}
+          onPress={() => navigation.navigate('FoodDetail', { foodId: food.id })} /></View>}
+        ListHeaderComponent={<>
+        {expirySummary.expired > 0 ? <Pressable accessibilityRole="button" accessibilityLabel={`期限切れ${expirySummary.expired}件を確認`}
+          accessibilityState={{ selected: expiredOnly }} aria-pressed={expiredOnly}
+          onPress={() => { setExpiredOnly(true); setQuery(''); setViewMode('expiry'); }} style={styles.expiredNotice}>
+          <Text style={styles.expiredTitle}>期限切れ {expirySummary.expired}件を確認</Text>
+          <Text style={styles.expiredHint}>期限と状態を確認してください。食べられるかどうかを判定する表示ではありません。</Text>
+        </Pressable> : null}
         {activeFoods.length > 0 ? (
           <View style={styles.expirySummary}>
             <View style={styles.summaryHeading}>
@@ -197,7 +221,7 @@ export function HomeScreen({ navigation }: Props) {
                 <Text style={styles.summaryNumber}>{expirySummary.soon}<Text style={styles.summaryUnit}> 件</Text></Text>
               </View>
             </View>
-            {!hasUrgentFoods ? <Text style={styles.summaryEmpty}>期限が近い食材はありません</Text> : null}
+            {!hasUrgentFoods ? <Text style={styles.summaryEmpty}>{expirySummary.expired > 0 ? '期限内で3日以内の食材はありません' : '期限が近い食材はありません'}</Text> : null}
             <Pressable
               accessibilityLabel={hasUrgentFoods ? '期限が近い食材でレシピを探す' : 'レシピを見る'}
               accessibilityRole="button"
@@ -240,13 +264,17 @@ export function HomeScreen({ navigation }: Props) {
           </Pressable>
         </View>
 
+        {expiredOnly ? <Pressable accessibilityRole="button" onPress={() => setExpiredOnly(false)} style={styles.expiredNotice}>
+          <Text style={styles.expiredTitle}>期限切れのみ表示中 · すべての食材に戻す</Text>
+        </Pressable> : null}
+
         <View style={styles.viewModeTabs}>
           {viewModeOptions.map((option) => {
             const selected = viewMode === option.key;
             return (
               <Pressable
                 accessibilityRole="button"
-                accessibilityState={{ selected }}
+                accessibilityState={{ selected }} aria-pressed={selected}
                 key={option.key}
                 onPress={() => setViewMode(option.key)}
                 style={[styles.viewModeTab, selected && styles.selectedViewModeTab]}
@@ -274,35 +302,20 @@ export function HomeScreen({ navigation }: Props) {
           </View>
         ) : null}
 
-        {sections.map((section) =>
-          section.foods.length > 0 ? (
-            <View key={section.key}>
-              <SectionHeader count={section.foods.length} title={section.title} tone={section.tone} />
-              <View style={styles.list}>
-                {section.foods.map((food) => (
-                  <SwipeableFoodCard
-                    food={food}
-                    key={food.id}
-                    onMarkDisposed={() => confirmStatusChange(food, 'disposed')}
-                    onMarkUsed={() => confirmStatusChange(food, 'used')}
-                    onPress={() => navigation.navigate('FoodDetail', { foodId: food.id })}
-                  />
-                ))}
-              </View>
-            </View>
-          ) : null,
-        )}
-
         {activeFoods.length > 0 && sections.every((section) => section.foods.length === 0) ? (
           <Text style={styles.noResults}>「{query}」に一致する食材はありません。</Text>
         ) : null}
-      </ScrollView>
+        </>}
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   content: { padding: spacing.md, paddingBottom: spacing.xl },
+  expiredNotice: { backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm, marginTop: spacing.sm, gap: 6 },
+  expiredTitle: { color: colors.danger, fontSize: 16, fontWeight: '700' },
+  expiredHint: { color: colors.text, fontSize: 13, lineHeight: 20 },
   expirySummary: { backgroundColor: colors.primarySoft, borderRadius: radius.md, marginBottom: spacing.md, padding: spacing.md },
   summaryHeading: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, justifyContent: 'space-between' },
   summaryTitle: { color: colors.text, fontSize: 16, fontWeight: '700' },

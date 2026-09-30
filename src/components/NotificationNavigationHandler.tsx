@@ -34,7 +34,7 @@ export function NotificationNavigationHandler({
       navigationRef.navigate('MainTabs', { screen: 'Home' });
     }
 
-    await Notifications.clearLastNotificationResponseAsync();
+    await Notifications.clearLastNotificationResponseAsync().catch((error) => console.warn('通知の確認済み状態を保存できませんでした。', error));
   }, [foods, isReady, navigationReady]);
 
   useEffect(() => {
@@ -44,7 +44,7 @@ export function NotificationNavigationHandler({
     });
     void Notifications.getLastNotificationResponseAsync().then((response) => {
       if (response) void handleResponse(response);
-    });
+    }).catch((error) => console.warn('起動時の通知を確認できませんでした。', error));
     return () => subscription.remove();
   }, [handleResponse]);
 

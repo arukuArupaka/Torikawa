@@ -6,176 +6,124 @@ import { getFoodDisplayName } from '../utils/ingredientNormalizer';
 import { loadStoredValue, saveStoredValue, storageKeys } from './storage';
 
 const CHANNEL_ID = 'expiry-reminders';
-type NotificationIdMap = Record<string, string[]>;
-type StoredNotificationIdMap = Record<string, string | string[]>;
-
+const KIND = 'tabedoki-expiry-v2';
+type IdMap = Record<string, string[]>;
 export type NotificationStatusSummary = {
-  permission: 'granted' | 'denied' | 'undetermined';
+  permission: 'granted' | 'denied' | 'undetermined' | 'unsupported';
   scheduledCount: number;
 };
-
 let syncQueue: Promise<void> = Promise.resolve();
 
 export function initializeNotificationHandling(): void {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
+  if (Platform.OS === 'web') return;
+  Notifications.setNotificationHandler({ handleNotification: async () => ({
+    shouldPlaySound: true, shouldSetBadge: false, shouldShowBanner: true, shouldShowList: true,
+  }) });
 }
-
 async function ensureAndroidChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;
   await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-    name: '食材の期限通知',
-    importance: Notifications.AndroidImportance.HIGH,
-    vibrationPattern: [0, 250, 250, 250],
+    name: '食材の期限通知', importance: Notifications.AndroidImportance.HIGH, vibrationPattern: [0, 250, 250, 250],
   });
 }
-
 function isPermissionGranted(status: Notifications.NotificationPermissionsStatus): boolean {
-  return status.granted
-    || status.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
+  return status.granted || status.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
 }
-
 export async function ensureNotificationPermission(): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
   await ensureAndroidChannel();
   const current = await Notifications.getPermissionsAsync();
   if (isPermissionGranted(current)) return true;
-
-  const requested = await Notifications.requestPermissionsAsync({
-    ios: { allowAlert: true, allowBadge: false, allowSound: true },
-  });
-  return isPermissionGranted(requested);
+  return isPermissionGranted(await Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowBadge: false, allowSound: true } }));
 }
 
-function getTriggerDate(
-  food: FoodItem,
-  daysBefore: number,
-  time: string,
-): Date | null {
-  const [hour, minute] = time.split(':').map(Number);
-  const expiry = parseDate(food.expiryDate);
-  const trigger = new Date(
-    expiry.getFullYear(),
-    expiry.getMonth(),
-    expiry.getDate() - daysBefore,
-    hour,
-    minute,
-    0,
-    0,
-  );
-  return trigger.getTime() > Date.now() ? trigger : null;
+export function buildNotificationPlan(foods: FoodItem[], settings: NotificationSettings) {
+  if (!settings.enabled) return [];
+  const [hour, minute] = settings.time.split(':').map(Number);
+  return foods.filter((food) => food.status === 'active').flatMap((food) => {
+    const expiry = parseDate(food.expiryDate);
+    return [...new Set(settings.daysBeforeList)].flatMap((daysBefore) => {
+      const date = new Date(expiry.getFullYear(), expiry.getMonth(), expiry.getDate() - daysBefore, hour, minute);
+      if (date.getTime() <= Date.now()) return [];
+      const title = `「${getFoodDisplayName(food)}」の期限が近づいています`;
+      const body = daysBefore === 0 ? '今日が期限です。忘れずに使い切りましょう。' : `${daysBefore}日後が期限です。使い道を確認しましょう。`;
+      const key = JSON.stringify([food.id, daysBefore, date.getTime(), title, body]);
+      return [{ foodId: food.id, daysBefore, date, title, body, key }];
+    });
+  }).sort((a, b) => a.date.getTime() - b.date.getTime());
 }
-
-async function cancelManagedNotifications(): Promise<void> {
-  const storedIds = await loadStoredValue<StoredNotificationIdMap>(storageKeys.notificationIds);
-  const identifiers = Object.values(storedIds ?? {}).flatMap((value) =>
-    Array.isArray(value) ? value : [value],
-  );
-  await Promise.all(
-    identifiers.map(async (id) => {
-      try {
-        await Notifications.cancelScheduledNotificationAsync(id);
-      } catch (error) {
-        console.warn('期限通知を解除できませんでした。', error);
-      }
-    }),
-  );
-  await saveStoredValue(storageKeys.notificationIds, {});
+function isManaged(item: Notifications.NotificationRequest, known: Set<string> = new Set()): boolean {
+  const data = item.content.data;
+  return data?.kind === KIND || known.has(item.identifier)
+    || (!data?.kind && typeof data?.foodId === 'string' && typeof data?.daysBefore === 'number');
 }
-
-async function syncFoodNotifications(
-  foods: FoodItem[],
-  settings: NotificationSettings,
-): Promise<void> {
-  await cancelManagedNotifications();
-  if (!settings.enabled) return;
-
+async function reconcile(foods: FoodItem[], settings: NotificationSettings): Promise<void> {
+  if (Platform.OS === 'web') return;
   await ensureAndroidChannel();
   const permission = await Notifications.getPermissionsAsync();
-  if (!isPermissionGranted(permission)) return;
-
-  const scheduledIds: NotificationIdMap = {};
-  try {
-    for (const food of foods) {
-      const identifiers: string[] = [];
-      for (const daysBefore of [...new Set(settings.daysBeforeList)]) {
-        const triggerDate = getTriggerDate(food, daysBefore, settings.time);
-        if (!triggerDate) continue;
-
-        const identifier = await Notifications.scheduleNotificationAsync({
-          content: {
-            title: `「${getFoodDisplayName(food)}」の期限が近づいています`,
-            body: daysBefore === 0
-              ? '今日が期限です。忘れずに使い切りましょう。'
-              : `${daysBefore}日後が期限です。使い道を確認しましょう。`,
-            data: { foodId: food.id, daysBefore },
-            sound: 'default',
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DATE,
-            date: triggerDate,
-            channelId: Platform.OS === 'android' ? CHANNEL_ID : undefined,
-          },
-        });
-        identifiers.push(identifier);
-      }
-      if (identifiers.length > 0) scheduledIds[food.id] = identifiers;
+  const plan = isPermissionGranted(permission) ? buildNotificationPlan(foods, settings) : [];
+  let stored: Record<string, string | string[]> = {};
+  try { stored = await loadStoredValue<typeof stored>(storageKeys.notificationIds) ?? {}; }
+  catch { /* OS metadata also recovers reservations when the index is unreadable. */ }
+  const known = new Set(Object.values(stored).flatMap((value) => typeof value === 'string' ? [value] : Array.isArray(value) ? value : []));
+  const actual = await Notifications.getAllScheduledNotificationsAsync();
+  const desired = new Map(plan.map((item) => [item.key, item]));
+  const kept = new Set<string>();
+  const ids: IdMap = Object.create(null);
+  const track = (foodId: string, id: string) => { (ids[foodId] ??= []).push(id); };
+  let failed = false;
+  for (const item of actual.filter((item) => isManaged(item, known))) {
+    const key = String(item.content.data?.planKey ?? '');
+    const expected = desired.get(key);
+    if (expected && !kept.has(key) && item.content.title === expected.title && item.content.body === expected.body) {
+      kept.add(key); track(expected.foodId, item.identifier);
+    } else {
+      try { await Notifications.cancelScheduledNotificationAsync(item.identifier); }
+      catch { track(String(item.content.data?.foodId ?? 'unknown'), item.identifier); failed = true; }
     }
-  } finally {
-    // 途中で失敗しても、作成済みの予約を次回同期で解除できるようにします。
-    await saveStoredValue(storageKeys.notificationIds, scheduledIds);
   }
+  // Retain failed cancellations before creating anything else.
+  await saveStoredValue(storageKeys.notificationIds, ids);
+  if (failed) throw new Error('解除できない期限通知があります。「通知を再同期」で再試行してください。');
+  for (const item of plan) {
+    if (kept.has(item.key)) continue;
+    const identifier = await Notifications.scheduleNotificationAsync({
+      content: { title: item.title, body: item.body, sound: 'default',
+        data: { kind: KIND, planKey: item.key, foodId: item.foodId, daysBefore: item.daysBefore } },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: item.date,
+        channelId: Platform.OS === 'android' ? CHANNEL_ID : undefined },
+    });
+    track(item.foodId, identifier);
+    // A failure later in this food's day list must not lose earlier reservations.
+    await saveStoredValue(storageKeys.notificationIds, ids);
+  }
+  const verified = (await Notifications.getAllScheduledNotificationsAsync()).filter((item) => isManaged(item, known));
+  const keys = verified.map((item) => item.content.data?.planKey);
+  if (keys.length !== plan.length || new Set(keys).size !== plan.length || plan.some((item) => !keys.includes(item.key))) {
+    throw new Error('端末の通知予約が予定と一致しません。「通知を再同期」で再試行してください。');
+  }
+  if (settings.enabled && !isPermissionGranted(permission)) throw new Error('通知が許可されていません。端末の設定で通知を許可して再同期してください。');
 }
-
-export function queueNotificationSync(
-  foods: FoodItem[],
-  settings: NotificationSettings,
-): Promise<void> {
-  syncQueue = syncQueue
-    .catch(() => undefined)
-    .then(() => syncFoodNotifications(foods, settings));
+export function queueNotificationSync(foods: FoodItem[], settings: NotificationSettings): Promise<void> {
+  // Take a snapshot; later callers run after this operation, including after failures.
+  syncQueue = syncQueue.catch(() => undefined).then(() => reconcile(foods, settings));
   return syncQueue;
 }
-
 export async function scheduleTestNotification(food?: Pick<FoodItem, 'id' | 'name' | 'productName'>): Promise<void> {
+  if (Platform.OS === 'web') throw new Error('Web版では通知を利用できません。スマートフォンでお試しください。');
   await ensureAndroidChannel();
   await Notifications.scheduleNotificationAsync({
-    content: {
-      title: food ? `「${getFoodDisplayName(food)}」のテスト通知` : 'たべどき！！のテスト通知',
-      body: food
-        ? 'タップすると食材の詳細画面を開きます。'
-        : '期限通知を受け取る準備ができました。',
-      data: food ? { foodId: food.id } : {},
-      sound: 'default',
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-      seconds: 3,
-      channelId: Platform.OS === 'android' ? CHANNEL_ID : undefined,
-    },
+    content: { title: food ? `「${getFoodDisplayName(food)}」のテスト通知` : 'たべどき！！のテスト通知',
+      body: food ? 'タップすると食材の詳細画面を開きます。' : '期限通知を受け取る準備ができました。',
+      data: { kind: 'tabedoki-test', ...(food ? { foodId: food.id } : {}) }, sound: 'default' },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 3,
+      channelId: Platform.OS === 'android' ? CHANNEL_ID : undefined },
   });
 }
-
 export async function getNotificationStatusSummary(): Promise<NotificationStatusSummary> {
-  const [permission, scheduled] = await Promise.all([
-    Notifications.getPermissionsAsync(),
-    Notifications.getAllScheduledNotificationsAsync(),
-  ]);
-  const permissionLabel = isPermissionGranted(permission)
-    ? 'granted'
-    : permission.status === 'denied'
-      ? 'denied'
-      : 'undetermined';
-
-  return {
-    permission: permissionLabel,
-    scheduledCount: scheduled.filter((notification) =>
-      typeof notification.content.data?.foodId === 'string',
-    ).length,
-  };
+  if (Platform.OS === 'web') return { permission: 'unsupported', scheduledCount: 0 };
+  await syncQueue.catch(() => undefined);
+  const [permission, scheduled] = await Promise.all([Notifications.getPermissionsAsync(), Notifications.getAllScheduledNotificationsAsync()]);
+  return { permission: isPermissionGranted(permission) ? 'granted' : permission.status === 'denied' ? 'denied' : 'undetermined',
+    scheduledCount: scheduled.filter((item) => isManaged(item)).length };
 }

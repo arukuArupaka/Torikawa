@@ -24,6 +24,10 @@ export type RecipeCategory =
 
 export type FoodItem = {
   id: string;
+  sourceShoppingItemId?: string;
+  barcode?: string | null;
+  revision?: number;
+  consumptionHistory?: FoodConsumption[];
   name: string;
   productName: string | null;
   ingredientName: string;
@@ -44,8 +48,18 @@ export type FoodItem = {
 
 export type NewFoodItem = Omit<
   FoodItem,
-  'id' | 'createdAt' | 'status' | 'usedAt' | 'disposedAt'
+  'id' | 'createdAt' | 'status' | 'usedAt' | 'disposedAt' | 'revision' | 'consumptionHistory' | 'sourceShoppingItemId'
 >;
+
+export type FoodConsumption = {
+  operationId: string;
+  recipeId: string;
+  recordedAt: string;
+  amount: number;
+  unit: FoodQuantityUnit;
+  before: number;
+  after: number;
+};
 
 export type ShoppingItem = {
   id: string;

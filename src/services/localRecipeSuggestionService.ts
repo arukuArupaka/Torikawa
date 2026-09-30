@@ -1,7 +1,7 @@
 import { FoodItem, NewRecipe, RecipeCategory } from '../types';
 import { daysUntil } from '../utils/date';
 import { getFoodIngredientName } from '../utils/ingredientNormalizer';
-import { findMatchingFood } from '../utils/recipeMatching';
+import { findMatchingFood, getUsableFoods } from '../utils/recipeMatching';
 import { getRecipeFallbackImage } from '../utils/recipeImages';
 
 export type LocalRecipeIdea = NewRecipe & {
@@ -21,7 +21,9 @@ type IdeaSeed = {
 };
 
 function findFood(foods: FoodItem[], keywords: string[]) {
-  return foods.find((food) => keywords.some((keyword) => findMatchingFood(keyword, [food])));
+  return keywords.map((keyword) => findMatchingFood(keyword, foods))
+    .filter((food): food is FoodItem => Boolean(food))
+    .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate) || foods.indexOf(a) - foods.indexOf(b))[0];
 }
 
 function ingredientLabel(food: FoodItem): string {
@@ -47,8 +49,7 @@ function toIdea(seed: IdeaSeed): LocalRecipeIdea {
 }
 
 export function generateLocalRecipeIdeas(foods: FoodItem[]): LocalRecipeIdea[] {
-  const usableFoods = foods
-    .filter((food) => food.status === 'active' && daysUntil(food.expiryDate) >= 0)
+  const usableFoods = [...getUsableFoods(foods)]
     .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
   const urgentFoods = usableFoods.filter((food) => daysUntil(food.expiryDate) <= 3);
   const urgentFoodNames = new Set(urgentFoods.map(ingredientLabel));

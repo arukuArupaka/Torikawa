@@ -1,5 +1,6 @@
+import { FoodImage } from './FoodImage';
 import { Ionicons } from '@expo/vector-icons';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing } from '../constants/theme';
 import { FoodItem, StorageLocation } from '../types';
 import { daysUntil, getRemainingLabel } from '../utils/date';
@@ -29,7 +30,7 @@ export function FoodCard({
       onPress={onPress}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
-      <Image source={{ uri: food.image }} style={styles.image} />
+      <FoodImage source={{ uri: food.image }} style={styles.image} />
       <View style={styles.content}>
         <Text numberOfLines={2} style={styles.name}>{displayName}</Text>
         <Text style={[styles.remaining, { color: urgencyColor }]}>{getRemainingLabel(food.expiryDate)}</Text>

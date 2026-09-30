@@ -1,7 +1,12 @@
 import { File, Paths } from 'expo-file-system';
 import { BarcodeProduct } from '../data/productCatalog';
 import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
-import { loadStoredValue, saveStoredValue, storageKeys } from './storage';
+import { loadStoredValue, updateStoredValue, storageKeys } from './storage';
+import { validateStoredData } from './dataValidation';
+import { FoodCategory } from '../types';
+import { foodCategoryLabels } from '../utils/foodCategory';
+import { getFoodRegistrationDefaults } from '../utils/foodRegistrationDefaults';
+import { getFoodFallbackImage } from '../utils/foodImages';
 
 export type LearnedProductCatalog = Record<string, BarcodeProduct>;
 type StoredBarcodeProduct = Omit<BarcodeProduct, 'ingredientName' | 'tags'> & {
@@ -26,6 +31,7 @@ function copyImageForCatalog(imageUri: string, barcode: string): string {
 
 export async function findLearnedProduct(barcode: string): Promise<BarcodeProduct | null> {
   const catalog = await loadStoredValue<Record<string, StoredBarcodeProduct>>(storageKeys.learnedProducts);
+  if (catalog !== null) validateStoredData('learnedProducts', catalog);
   const product = catalog?.[barcode];
   if (!product) return null;
   const normalized = normalizeProductToIngredient(product.name);
@@ -38,9 +44,31 @@ export async function findLearnedProduct(barcode: string): Promise<BarcodeProduc
 }
 
 export async function saveLearnedProduct(product: BarcodeProduct): Promise<void> {
-  const catalog = await loadStoredValue<LearnedProductCatalog>(storageKeys.learnedProducts) ?? {};
-  const image = copyImageForCatalog(product.image, product.barcode);
+  await updateStoredValue<LearnedProductCatalog>(storageKeys.learnedProducts, (stored) => {
+    const catalog = stored ?? {};
+    validateStoredData('learnedProducts', catalog);
+    const image = copyImageForCatalog(product.image, product.barcode);
+    const next = { ...catalog, [product.barcode]: { ...product, image } };
+    validateStoredData('learnedProducts', next);
+    return next;
+  });
+}
 
-  catalog[product.barcode] = { ...product, image };
-  await saveStoredValue(storageKeys.learnedProducts, catalog);
+export type ProductCorrection = { barcode: string; name: string; ingredientName: string; category: FoodCategory };
+
+/** Only correct product metadata; this inventory's storage/photo/memo are not defaults. */
+export async function correctLearnedProduct(correction: ProductCorrection): Promise<void> {
+  await updateStoredValue<LearnedProductCatalog>(storageKeys.learnedProducts, (stored) => {
+    const catalog = stored ?? {};
+    validateStoredData('learnedProducts', catalog);
+    const previous = catalog[correction.barcode];
+    const next = { ...catalog, [correction.barcode]: {
+      barcode: correction.barcode, name: correction.name, ingredientName: correction.ingredientName,
+      category: foodCategoryLabels[correction.category], tags: [correction.ingredientName],
+      image: previous?.image ?? getFoodFallbackImage(correction),
+      storage: previous?.storage ?? getFoodRegistrationDefaults(correction).storage,
+    } };
+    validateStoredData('learnedProducts', next);
+    return next;
+  });
 }

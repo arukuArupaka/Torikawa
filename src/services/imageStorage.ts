@@ -1,4 +1,5 @@
 import { File, Paths } from 'expo-file-system';
+import { checkImageSize } from './backupLimits';
 
 export function persistFoodImage(sourceUri: string): string {
   if (!sourceUri.startsWith('file:') && !sourceUri.startsWith('content:')) return sourceUri;
@@ -9,7 +10,8 @@ export function persistFoodImage(sourceUri: string): string {
   const cleanUri = sourceUri.split('?')[0];
   const extension = cleanUri.match(/\.[a-zA-Z0-9]+$/)?.[0] ?? '.jpg';
   const source = new File(sourceUri);
-  const destination = new File(Paths.document, `food-${Date.now()}${extension}`);
+  checkImageSize(source.size);
+  const destination = new File(Paths.document, `food-${Date.now()}-${Math.random().toString(36).slice(2)}${extension}`);
   source.copy(destination);
   return destination.uri;
 }

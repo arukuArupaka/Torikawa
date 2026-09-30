@@ -17,12 +17,12 @@ export function QuantityUnitSelector({
         return (
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ selected }}
+            accessibilityState={{ selected }} aria-pressed={selected}
             key={option.value}
             onPress={() => onChange(option.value)}
             style={[styles.option, selected && styles.selected]}
           >
-            <Text style={[styles.label, selected && styles.selectedLabel]}>{option.label}</Text>
+            <Text style={[styles.label, selected && styles.selectedLabel]}>{selected ? '✓ ' : ''}{option.label}</Text>
           </Pressable>
         );
       })}
@@ -32,7 +32,7 @@ export function QuantityUnitSelector({
 
 const styles = StyleSheet.create({
   options: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  option: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.sm, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 9 },
+  option: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.sm, borderWidth: 1, minHeight: 44, justifyContent: 'center', paddingHorizontal: 13, paddingVertical: 9 },
   selected: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
   label: { color: colors.textMuted, fontSize: 13, fontWeight: '700' },
   selectedLabel: { color: colors.primaryDark },

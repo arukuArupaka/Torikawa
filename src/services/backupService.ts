@@ -1,31 +1,23 @@
 import * as DocumentPicker from 'expo-document-picker';
-import { File, Paths } from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-import { BarcodeProduct } from '../data/productCatalog';
-import {
-  AppDataSnapshot,
-  FoodCategory,
-  FoodItem,
-  FoodQuantityUnit,
-  NotificationSettings,
-  Recipe,
-  RecipeCategory,
-  ShoppingItem,
-  StorageLocation,
-} from '../types';
-import { isFoodCategory } from '../utils/foodCategory';
-import { isFoodQuantityUnit } from '../utils/foodQuantity';
-import { isRecipeCategory } from '../utils/recipeCategory';
-import { isValidServings } from '../utils/recipeServings';
-import { LearnedProductCatalog } from './learnedProductService';
-import { loadStoredValue, saveStoredValue, storageKeys } from './storage';
+import { discardRestoredImage, embedImage, restoreImage } from './backupImages';
+import { AppDataSnapshot } from '../types';
+import type { LearnedProductCatalog } from './learnedProductService';
+import { commitRestoredValues, loadStoredValue, readRecoveryData, storageKeys } from './storage';
+import { isObject, isTimestamp, validateSnapshot, validateEmbeddedImage } from './dataValidation';
+import { checkBackupSize, checkImageSize, MAX_TOTAL_IMAGE_BYTES, textBytes } from './backupLimits';
+import { readBackupText, shareJsonFile } from './backupFileAccess';
 
 const BACKUP_FORMAT = 'refrigerator-note-backup';
-const BACKUP_VERSION = 1;
+const BACKUP_VERSION = 2;
+const IMAGE_REF = 'tabedoki-image:';
+const ASSET_REF = 'tabedoki-asset:';
+declare const require: (path: string) => { sampleRecipeImages: Record<string, string> };
+const bundledImages = () => require('../data/sampleData').sampleRecipeImages;
 
 export type BackupPayload = {
   format: typeof BACKUP_FORMAT;
-  version: typeof BACKUP_VERSION;
+  version: 1 | 2;
+  images?: Record<string, string>;
   exportedAt: string;
   appVersion: string;
   data: AppDataSnapshot & {
@@ -33,178 +25,116 @@ export type BackupPayload = {
   };
 };
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isStorageLocation(value: unknown): value is StorageLocation {
-  return value === 'refrigerated' || value === 'frozen' || value === 'room';
-}
-
-function isFoodItem(value: unknown): value is FoodItem {
-  if (!isObject(value)) return false;
-  return typeof value.id === 'string'
-    && typeof value.name === 'string'
-    && (value.productName === undefined || value.productName === null || typeof value.productName === 'string')
-    && (value.ingredientName === undefined || typeof value.ingredientName === 'string')
-    && typeof value.image === 'string'
-    && isFoodCategory(value.category as FoodCategory)
-    && (value.tags === undefined || (Array.isArray(value.tags) && value.tags.every((tag) => typeof tag === 'string')))
-    && isStorageLocation(value.storage)
-    && Number.isFinite(value.quantity)
-    && (value.quantityUnit === undefined || isFoodQuantityUnit(value.quantityUnit as FoodQuantityUnit))
-    && typeof value.expiryDate === 'string'
-    && typeof value.purchaseDate === 'string'
-    && typeof value.memo === 'string'
-    && typeof value.createdAt === 'string'
-    && (value.status === 'active' || value.status === 'used' || value.status === 'disposed')
-    && (value.usedAt === null || typeof value.usedAt === 'string')
-    && (value.disposedAt === null || typeof value.disposedAt === 'string');
-}
-
-function isShoppingItem(value: unknown): value is ShoppingItem {
-  if (!isObject(value)) return false;
-  return typeof value.id === 'string'
-    && typeof value.name === 'string'
-    && (value.memo === undefined || typeof value.memo === 'string')
-    && typeof value.checked === 'boolean'
-    && typeof value.createdAt === 'string';
-}
-
-function isRecipe(value: unknown): value is Recipe {
-  if (!isObject(value) || !isObject(value.ingredientAmounts)) return false;
-  return typeof value.id === 'string'
-    && typeof value.name === 'string'
-    && typeof value.image === 'string'
-    && (value.category === undefined || isRecipeCategory(value.category as RecipeCategory))
-    && Array.isArray(value.ingredients)
-    && value.ingredients.every((ingredient) => typeof ingredient === 'string')
-    && Object.values(value.ingredientAmounts).every((amount) => typeof amount === 'string')
-    && Array.isArray(value.steps)
-    && value.steps.every((step) => typeof step === 'string')
-    && Number.isInteger(value.minutes)
-    && (value.servings === undefined || value.servings === null || isValidServings(value.servings))
-    && typeof value.isFavorite === 'boolean'
-    && typeof value.createdAt === 'string';
-}
-
-function isNotificationSettings(value: unknown): value is NotificationSettings {
-  if (!isObject(value)) return false;
-  return typeof value.enabled === 'boolean'
-    && Array.isArray(value.daysBeforeList)
-    && value.daysBeforeList.every((day) => Number.isInteger(day) && day >= 0 && day <= 365)
-    && typeof value.time === 'string'
-    && /^([01]\d|2[0-3]):[0-5]\d$/.test(value.time);
-}
-
-function isBarcodeProduct(value: unknown): value is BarcodeProduct {
-  if (!isObject(value)) return false;
-  return typeof value.barcode === 'string'
-    && typeof value.name === 'string'
-    && typeof value.image === 'string'
-    && typeof value.category === 'string'
-    && (value.ingredientName === undefined || typeof value.ingredientName === 'string')
-    && (value.tags === undefined || (Array.isArray(value.tags) && value.tags.every((tag) => typeof tag === 'string')))
-    && isStorageLocation(value.storage);
-}
-
-function validatePayload(value: unknown): BackupPayload {
+export function validatePayload(value: unknown): BackupPayload {
   if (!isObject(value)
     || value.format !== BACKUP_FORMAT
-    || value.version !== BACKUP_VERSION
-    || typeof value.exportedAt !== 'string'
+    || (value.version !== 1 && value.version !== BACKUP_VERSION)
+    || !isTimestamp(value.exportedAt)
     || typeof value.appVersion !== 'string'
     || !isObject(value.data)) {
     throw new Error('対応していないバックアップ形式です。');
   }
 
-  const data = value.data;
-  if (!Array.isArray(data.foods) || !data.foods.every(isFoodItem)
-    || !Array.isArray(data.recipes) || !data.recipes.every(isRecipe)
-    || !Array.isArray(data.shoppingItems) || !data.shoppingItems.every(isShoppingItem)
-    || !isNotificationSettings(data.notificationSettings)
-    || !isObject(data.learnedProducts)
-    || !Object.values(data.learnedProducts).every(isBarcodeProduct)) {
-    throw new Error('バックアップの内容が壊れているか、不足しています。');
+  try {
+    checkBackupSize(textBytes(JSON.stringify(value)));
+    validateSnapshot(value.data, true);
+    const settings = value.data.notificationSettings;
+    if (!isObject(settings) || typeof settings.enabled !== 'boolean' || typeof settings.time !== 'string'
+      || !Array.isArray(settings.daysBeforeList)) throw new Error('通知設定が不足しています。');
+    validateImages(value as BackupPayload);
+  } catch (error) {
+    throw new Error('バックアップの内容が壊れているか、不足しています。' + (error instanceof Error ? error.message : ''));
   }
 
   return value as BackupPayload;
 }
 
-function getImageExtension(mimeType: string): string {
-  if (mimeType.includes('png')) return '.png';
-  if (mimeType.includes('webp')) return '.webp';
-  if (mimeType.includes('gif')) return '.gif';
-  return '.jpg';
+function imageUris(payload: BackupPayload): string[] {
+  return [...payload.data.foods, ...payload.data.recipes, ...Object.values(payload.data.learnedProducts)].map((item) => item.image);
 }
-
-function getImageMimeType(uri: string): string {
-  const cleanUri = uri.split('?')[0].toLowerCase();
-  if (cleanUri.endsWith('.png')) return 'image/png';
-  if (cleanUri.endsWith('.webp')) return 'image/webp';
-  if (cleanUri.endsWith('.gif')) return 'image/gif';
-  return 'image/jpeg';
-}
-
-async function embedImage(uri: string): Promise<string> {
-  if (!uri.startsWith('file:') && !uri.startsWith('content:')) return uri;
-  const file = new File(uri);
-  if (!file.exists) throw new Error('保存画像を読み込めませんでした。');
-  const base64 = await file.base64();
-  return `data:${getImageMimeType(uri)};base64,${base64}`;
-}
-
-function restoreImage(uri: string, prefix: string): string {
-  if (!uri.startsWith('data:')) return uri;
-  const match = uri.match(/^data:([^;]+);base64,(.+)$/s);
-  if (!match) throw new Error('バックアップ画像の形式が正しくありません。');
-  const file = new File(
-    Paths.document,
-    `restored-${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}${getImageExtension(match[1])}`,
-  );
-  file.write(match[2], { encoding: 'base64' });
-  return file.uri;
-}
-
-export async function shareBackup(data: AppDataSnapshot): Promise<void> {
-  if (!(await Sharing.isAvailableAsync())) {
-    throw new Error('この端末ではファイル共有を利用できません。');
+function validateImages(payload: BackupPayload): void {
+  if (payload.version === 2 && !isObject(payload.images)) throw new Error('画像一覧がありません。');
+  const unique = new Set<string>();
+  let total = 0;
+  const embedded = (uri: string) => {
+    if (unique.has(uri)) return;
+    unique.add(uri);
+    const { size } = validateEmbeddedImage(uri);
+    checkImageSize(size); total += size;
+    if (total > MAX_TOTAL_IMAGE_BYTES) throw new Error('写真の合計容量は10MBまでです。');
+  };
+  for (const uri of Object.values(payload.images ?? {})) {
+    if (typeof uri !== 'string') throw new Error('画像の内容が正しくありません。');
+    embedded(uri);
   }
-
+  for (const uri of imageUris(payload)) {
+    if (uri.startsWith('data:')) embedded(uri);
+    if (uri.startsWith(IMAGE_REF) && (!payload.images || !Object.hasOwn(payload.images, uri.slice(IMAGE_REF.length)))) throw new Error('参照する写真がありません。');
+    if (uri.startsWith(ASSET_REF) && !/^recipe-[1-8]$/.test(uri.slice(ASSET_REF.length))) throw new Error('対応していない組み込み画像です。');
+  }
+}
+export type PreparedBackup = { contents: string; bytes: number; embeddedCount: number; externalCount: number };
+export async function prepareBackup(data: AppDataSnapshot): Promise<PreparedBackup> {
   const learnedProducts = await loadStoredValue<LearnedProductCatalog>(storageKeys.learnedProducts) ?? {};
-  const foods = await Promise.all(data.foods.map(async (food) => ({
-    ...food,
-    image: await embedImage(food.image),
-  })));
-  const recipes = await Promise.all(data.recipes.map(async (recipe) => ({
-    ...recipe,
-    image: await embedImage(recipe.image),
-  })));
-  const learnedEntries = await Promise.all(Object.entries(learnedProducts).map(async ([barcode, product]) => [
-    barcode,
-    { ...product, image: await embedImage(product.image) },
-  ] as const));
+  validateSnapshot({ ...data, learnedProducts }, true);
+  const images: Record<string, string> = {};
+  const cache = new Map<string, string>();
+  const byContent = new Map<string, string>();
+  const assets = Object.entries(bundledImages());
+  let total = 0;
+  let externalCount = 0;
+  const image = async (uri: string): Promise<string> => {
+    if (cache.has(uri)) return cache.get(uri)!;
+    const asset = assets.find(([, source]) => source === uri);
+    if (asset) return ASSET_REF + asset[0];
+    const embedded = await embedImage(uri);
+    if (!embedded.startsWith('data:')) {
+      if (/^https?:/.test(embedded)) externalCount++;
+      cache.set(uri, embedded); return embedded;
+    }
+    const size = validateEmbeddedImage(embedded).size;
+    checkImageSize(size);
+    let key = byContent.get(embedded);
+    if (!key) {
+      total += size;
+      if (total > MAX_TOTAL_IMAGE_BYTES) throw new Error('写真の合計容量は10MBまでです。小さい写真を選び直してください。');
+      key = `image-${byContent.size + 1}`;
+      images[key] = embedded; byContent.set(embedded, key);
+    }
+    cache.set(uri, IMAGE_REF + key); return IMAGE_REF + key;
+  };
+  // Bound peak memory: one image read at a time, with shared image references.
+  const foods = [];
+  for (const food of data.foods) foods.push({ ...food, image: await image(food.image) });
+  const recipes = [];
+  for (const recipe of data.recipes) recipes.push({ ...recipe, image: await image(recipe.image) });
+  const learned: LearnedProductCatalog = {};
+  for (const [barcode, product] of Object.entries(learnedProducts)) learned[barcode] = { ...product, image: await image(product.image) };
 
   const payload: BackupPayload = {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
     appVersion: '1.20.0',
+    images,
     data: {
       ...data,
       foods,
       recipes,
-      learnedProducts: Object.fromEntries(learnedEntries),
+      learnedProducts: learned,
     },
   };
-  const date = new Date().toISOString().slice(0, 10);
-  const file = new File(Paths.cache, `tabedoki-backup-${date}.json`);
-  file.write(JSON.stringify(payload));
-  await Sharing.shareAsync(file.uri, {
-    dialogTitle: 'たべどき！！のバックアップを保存',
-    mimeType: 'application/json',
-    UTI: 'public.json',
-  });
+  validatePayload(payload);
+  const contents = JSON.stringify(payload);
+  const bytes = textBytes(contents);
+  checkBackupSize(bytes);
+  return { contents, bytes, embeddedCount: Object.keys(images).length, externalCount };
+}
+export async function sharePreparedBackup(backup: PreparedBackup): Promise<void> {
+  await shareJsonFile(backup.contents, `tabedoki-backup-${new Date().toISOString().slice(0, 10)}.json`, 'たべどき！！のバックアップを保存');
+}
+export async function shareBackup(data: AppDataSnapshot): Promise<void> {
+  await sharePreparedBackup(await prepareBackup(data));
 }
 
 export async function pickBackup(): Promise<BackupPayload | null> {
@@ -214,39 +144,59 @@ export async function pickBackup(): Promise<BackupPayload | null> {
     type: ['application/json', 'text/plain', 'application/octet-stream'],
   });
   if (result.canceled) return null;
-  const file = new File(result.assets[0].uri);
-  const contents = await file.text();
+  checkBackupSize(result.assets[0].size ?? 0);
+  const contents = await readBackupText(result.assets[0].uri);
+  checkBackupSize(textBytes(contents));
   return validatePayload(JSON.parse(contents) as unknown);
 }
 
-export async function restoreBackup(payload: BackupPayload): Promise<AppDataSnapshot> {
-  const foods = payload.data.foods.map((food) => ({
-    ...food,
-    image: restoreImage(food.image, 'food'),
-  }));
-  const recipes = payload.data.recipes.map((recipe) => ({
-    ...recipe,
-    image: restoreImage(recipe.image, 'recipe'),
-  }));
-  const learnedProducts = Object.fromEntries(
-    Object.entries(payload.data.learnedProducts).map(([barcode, product]) => [
-      barcode,
-      { ...product, image: restoreImage(product.image, `catalog-${barcode}`) },
-    ]),
-  );
-  const snapshot: AppDataSnapshot = {
-    foods,
-    recipes,
-    shoppingItems: payload.data.shoppingItems,
-    notificationSettings: payload.data.notificationSettings,
-  };
-
-  await Promise.all([
-    saveStoredValue(storageKeys.foods, snapshot.foods),
-    saveStoredValue(storageKeys.recipes, snapshot.recipes),
-    saveStoredValue(storageKeys.shopping, snapshot.shoppingItems),
-    saveStoredValue(storageKeys.notifications, snapshot.notificationSettings),
-    saveStoredValue(storageKeys.learnedProducts, learnedProducts),
-  ]);
+export async function restoreBackup(
+  payload: BackupPayload,
+  normalize: (data: AppDataSnapshot) => AppDataSnapshot = (data) => data,
+): Promise<AppDataSnapshot> {
+  // Validate here too: callers must not bypass the picker validation.
+  const validated = validatePayload(payload);
+  const source = normalize(validated.data);
+  validateSnapshot(source);
+  let snapshot!: AppDataSnapshot;
+  await commitRestoredValues(async () => {
+    const created: string[] = [];
+    const restoredImages = new Map<string, string>();
+    const image = (uri: string, prefix: string) => {
+      if (uri.startsWith(ASSET_REF)) return bundledImages()[uri.slice(ASSET_REF.length)];
+      const sourceUri = uri.startsWith(IMAGE_REF) ? validated.images![uri.slice(IMAGE_REF.length)] : uri;
+      if (restoredImages.has(sourceUri)) return restoredImages.get(sourceUri)!;
+      const restored = restoreImage(sourceUri, prefix, created);
+      restoredImages.set(sourceUri, restored);
+      return restored;
+    };
+    try {
+      const foods = source.foods.map((food) => ({ ...food, image: image(food.image, 'food') }));
+      const recipes = source.recipes.map((recipe) => ({ ...recipe, image: image(recipe.image, 'recipe') }));
+      const learnedProducts = Object.fromEntries(Object.entries(validated.data.learnedProducts)
+        .map(([barcode, product]) => [barcode, { ...product, image: image(product.image, 'catalog') }]));
+      snapshot = { ...source, foods, recipes };
+      return {
+        [storageKeys.foods]: foods, [storageKeys.recipes]: recipes,
+        [storageKeys.shopping]: snapshot.shoppingItems,
+        [storageKeys.notifications]: snapshot.notificationSettings,
+        [storageKeys.learnedProducts]: learnedProducts,
+      };
+    } catch (error) {
+      // Only preparation failures can safely discard these newly created files.
+      // Storage/commit failures retain staging files for crash-safe recovery.
+      for (const uri of created) {
+        try { discardRestoredImage(uri); }
+        catch (cleanupError) { console.warn('復元途中の写真を削除できませんでした。', cleanupError); }
+      }
+      throw error;
+    }
+  });
   return snapshot;
+}
+
+export async function shareRecoveryData(): Promise<void> {
+  const raw = await readRecoveryData();
+  await shareJsonFile(JSON.stringify({ format: 'tabedoki-recovery-original', exportedAt: new Date().toISOString(), raw }),
+    `tabedoki-recovery-${Date.now()}.json`, '読み込めない保存データの原本を退避');
 }

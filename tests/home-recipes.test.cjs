@@ -15,11 +15,11 @@ Module._load = function (request, ...args) {
       listeners.add(listener);
       return { remove: () => listeners.delete(listener) };
     } },
-    StyleSheet: { create: (styles) => styles }, Alert: { alert() {} },
+    StyleSheet: { create: (styles) => styles }, Alert: { alert() {} }, SectionList: require('./native-section-list.cjs'),
     Pressable: 'Pressable', ScrollView: 'ScrollView', Text: 'Text', TextInput: 'TextInput', View: 'View', Image: 'Image',
   };
   if (request === '@expo/vector-icons') return { Ionicons: 'Icon' };
-  if (request.endsWith('/context/AppDataContext')) return { useAppData: () => data };
+  if (request.endsWith('/context/AppDataContext')) return { useAppData: () => data, useFoodData: () => data };
   if (request.endsWith('/services/storage')) return {
     storageKeys: { swipeGuideSeen: 'guide' }, loadStoredValue: async () => true, saveStoredValue: async () => {},
   };
@@ -154,4 +154,16 @@ test('returning from background refreshes the day and unmount removes its listen
   const before = renders;
   await act(async () => t.mock.timers.tick(86400000));
   assert.equal(renders, before);
+});
+
+test('phase 4 expired-only entry clears search and shows only expired active foods', async (t) => {
+  data = { foods: [food('牛乳', -1), food('卵', 0), food('豆腐', -1, 'used')] };
+  const renderer = await mount(t, React.createElement(HomeScreen, { navigation: {} }));
+  const root = renderer.root;
+  await act(async () => root.findByType('TextInput').props.onChangeText('該当なし'));
+  await act(async () => labeledButton(root, '期限切れ1件を確認').props.onPress());
+  assert.equal(root.findByType('TextInput').props.value, '');
+  assert.deepEqual(root.findAllByType('SwipeableFoodCard').map((node) => node.props.food.name), ['牛乳']);
+  await act(async () => textButton(root, '期限切れのみ表示中 · すべての食材に戻す').props.onPress());
+  assert.equal(root.findAllByType('SwipeableFoodCard').length, 2);
 });

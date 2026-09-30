@@ -17,7 +17,7 @@ export function RecipeCategorySelector({
         return (
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ selected }}
+            accessibilityState={{ selected }} aria-pressed={selected}
             key={option.value}
             onPress={() => onChange(option.value)}
             style={[styles.option, selected && styles.selected]}

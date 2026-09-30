@@ -1,3 +1,4 @@
+import { FoodImage } from '../components/FoodImage';
 import { normalizeSharedBarcode } from '../../shared/productContract';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -5,7 +6,7 @@ import { CompositeScreenProps, useIsFocused } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { BarcodeScanningResult } from 'expo-camera';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BarcodeScanner } from '../components/BarcodeScanner';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Screen } from '../components/Screen';
@@ -90,7 +91,7 @@ export function BarcodeScreen({ navigation }: Props) {
       allowProductSharing: scanResult.source === 'none' && ['ean13', 'ean8'].includes(scanResult.type),
       initialCategory: scanResult.product?.category,
       initialTags: scanResult.product?.tags,
-      initialStorage: scanResult.product?.storage,
+      initialStorage: ['learned', 'local'].includes(scanResult.source) ? scanResult.product?.storage : undefined,
     });
   };
 
@@ -118,7 +119,7 @@ export function BarcodeScreen({ navigation }: Props) {
               <Text style={styles.resultLabel}>読み取り結果</Text>
               {scanResult.product ? (
                 <View style={styles.productCard}>
-                  <Image source={{ uri: scanResult.product.image }} style={styles.productImage} />
+                  <FoodImage source={{ uri: scanResult.product.image }} style={styles.productImage} />
                   <View style={styles.productInfo}>
                     <Text style={styles.productName}>{scanResult.product.name}</Text>
                     <Text style={styles.productCategory}>商品名：{scanResult.product.name}</Text>

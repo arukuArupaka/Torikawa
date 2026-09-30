@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { DataRecoveryPanel } from '../components/DataRecoveryPanel';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../constants/theme';
 import { useAppData } from '../context/AppDataContext';
@@ -72,29 +73,40 @@ function MainTabs() {
 }
 
 export function RootNavigator() {
-  const { isReady, loadError, retryLoad, saveError, retrySave } = useAppData();
+  const { isReady, isRestoring, loadError, saveError, retrySave, notificationSyncError, isNotificationSyncing, resyncNotifications } = useAppData();
 
   if (!isReady) {
     return (
-      <View style={styles.loading}>
-        {loadError ? (
-          <View style={styles.loadError}>
-            <Text accessibilityRole="alert" style={styles.loadErrorText}>{loadError}</Text>
-            <PrimaryButton label="もう一度読み込む" onPress={retryLoad} />
-          </View>
+      <SafeAreaView style={styles.loading}>
+        {isRestoring ? <>
+          <ActivityIndicator color={colors.primary} size="large" />
+          <Text style={styles.loadErrorText}>バックアップを復元しています…</Text>
+        </> : loadError ? (
+          <DataRecoveryPanel />
         ) : <ActivityIndicator color={colors.primary} size="large" />}
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
     <View style={{ flex: 1 }}>
+      <Modal visible={isRestoring} transparent animationType="none" onRequestClose={() => {}}>
+        <View accessibilityViewIsModal style={styles.restoring}>
+          <ActivityIndicator color={colors.primary} size="large" />
+          <Text accessibilityRole="alert" style={styles.loadErrorText}>バックアップを復元しています…</Text>
+          <Text style={styles.loadErrorText}>完了するまでアプリを閉じずにお待ちください。</Text>
+        </View>
+      </Modal>
       {saveError ? (
         <SafeAreaView edges={['top']} style={styles.saveError}>
           <Text accessibilityRole="alert" style={styles.loadErrorText}>{saveError}</Text>
           <PrimaryButton label="保存を再試行" onPress={retrySave} variant="outline" />
         </SafeAreaView>
       ) : null}
+      {notificationSyncError ? <SafeAreaView edges={['top']} style={styles.saveError}>
+        <Text accessibilityRole="alert" style={styles.loadErrorText}>期限通知の反映が完了していません。{notificationSyncError}</Text>
+        <PrimaryButton disabled={isNotificationSyncing} label={isNotificationSyncing ? '同期中...' : '通知を再同期'} variant="outline" onPress={() => { void resyncNotifications().catch(() => undefined); }} />
+      </SafeAreaView> : null}
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen component={MainTabs} name="MainTabs" />
         <Stack.Screen component={AddFoodScreen} name="AddFood" options={{ presentation: 'modal' }} />
@@ -109,12 +121,13 @@ export function RootNavigator() {
 }
 
 const styles = StyleSheet.create({
+  restoring: { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 },
   loadError: { width: '100%', maxWidth: 420, padding: 24, gap: 20 },
   loadErrorText: { color: colors.text, fontSize: 16, lineHeight: 26 },
   saveError: { backgroundColor: colors.warningSoft, padding: 16, gap: 10 },
   loading: { alignItems: 'center', backgroundColor: colors.background, flex: 1, justifyContent: 'center' },
   tabBar: { backgroundColor: colors.surface, borderTopColor: colors.border, height: 68, paddingBottom: 7, paddingTop: 7 },
-  tabLabel: { fontSize: 10, fontWeight: '600' },
+  tabLabel: { fontSize: 12, fontWeight: '600' },
   iconWrap: { alignItems: 'center', height: 30, justifyContent: 'center', width: 44 },
   barcodeIconWrap: { backgroundColor: colors.primary, borderColor: colors.surface, borderRadius: 24, borderWidth: 3, height: 48, marginTop: -19, width: 48 },
 });

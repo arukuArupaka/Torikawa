@@ -1,25 +1,17 @@
-import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
-import {
-  createSampleFoods,
-  initialNotificationSettings,
-  initialShoppingItems,
-  legacySampleRecipeImages,
-  sampleRecipeImages,
-  sampleRecipes,
-} from '../data/sampleData';
-import { loadStoredValue, saveStoredValue, storageKeys } from '../services/storage';
+import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
+import { createSampleFoods, initialNotificationSettings, initialShoppingItems, sampleRecipes } from '../data/sampleData';
+import { collectStoredImages, loadStoredValues, saveStoredValue, storageKeys, RestoreNeedsReloadError } from '../services/storage';
 import { deleteStoredFoodImage } from '../services/imageStorage';
 import { queueNotificationSync } from '../services/notificationService';
-import { AppDataSnapshot, FoodCategory, FoodItem, FoodQuantityUnit, FoodStatus, NewFoodItem, NewRecipe, NotificationSettings, Recipe, RecipeCategory, ShoppingItem } from '../types';
+import { normalizeAppData } from '../services/appDataMigration';
+import { validateStoredData } from '../services/dataValidation';
+import type { BackupPayload } from '../services/backupService';
+import { AppDataSnapshot, FoodItem, NewFoodItem, NewRecipe, NotificationSettings, Recipe, ShoppingItem } from '../types';
 import { toDateString } from '../utils/date';
-import { inferFoodCategory, isFoodCategory } from '../utils/foodCategory';
-import { isFoodQuantityUnit } from '../utils/foodQuantity';
 import { createId } from '../utils/id';
-import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
-import { inferRecipeCategory, isRecipeCategory } from '../utils/recipeCategory';
 import { hasPendingShoppingItem } from '../utils/shoppingList';
-import { migrateSampleRecipe } from '../utils/recipeMigration';
-import { isValidServings } from '../utils/recipeServings';
+import { applyFoodConsumption, ConsumptionRequest } from '../utils/foodConsumption';
 
 type AppDataContextValue = {
   foods: FoodItem[];
@@ -27,13 +19,16 @@ type AppDataContextValue = {
   shoppingItems: ShoppingItem[];
   notificationSettings: NotificationSettings;
   isReady: boolean;
+  isRestoring: boolean;
+  restoreAppData: (payload: BackupPayload) => Promise<void>;
   loadError: string | null;
   retryLoad: () => void;
   saveError: string | null;
   retrySave: () => void;
-  addFood: (food: NewFoodItem) => FoodItem;
+  addFood: (food: NewFoodItem, shoppingItemId?: string) => FoodItem;
   updateFood: (id: string, food: NewFoodItem) => void;
   markFoodUsed: (id: string) => void;
+  recordConsumption: (request: ConsumptionRequest) => boolean;
   markFoodDisposed: (id: string) => void;
   restoreFood: (id: string) => void;
   deleteFood: (id: string) => void;
@@ -45,133 +40,77 @@ type AppDataContextValue = {
   addShoppingItem: (name: string, memo?: string) => boolean;
   toggleShoppingItem: (id: string) => void;
   deleteShoppingItem: (id: string) => void;
-  updateNotificationSettings: (settings: NotificationSettings) => void;
+  updateNotificationSettings: (settings: NotificationSettings) => Promise<void>;
+  resyncNotifications: () => Promise<void>;
+  notificationSyncError: string | null;
+  isNotificationSyncing: boolean;
 };
 
 const AppDataContext = createContext<AppDataContextValue | undefined>(undefined);
-
-type StoredNotificationSettings = Partial<NotificationSettings> & { daysBefore?: number };
-type StoredRecipe = Omit<Recipe, 'category' | 'isFavorite' | 'createdAt'> & {
-  category?: RecipeCategory;
-  isFavorite?: boolean;
-  createdAt?: string;
-};
-type StoredFoodItem = Omit<FoodItem, 'productName' | 'ingredientName' | 'category' | 'tags' | 'quantity' | 'quantityUnit' | 'status' | 'usedAt' | 'disposedAt'> & {
-  productName?: string | null;
-  ingredientName?: string;
-  category?: FoodCategory;
-  tags?: string[];
-  quantity?: number;
-  quantityUnit?: FoodQuantityUnit;
-  status?: FoodStatus;
-  usedAt?: string | null;
-  disposedAt?: string | null;
-};
-
-function normalizeFoods(storedFoods: StoredFoodItem[] | null): FoodItem[] {
-  const source = storedFoods ?? createSampleFoods();
-  return source.map((food) => {
-    const normalized = normalizeProductToIngredient(food.productName || food.ingredientName || food.name);
-    return {
-      ...food,
-      productName: food.productName?.trim() || null,
-      ingredientName: food.ingredientName?.trim() || normalized.ingredientName,
-      tags: Array.isArray(food.tags) && food.tags.length > 0 ? food.tags : normalized.tags,
-      quantity: Number.isFinite(food.quantity) && (food.quantity ?? 0) > 0
-        ? food.quantity as number
-        : 1,
-      quantityUnit: isFoodQuantityUnit(food.quantityUnit) ? food.quantityUnit : 'piece',
-      category: isFoodCategory(food.category) ? food.category : normalized.category || inferFoodCategory(food.name),
-      status: food.status === 'used' || food.status === 'disposed' ? food.status : 'active',
-      usedAt: food.status === 'used' ? food.usedAt ?? null : null,
-      disposedAt: food.status === 'disposed' ? food.disposedAt ?? null : null,
-    };
-  });
-}
-
-function normalizeRecipes(storedRecipes: StoredRecipe[] | null): Recipe[] {
-  const source = storedRecipes ?? sampleRecipes;
-  return source.map((storedRecipe) => {
-    const recipe = migrateSampleRecipe(storedRecipe, sampleRecipes);
-    return {
-      ...recipe,
-      ...(recipe.servings === undefined ? {} : { servings: isValidServings(recipe.servings) ? recipe.servings : null }),
-      image: normalizeRecipeImage(recipe),
-      category: isRecipeCategory(recipe.category)
-        ? recipe.category
-        : inferRecipeCategory(recipe.name, recipe.ingredients, recipe.minutes),
-      isFavorite: recipe.isFavorite ?? false,
-      createdAt: recipe.createdAt ?? new Date().toISOString(),
-    };
-  });
-}
-
-function normalizeRecipeImage(recipe: StoredRecipe): string {
-  const sampleImage = sampleRecipeImages[recipe.id];
-  const legacyImage = legacySampleRecipeImages[recipe.id];
-  if (!sampleImage) return recipe.image;
-  if (!recipe.image.trim() || recipe.image === legacyImage) return sampleImage;
-  return recipe.image;
-}
-
-function normalizeNotificationSettings(
-  stored: StoredNotificationSettings | null,
-): NotificationSettings {
-  if (!stored) return initialNotificationSettings;
-
-  const sourceDays = Array.isArray(stored.daysBeforeList)
-    ? stored.daysBeforeList
-    : typeof stored.daysBefore === 'number'
-      ? [stored.daysBefore]
-      : initialNotificationSettings.daysBeforeList;
-  const daysBeforeList = [...new Set(sourceDays)]
-    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 365)
-    .sort((a, b) => a - b);
-
-  return {
-    enabled: stored.enabled ?? initialNotificationSettings.enabled,
-    daysBeforeList,
-    time: stored.time ?? initialNotificationSettings.time,
-  };
-}
+type FoodData = Pick<AppDataContextValue, 'foods' | 'addShoppingItem' | 'markFoodUsed' | 'markFoodDisposed' | 'updateFood'>;
+const FoodDataContext = createContext<FoodData | undefined>(undefined);
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
-  const [foods, setFoods] = useState<FoodItem[]>([]);
+  const [foods, setFoodsState] = useState<FoodItem[]>([]);
+  const foodsRef = useRef<FoodItem[]>([]);
+  const setFoods = (update: FoodItem[] | ((current: FoodItem[]) => FoodItem[])) => {
+    const next = typeof update === 'function' ? update(foodsRef.current) : update;
+    foodsRef.current = next;
+    setFoodsState(next);
+  };
   const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>([]);
+  const [shoppingItems, setShoppingItemsState] = useState<ShoppingItem[]>([]);
+  const shoppingRef = useRef<ShoppingItem[]>([]);
+  const setShoppingItems = (update: ShoppingItem[] | ((current: ShoppingItem[]) => ShoppingItem[])) => {
+    const next = typeof update === 'function' ? update(shoppingRef.current) : update;
+    shoppingRef.current = next;
+    setShoppingItemsState(next);
+  };
   const [notificationSettings, setNotificationSettings] =
     useState<NotificationSettings>(initialNotificationSettings);
   const [isReady, setIsReady] = useState(false);
+  const [notificationSyncError, setNotificationSyncError] = useState<string | null>(null);
+  const [isNotificationSyncing, setIsNotificationSyncing] = useState(false);
+  const notificationRun = useRef(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveAttempt, setSaveAttempt] = useState(0);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const restoringRef = useRef(false);
+  const dataEpoch = useRef(0);
+  const imageCandidates = useRef(new Set<string>());
+  const currentImages = useRef(new Set<string>());
+  const persisted = useRef(new Map<string, unknown>());
+  currentImages.current = new Set([...foods, ...recipes].map((item) => item.image));
 
   useEffect(() => {
     let cancelled = false;
     async function hydrate() {
       setLoadError(null);
       try {
-        const [storedFoods, storedShopping, storedSettings, storedRecipes] = await Promise.all([
-          loadStoredValue<StoredFoodItem[]>(storageKeys.foods),
-          loadStoredValue<ShoppingItem[]>(storageKeys.shopping),
-          loadStoredValue<StoredNotificationSettings>(storageKeys.notifications),
-          loadStoredValue<StoredRecipe[]>(storageKeys.recipes),
+        const [storedFoods, storedShopping, storedSettings, storedRecipes, catalog] = await loadStoredValues([
+          storageKeys.foods, storageKeys.shopping, storageKeys.notifications, storageKeys.recipes, storageKeys.learnedProducts,
         ]);
         // Normalize all records before committing any state. A malformed record must
         // not trigger persistence of partial data or sample fallbacks.
-        const nextFoods = normalizeFoods(storedFoods);
-        const nextRecipes = normalizeRecipes(storedRecipes);
-        const nextSettings = normalizeNotificationSettings(storedSettings);
+        if (catalog !== null) validateStoredData('learnedProducts', catalog);
+        const next = normalizeAppData({
+          foods: storedFoods ?? createSampleFoods(),
+          recipes: storedRecipes ?? sampleRecipes,
+          shoppingItems: storedShopping ?? initialShoppingItems,
+          notificationSettings: storedSettings ?? initialNotificationSettings,
+        } as AppDataSnapshot);
         if (cancelled) return;
-        setFoods(nextFoods);
-        setShoppingItems(storedShopping ?? initialShoppingItems);
-        setNotificationSettings(nextSettings);
-        setRecipes(nextRecipes);
+        setFoods(next.foods);
+        setShoppingItems(next.shoppingItems);
+        setNotificationSettings(next.notificationSettings);
+        setRecipes(next.recipes);
+        [...next.foods, ...next.recipes].forEach((item) => imageCandidates.current.add(item.image));
         setIsReady(true);
       } catch (error) {
         console.warn('保存データを読み込めませんでした。元のデータを保持します。', error);
-        if (!cancelled) setLoadError('保存データを読み込めませんでした。データは上書きせずに保護しています。もう一度お試しください。');
+        if (!cancelled) setLoadError('保存データを読み込めませんでした。データは上書きせずに保護しています。' + (error instanceof Error ? `\n${error.message}` : ''));
       }
     }
     void hydrate();
@@ -179,35 +118,71 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, [loadAttempt]);
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || isRestoring || restoringRef.current) return;
     let cancelled = false;
-    void Promise.all([
-      saveStoredValue(storageKeys.foods, foods),
-      saveStoredValue(storageKeys.shopping, shoppingItems),
-      saveStoredValue(storageKeys.recipes, recipes),
-      saveStoredValue(storageKeys.notifications, notificationSettings),
-    ]).then(() => {
-      if (!cancelled) setSaveError(null);
+    const savingEpoch = dataEpoch.current;
+    currentImages.current.forEach((uri) => imageCandidates.current.add(uri));
+    const snapshots: [string, unknown][] = [
+      [storageKeys.foods, foods], [storageKeys.shopping, shoppingItems],
+      [storageKeys.recipes, recipes], [storageKeys.notifications, notificationSettings],
+    ];
+    void Promise.all(snapshots.filter(([key, value]) => persisted.current.get(key) !== value).map(async ([key, value]) => {
+      await saveStoredValue(key, value);
+      if (savingEpoch === dataEpoch.current) persisted.current.set(key, value);
+    })).then(() => {
+      if (!cancelled && savingEpoch === dataEpoch.current && !restoringRef.current) {
+        setSaveError(null);
+        void collectStoredImages(imageCandidates.current, () => currentImages.current, deleteStoredFoodImage)
+          .catch((error) => console.warn('写真の整理を延期します。', error));
+      }
     }).catch((error) => {
       console.warn('変更を端末へ保存できませんでした。', error);
-      if (!cancelled) setSaveError('変更を保存できませんでした。アプリを閉じずに、保存を再試行してください。');
+      if (!cancelled && savingEpoch === dataEpoch.current && !restoringRef.current) setSaveError('変更を保存できませんでした。アプリを閉じずに、保存を再試行してください。');
     });
     return () => { cancelled = true; };
-  }, [foods, shoppingItems, recipes, notificationSettings, isReady, saveAttempt]);
+  }, [foods, shoppingItems, recipes, notificationSettings, isReady, saveAttempt, isRestoring]);
 
+  const resyncNotifications = async (settings = notificationSettings) => {
+    const run = ++notificationRun.current;
+    setIsNotificationSyncing(true);
+    try {
+      await queueNotificationSync(foodsRef.current, settings);
+      if (run === notificationRun.current) setNotificationSyncError(null);
+    } catch (error) {
+      if (run === notificationRun.current) setNotificationSyncError(error instanceof Error ? error.message : '通知予約を更新できませんでした。');
+      throw error;
+    } finally {
+      if (run === notificationRun.current) setIsNotificationSyncing(false);
+    }
+  };
+  const notificationInputs = JSON.stringify(foods.map(({ id, name, productName, expiryDate, status }) => [id, name, productName, expiryDate, status]));
   useEffect(() => {
-    if (!isReady) return;
-    void queueNotificationSync(
-      foods.filter((food) => food.status === 'active'),
-      notificationSettings,
-    ).catch((error) => {
-      console.warn('期限通知を更新できませんでした。', error);
-    });
-  }, [foods, notificationSettings, isReady]);
+    if (!isReady || isRestoring || restoringRef.current) return;
+    const sync = () => { if (!restoringRef.current) void resyncNotifications().catch(() => undefined); };
+    sync();
+    const subscription = AppState?.addEventListener('change', (state) => { if (state === 'active') sync(); });
+    return () => subscription?.remove();
+  }, [notificationInputs, notificationSettings, isReady, isRestoring]);
 
-  const addFood = (input: NewFoodItem) => {
+  const updateNotificationSettings = async (settings: NotificationSettings) => {
+    const epoch = dataEpoch.current;
+    await saveStoredValue(storageKeys.notifications, settings);
+    if (epoch !== dataEpoch.current || restoringRef.current) throw new Error('復元中に設定が変わりました。現在の設定を確認してください。');
+    persisted.current.set(storageKeys.notifications, settings);
+    setNotificationSettings(settings);
+    await resyncNotifications(settings);
+  };
+
+  const addFood = (input: NewFoodItem, shoppingItemId?: string) => {
+    if (shoppingItemId) {
+      const existing = foodsRef.current.find((food) => food.sourceShoppingItemId === shoppingItemId);
+      if (existing) throw new Error('この購入分は食材に登録済みです。買い物リストから登録済みの食材を確認してください。');
+      const item = shoppingRef.current.find((item) => item.id === shoppingItemId);
+      if (!item?.checked) throw new Error('購入状態が変わりました。買い物リストで購入済みになっていることを確認してください。');
+    }
     const food: FoodItem = {
       ...input,
+      ...(shoppingItemId ? { sourceShoppingItemId: shoppingItemId } : {}),
       id: createId('food'),
       createdAt: new Date().toISOString(),
       status: 'active',
@@ -219,19 +194,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteFood = (id: string) => {
-    setFoods((current) => {
-      const target = current.find((food) => food.id === id);
-      if (target) deleteStoredFoodImage(target.image);
-      return current.filter((food) => food.id !== id);
-    });
+    setFoods((current) => current.filter((food) => food.id !== id));
   };
 
   const updateFood = (id: string, input: NewFoodItem) => {
     setFoods((current) =>
       current.map((food) => {
         if (food.id !== id) return food;
-        if (food.image !== input.image) deleteStoredFoodImage(food.image);
-        return { ...food, ...input };
+        return { ...food, ...input, id: food.id, createdAt: food.createdAt,
+          status: food.status, usedAt: food.usedAt, disposedAt: food.disposedAt,
+          consumptionHistory: food.consumptionHistory, revision: (food.revision ?? 0) + 1 };
       }),
     );
   };
@@ -240,7 +212,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const today = toDateString(new Date());
     setFoods((current) => current.map((food) =>
       food.id === id
-        ? { ...food, status: 'used', usedAt: today, disposedAt: null }
+        ? { ...food, status: 'used', usedAt: today, disposedAt: null, revision: (food.revision ?? 0) + 1 }
         : food,
     ));
   };
@@ -249,7 +221,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const today = toDateString(new Date());
     setFoods((current) => current.map((food) =>
       food.id === id
-        ? { ...food, status: 'disposed', usedAt: null, disposedAt: today }
+        ? { ...food, status: 'disposed', usedAt: null, disposedAt: today, revision: (food.revision ?? 0) + 1 }
         : food,
     ));
   };
@@ -257,7 +229,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const restoreFood = (id: string) => {
     setFoods((current) => current.map((food) =>
       food.id === id
-        ? { ...food, status: 'active', usedAt: null, disposedAt: null }
+        ? { ...food, status: 'active', usedAt: null, disposedAt: null, revision: (food.revision ?? 0) + 1 }
         : food,
     ));
   };
@@ -276,17 +248,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const updateRecipe = (id: string, input: NewRecipe) => {
     setRecipes((current) => current.map((recipe) => {
       if (recipe.id !== id) return recipe;
-      if (recipe.image !== input.image) deleteStoredFoodImage(recipe.image);
       return { ...recipe, ...input };
     }));
   };
 
   const deleteRecipe = (id: string) => {
-    setRecipes((current) => {
-      const target = current.find((recipe) => recipe.id === id);
-      if (target) deleteStoredFoodImage(target.image);
-      return current.filter((recipe) => recipe.id !== id);
-    });
+    setRecipes((current) => current.filter((recipe) => recipe.id !== id));
   };
 
   const toggleRecipeFavorite = (id: string) => {
@@ -296,16 +263,61 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   };
 
   const replaceAppData = (data: AppDataSnapshot) => {
-    setFoods(normalizeFoods(data.foods));
-    setRecipes(normalizeRecipes(data.recipes));
-    setShoppingItems(data.shoppingItems);
-    setNotificationSettings(normalizeNotificationSettings(data.notificationSettings));
+    const next = normalizeAppData(data);
+    setFoods(next.foods);
+    setRecipes(next.recipes);
+    setShoppingItems(next.shoppingItems);
+    setNotificationSettings(next.notificationSettings);
   };
+
+  const restoreAppData = async (payload: BackupPayload) => {
+    if (restoringRef.current) throw new Error('復元はすでに実行中です。');
+    restoringRef.current = true;
+    dataEpoch.current += 1;
+    setIsRestoring(true);
+    try {
+      // Lazy loading also keeps the platform file picker out of ordinary startup.
+      const { restoreBackup } = await import('../services/backupService');
+      const snapshot = await restoreBackup(payload, normalizeAppData);
+      replaceAppData(snapshot);
+      setLoadError(null);
+      setSaveError(null);
+      setIsReady(true);
+      // Restored data is already committed; notification failure is reported
+      // separately and must not claim that the data restoration failed.
+      await resyncNotifications(snapshot.notificationSettings).catch(() => undefined);
+    } catch (error) {
+      if (error instanceof RestoreNeedsReloadError) {
+        setIsReady(false);
+        setLoadError(error.message);
+      }
+      throw error;
+    } finally {
+      restoringRef.current = false;
+      setIsRestoring(false);
+    }
+  };
+
+  const recordConsumption = (request: ConsumptionRequest) => {
+    const current = foodsRef.current;
+    const next = applyFoodConsumption(current, request);
+    if (next === current) return false;
+    setFoods(next);
+    return true;
+  };
+
+  function editable<Args extends unknown[], Result>(action: (...args: Args) => Result) {
+    const actionEpoch = dataEpoch.current;
+    return (...args: Args): Result => {
+      if (restoringRef.current || !isReady || actionEpoch !== dataEpoch.current) throw new Error('データの準備中、または復元前の操作です。現在の内容を確認してもう一度お試しください。');
+      return action(...args);
+    };
+  }
 
   const addShoppingItem = (name: string, memo?: string) => {
     const trimmedName = name.trim();
     if (!trimmedName) return false;
-    if (hasPendingShoppingItem(shoppingItems, trimmedName)) return false;
+    if (hasPendingShoppingItem(shoppingRef.current, trimmedName)) return false;
     const trimmedMemo = memo?.trim();
     setShoppingItems((current) => {
       if (hasPendingShoppingItem(current, trimmedName)) return current;
@@ -324,6 +336,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   };
 
   const toggleShoppingItem = (id: string) => {
+    if (foodsRef.current.some((food) => food.sourceShoppingItemId === id)) return;
     setShoppingItems((current) =>
       current.map((item) => (item.id === id ? { ...item, checked: !item.checked } : item)),
     );
@@ -333,6 +346,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setShoppingItems((current) => current.filter((item) => item.id !== id));
   };
 
+  const foodData = useMemo<FoodData>(() => ({ foods, addShoppingItem: editable(addShoppingItem),
+    markFoodUsed: editable(markFoodUsed), markFoodDisposed: editable(markFoodDisposed), updateFood: editable(updateFood) }),
+  [foods, isReady, isRestoring]);
+
   return (
     <AppDataContext.Provider
       value={{
@@ -341,28 +358,34 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         shoppingItems,
         notificationSettings,
         isReady,
+        isRestoring,
+        restoreAppData,
         loadError,
         retryLoad: () => setLoadAttempt((attempt) => attempt + 1),
         saveError,
         retrySave: () => setSaveAttempt((attempt) => attempt + 1),
-        addFood,
-        updateFood,
-        markFoodUsed,
-        markFoodDisposed,
-        restoreFood,
-        deleteFood,
-        addRecipe,
-        updateRecipe,
-        deleteRecipe,
-        toggleRecipeFavorite,
-        replaceAppData,
-        addShoppingItem,
-        toggleShoppingItem,
-        deleteShoppingItem,
-        updateNotificationSettings: setNotificationSettings,
+        addFood: editable(addFood),
+        updateFood: editable(updateFood),
+        markFoodUsed: editable(markFoodUsed),
+        recordConsumption: editable(recordConsumption),
+        markFoodDisposed: editable(markFoodDisposed),
+        restoreFood: editable(restoreFood),
+        deleteFood: editable(deleteFood),
+        addRecipe: editable(addRecipe),
+        updateRecipe: editable(updateRecipe),
+        deleteRecipe: editable(deleteRecipe),
+        toggleRecipeFavorite: editable(toggleRecipeFavorite),
+        replaceAppData: editable(replaceAppData),
+        addShoppingItem: editable(addShoppingItem),
+        toggleShoppingItem: editable(toggleShoppingItem),
+        deleteShoppingItem: editable(deleteShoppingItem),
+        updateNotificationSettings: editable(updateNotificationSettings),
+        resyncNotifications: editable(() => resyncNotifications()),
+        notificationSyncError,
+        isNotificationSyncing,
       }}
     >
-      {children}
+      <FoodDataContext.Provider value={foodData}>{children}</FoodDataContext.Provider>
     </AppDataContext.Provider>
   );
 }
@@ -370,5 +393,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 export function useAppData() {
   const value = useContext(AppDataContext);
   if (!value) throw new Error('useAppData must be used inside AppDataProvider');
+  return value;
+}
+
+export function useFoodData() {
+  const value = useContext(FoodDataContext);
+  if (!value) throw new Error('useFoodData must be used inside AppDataProvider');
   return value;
 }

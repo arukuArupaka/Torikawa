@@ -1,3 +1,4 @@
+import { FoodImage } from '../components/FoodImage';
 import { getRecipeStock, getStockLabel, RecipeStockRow } from '../utils/recipeStock';
 import { useAppAlert } from '../context/AppAlertContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -5,7 +6,7 @@ import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { CompositeScreenProps } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { colors, radius, spacing } from '../constants/theme';
@@ -103,7 +104,7 @@ export function RecipesScreen({ navigation, route }: Props) {
   const expiredCount = foods.filter(
     (food) => food.status === 'active' && daysUntil(food.expiryDate) < 0,
   ).length;
-  const localIdeas = useMemo(() => generateLocalRecipeIdeas(foods), [foods, currentDay]);
+  const localIdeas = useMemo(() => showExplore && showLocalIdeas ? generateLocalRecipeIdeas(foods) : [], [foods, currentDay, showExplore, showLocalIdeas]);
   const cookpadSearchFoods = useMemo(() => pickCookpadSearchFoods(foods), [foods, currentDay]);
   const cookpadKeyword = cookpadSearchFoods.map((food) => getFoodIngredientName(food)).join(' ');
 
@@ -242,7 +243,7 @@ export function RecipesScreen({ navigation, route }: Props) {
           <Pressable
             accessibilityLabel="絞り込み"
             accessibilityRole="button"
-            accessibilityState={{ expanded: showFilters }}
+            accessibilityState={{ expanded: showFilters }} aria-expanded={showFilters}
             onPress={() => setShowFilters((current) => !current)}
             style={[styles.filterToggle, (showFilters || activeFilterLabels.length > 0) && styles.selectedFilterChip]}
           >
@@ -260,7 +261,7 @@ export function RecipesScreen({ navigation, route }: Props) {
                 return (
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityState={{ selected }}
+                    accessibilityState={{ selected }} aria-pressed={selected}
                     key={option.key}
                     onPress={() => setSelectedFilter(option.key)}
                     style={[styles.filterChip, selected && styles.selectedFilterChip]}
@@ -317,7 +318,7 @@ export function RecipesScreen({ navigation, route }: Props) {
           </View>
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ expanded: showExplore }}
+            accessibilityState={{ expanded: showExplore }} aria-expanded={showExplore}
             onPress={() => setShowExplore((current) => !current)}
             style={styles.exploreToggle}
           >
@@ -375,7 +376,7 @@ export function RecipesScreen({ navigation, route }: Props) {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="食材からレシピ候補を作る"
-                  accessibilityState={{ expanded: showLocalIdeas }}
+                  accessibilityState={{ expanded: showLocalIdeas }} aria-expanded={showLocalIdeas}
                   onPress={() => setShowLocalIdeas((current) => !current)}
                   style={styles.localIdeaToggle}
                 >
@@ -392,7 +393,7 @@ export function RecipesScreen({ navigation, route }: Props) {
                     );
                     return (
                       <View key={idea.name} style={styles.localIdeaCard}>
-                        <Image source={{ uri: idea.image }} style={styles.localIdeaImage} />
+                        <FoodImage source={{ uri: idea.image }} style={styles.localIdeaImage} />
                         <View style={styles.localIdeaInfo}>
                           <Text style={styles.localIdeaName}>{idea.name}</Text>
                           <Text style={styles.localIdeaReason}>{idea.reason}</Text>
@@ -449,13 +450,13 @@ export function RecipesScreen({ navigation, route }: Props) {
           return (
             <View key={recipe.id} style={styles.card}>
               <View style={styles.imageWrap}>
-                <Image source={{ uri: recipe.image }} style={styles.image} />
+                <FoodImage source={{ uri: recipe.image }} style={styles.image} />
                 <View style={styles.rankBadge}>
                   <Text style={styles.rankText}>おすすめ {index + 1}</Text>
                 </View>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityState={{ selected: recipe.isFavorite }}
+                  accessibilityState={{ selected: recipe.isFavorite }} aria-pressed={recipe.isFavorite}
                   accessibilityLabel={`${recipe.name}をお気に入り${recipe.isFavorite ? 'から外す' : 'に追加'}`}
                   hitSlop={8}
                   onPress={() => toggleRecipeFavorite(recipe.id)}
@@ -499,7 +500,7 @@ export function RecipesScreen({ navigation, route }: Props) {
                 <Pressable
                   accessibilityLabel={`${recipe.name}の材料の確認`}
                   accessibilityRole="button"
-                  accessibilityState={{ expanded }}
+                  accessibilityState={{ expanded }} aria-expanded={expanded}
                   onPress={() => setExpandedRecipes((current) => ({ ...current, [recipe.id]: !current[recipe.id] }))}
                   style={styles.materialToggle}
                 >
@@ -627,7 +628,7 @@ function CategoryFilterChip({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ selected }}
+      accessibilityState={{ selected }} aria-pressed={selected}
       onPress={onPress}
       style={[styles.categoryChip, selected && styles.selectedCategoryChip]}
     >

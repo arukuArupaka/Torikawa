@@ -21,11 +21,14 @@ export function StorageSelector({
         const selected = option.value === value;
         return (
           <Pressable
+            accessibilityRole="radio"
+            accessibilityState={{ checked: selected }} aria-checked={selected}
+            accessibilityLabel={`保存場所 ${option.label}`}
             key={option.value}
             onPress={() => onChange(option.value)}
             style={[styles.option, selected && styles.selected]}
           >
-            <Text style={[styles.label, selected && styles.selectedLabel]}>{option.label}</Text>
+            <Text style={[styles.label, selected && styles.selectedLabel]}>{selected ? '✓ ' : ''}{option.label}</Text>
           </Pressable>
         );
       })}

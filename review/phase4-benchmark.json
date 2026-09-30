@@ -1,0 +1,30 @@
+{
+  "measuredAt": "2026-09-29T16:03:39.182Z",
+  "node": "v24.19.0",
+  "platform": "win32",
+  "recipeCount": 8,
+  "method": "15-run median after 3 warmups; fresh immutable inventory per run. Scan versus index in current calculation logic. Excludes rendering/storage; not device FPS.",
+  "results": [
+    {
+      "foods": 10,
+      "scanRecipeMs": 1.687,
+      "indexedRecipeMs": 0.379,
+      "scanIdeasMs": 1.302,
+      "indexedIdeasMs": 0.167
+    },
+    {
+      "foods": 100,
+      "scanRecipeMs": 14.764,
+      "indexedRecipeMs": 0.787,
+      "scanIdeasMs": 11.193,
+      "indexedIdeasMs": 0.455
+    },
+    {
+      "foods": 500,
+      "scanRecipeMs": 67.368,
+      "indexedRecipeMs": 2.541,
+      "scanIdeasMs": 55.075,
+      "indexedIdeasMs": 1.611
+    }
+  ]
+}

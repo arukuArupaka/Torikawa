@@ -1,14 +1,21 @@
 import { useAppAlert } from '../context/AppAlertContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRef } from 'react';
+import { FoodImage } from './FoodImage';
+import { checkImageSize } from '../services/backupLimits';
 import { colors, radius, spacing } from '../constants/theme';
 
 type ImageSource = 'camera' | 'library';
 
 export function FoodImagePicker({ image, onChange }: { image: string; onChange: (uri: string) => void }) {
   const alert = useAppAlert();
+  const picking = useRef(false);
   const openPicker = async (source: ImageSource) => {
+    if (picking.current) return;
+    picking.current = true;
+    try {
     const permission = source === 'camera'
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -37,7 +44,15 @@ export function FoodImagePicker({ image, onChange }: { image: string; onChange: 
           quality: 0.8,
         });
 
-    if (!result.canceled && result.assets[0]) onChange(result.assets[0].uri);
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      checkImageSize(asset.fileSize ?? 0);
+      if (asset.width * asset.height > 24_000_000) throw new Error('写真が大きすぎます。2400万画素以下の写真を選び直してください。');
+      onChange(asset.uri);
+    }
+    } catch (error) {
+      alert('写真を選択できませんでした', (error instanceof Error ? error.message + '\n' : '') + '別の写真を選ぶか、写真を変更せずに登録を続けられます。');
+    } finally { picking.current = false; }
   };
 
   const showOptions = () => {
@@ -50,8 +65,8 @@ export function FoodImagePicker({ image, onChange }: { image: string; onChange: 
 
   return (
     <View style={styles.container}>
-      <Image source={{ uri: image }} style={styles.image} />
-      <Pressable onPress={showOptions} style={styles.button}>
+      <FoodImage source={{ uri: image }} style={styles.image} />
+      <Pressable accessibilityRole="button" accessibilityLabel="写真を変更" onPress={showOptions} style={styles.button}>
         <Ionicons color={colors.primary} name="camera-outline" size={19} />
         <Text style={styles.buttonText}>写真を変更</Text>
       </Pressable>

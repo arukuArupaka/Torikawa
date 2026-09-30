@@ -1,5 +1,6 @@
 import { FoodCategory, FoodQuantityUnit, StorageLocation } from '../types';
 import { addDays, parseDate, toDateString } from './date';
+import { normalizeProductToIngredient } from './ingredientNormalizer';
 
 type ExpiryDaysByStorage = Record<StorageLocation, number>;
 
@@ -49,8 +50,8 @@ const registrationRules: RegistrationDefaultRule[] = [
   { keywords: ['にんじん', '人参', 'ニンジン'], quantity: 1, quantityUnit: 'piece', storage: 'refrigerated', expiryDays: { refrigerated: 14, frozen: 30, room: 7 } },
   { keywords: ['きのこ', 'しめじ', 'えのき', '舞茸', 'まいたけ', 'しいたけ', '椎茸'], quantity: 1, quantityUnit: 'pack', storage: 'refrigerated', expiryDays: { refrigerated: 4, frozen: 30, room: 1 } },
   { keywords: ['パン', '食パン', 'ロールパン'], quantity: 1, quantityUnit: 'pack', storage: 'room', expiryDays: { refrigerated: 5, frozen: 30, room: 4 } },
-  { keywords: ['ごはん', 'ご飯', '白米'], quantity: 300, quantityUnit: 'g', storage: 'refrigerated', expiryDays: { refrigerated: 2, frozen: 30, room: 1 } },
-  { keywords: ['米'], quantity: 1, quantityUnit: 'bag', storage: 'room', expiryDays: { refrigerated: 180, frozen: 180, room: 180 } },
+  { keywords: ['ごはん', 'ご飯', '御飯'], quantity: 300, quantityUnit: 'g', storage: 'refrigerated', expiryDays: { refrigerated: 2, frozen: 30, room: 1 } },
+  { keywords: ['米', '白米'], quantity: 1, quantityUnit: 'bag', storage: 'room', expiryDays: { refrigerated: 180, frozen: 180, room: 180 } },
   { keywords: ['パスタ', 'スパゲッティ', 'スパゲティ'], quantity: 1, quantityUnit: 'bag', storage: 'room', expiryDays: { refrigerated: 180, frozen: 180, room: 180 } },
   { keywords: ['うどん', 'そば', '蕎麦', '中華麺', '焼きそば', '麺'], quantity: 1, quantityUnit: 'pack', storage: 'refrigerated', expiryDays: { refrigerated: 5, frozen: 30, room: 1 } },
   { keywords: ['醤油', 'しょうゆ', '味噌', 'みそ', 'ソース', 'ケチャップ', 'マヨネーズ', 'めんつゆ', 'ポン酢', 'みりん', '料理酒'], quantity: 1, quantityUnit: 'bottle', storage: 'room', expiryDays: { refrigerated: 180, frozen: 180, room: 180 } },
@@ -86,9 +87,10 @@ export function getFoodRegistrationDefaults({
   productName?: string | null;
   storage?: StorageLocation;
 }): FoodRegistrationDefaults {
-  const text = normalizeText(`${ingredientName} ${name} ${productName ?? ''}`);
+  // Explicit recipe classification wins over words embedded in a product name.
+  const text = normalizeText(ingredientName.trim() || normalizeProductToIngredient(productName || name).ingredientName);
   const rule = registrationRules.find((item) =>
-    item.keywords.some((keyword) => text.includes(normalizeText(keyword))),
+    item.keywords.some((keyword) => text === normalizeText(keyword)),
   );
   const categoryDefault = categoryDefaults[category];
   const nextStorage = storage ?? rule?.storage ?? categoryDefault.storage;

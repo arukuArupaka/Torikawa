@@ -47,6 +47,6 @@ const styles = StyleSheet.create({
   },
   multiline: { minHeight: 100, textAlignVertical: 'top' },
   inputError: { borderColor: colors.danger },
-  hint: { color: colors.textMuted, fontSize: 12 },
-  error: { color: colors.danger, fontSize: 12 },
+  hint: { color: colors.textMuted, fontSize: 13, lineHeight: 20 },
+  error: { color: colors.danger, fontSize: 13, lineHeight: 20 },
 });

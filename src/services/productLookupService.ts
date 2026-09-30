@@ -1,5 +1,6 @@
 import { BarcodeProduct, findProductByBarcode } from '../data/productCatalog';
 import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
+import { getFoodRegistrationDefaults } from '../utils/foodRegistrationDefaults';
 import { findLearnedProduct } from './learnedProductService';
 import { lookupYahooProductByBarcode } from './yahooProductLookupService';
 import { lookupSharedProduct } from './sharedProductService';
@@ -27,8 +28,12 @@ type OpenFoodFactsResponse = {
 const fallbackImage = 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=300';
 
 export async function lookupProductByBarcode(barcode: string): Promise<ProductLookupResult> {
-  const learnedProduct = await findLearnedProduct(barcode);
-  if (learnedProduct) return { product: learnedProduct, source: 'learned' };
+  try {
+    const learnedProduct = await findLearnedProduct(barcode);
+    if (learnedProduct) return { product: learnedProduct, source: 'learned' };
+  } catch (error) {
+    console.warn('端末の商品候補を読み込めませんでした。外部検索を続けます。', error);
+  }
 
   const localProduct = findProductByBarcode(barcode);
   if (localProduct) return { product: localProduct, source: 'local' };
@@ -83,7 +88,7 @@ export async function lookupProductByBarcode(barcode: string): Promise<ProductLo
     }
 
     const normalized = normalizeProductToIngredient(name);
-    const category = normalized.category === 'other'
+    const category = normalized.needsReview
       ? data.product.categories?.split(',')[0]?.trim() || normalized.categoryLabel
       : normalized.categoryLabel;
     return {
@@ -94,7 +99,7 @@ export async function lookupProductByBarcode(barcode: string): Promise<ProductLo
         category,
         ingredientName: normalized.ingredientName,
         tags: normalized.tags,
-        storage: 'room',
+        storage: getFoodRegistrationDefaults({ ingredientName: normalized.ingredientName, category: normalized.category }).storage,
       },
       source: 'open-food-facts',
     };
