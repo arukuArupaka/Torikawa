@@ -1,10 +1,11 @@
 import { useAppAlert } from '../context/AppAlertContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRef } from 'react';
 import { FoodImage } from './FoodImage';
 import { checkImageSize } from '../services/backupLimits';
+import { validateEmbeddedImage } from '../services/dataValidation';
 import { colors, radius, spacing } from '../constants/theme';
 
 type ImageSource = 'camera' | 'library';
@@ -36,19 +37,35 @@ export function FoodImagePicker({ image, onChange }: { image: string; onChange: 
           aspect: [1, 1],
           mediaTypes: ['images'],
           quality: 0.8,
+          base64: Platform.OS === 'web',
         })
       : await ImagePicker.launchImageLibraryAsync({
           allowsEditing: true,
           aspect: [1, 1],
           mediaTypes: ['images'],
           quality: 0.8,
+          base64: Platform.OS === 'web',
         });
 
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
       checkImageSize(asset.fileSize ?? 0);
       if (asset.width * asset.height > 24_000_000) throw new Error('写真が大きすぎます。2400万画素以下の写真を選び直してください。');
-      onChange(asset.uri);
+      if (Platform.OS === 'web') {
+        // Picker blob URLs last only for this document. Store the photo itself
+        // so it survives Safari closing the page and can be backed up later.
+        const mime = asset.mimeType?.toLowerCase();
+        if (!mime || !['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(mime)) {
+          throw new Error('JPEG・PNG・WebP・GIFの写真を選んでください。');
+        }
+        if (!asset.base64) throw new Error('写真の保存内容を読み込めませんでした。もう一度選んでください。');
+        const uri = `data:${mime};base64,${asset.base64}`;
+        checkImageSize(validateEmbeddedImage(uri).size);
+        onChange(uri);
+        if (asset.uri.startsWith('blob:')) URL.revokeObjectURL(asset.uri);
+      } else {
+        onChange(asset.uri);
+      }
     }
     } catch (error) {
       alert('写真を選択できませんでした', (error instanceof Error ? error.message + '\n' : '') + '別の写真を選ぶか、写真を変更せずに登録を続けられます。');

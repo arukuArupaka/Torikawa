@@ -67,6 +67,7 @@ export async function correctLearnedProduct(correction: ProductCorrection): Prom
       category: foodCategoryLabels[correction.category], tags: [correction.ingredientName],
       image: previous?.image ?? getFoodFallbackImage(correction),
       storage: previous?.storage ?? getFoodRegistrationDefaults(correction).storage,
+      ...(previous?.productSource ? { productSource: { ...previous.productSource, modified: true } } : {}),
     } };
     validateStoredData('learnedProducts', next);
     return next;

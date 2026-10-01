@@ -1,4 +1,5 @@
 import { checkBackupSize } from './backupLimits';
+import { getStorageEpoch, assertStorageEpoch } from './storage';
 export async function readBackupText(uri: string): Promise<string> {
   const response = await fetch(uri);
   if (!response.ok) throw new Error('選択したファイルを読み込めませんでした。');
@@ -8,6 +9,7 @@ export async function readBackupText(uri: string): Promise<string> {
 }
 
 export async function shareJsonFile(contents: string, filename: string, _title: string): Promise<void> {
+  assertStorageEpoch(getStorageEpoch());
   const url = URL.createObjectURL(new Blob([contents], { type: 'application/json' }));
   const link = document.createElement('a');
   link.href = url;

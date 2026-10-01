@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { StyleProp, StyleSheet, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../constants/theme';
+import { WebTestNotice } from './WebTestNotice';
 
 export function Screen({
   children,
@@ -17,6 +18,7 @@ export function Screen({
       edges={bottomSafe ? ['top', 'bottom'] : ['top']}
       style={[styles.container, style]}
     >
+      <WebTestNotice />
       {children}
     </SafeAreaView>
   );

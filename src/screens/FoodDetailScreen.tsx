@@ -1,4 +1,5 @@
 import { FoodImage } from '../components/FoodImage';
+import { ProductAttribution } from '../components/ProductAttribution';
 import { useCurrentDay } from '../hooks/useCurrentDay';
 import { useAppAlert } from '../context/AppAlertContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -109,8 +110,8 @@ export function FoodDetailScreen({ navigation, route }: Props) {
 
   const confirmDelete = () => {
     alert(
-      '登録データを完全に削除',
-      `「${displayName}」を完全に削除しますか？この操作は取り消せません。`,
+      '食材の登録を削除',
+      `「${displayName}」を現在の一覧・履歴から削除します。\n\n端末の商品候補、復元前の退避データ、書き出したバックアップは残ります。参照されている写真も保持されます。`,
       [
       { text: 'キャンセル', style: 'cancel' },
       {
@@ -150,6 +151,7 @@ export function FoodDetailScreen({ navigation, route }: Props) {
           )}
         </View>
 
+        <ProductAttribution source={food.productSource} image={food.image} />
         <View style={styles.infoCard}>
           {food.productName ? <DetailRow icon="barcode-outline" label="商品名" value={food.productName} /> : null}
           <DetailRow icon="restaurant-outline" label="レシピ用分類" value={ingredientName} />
@@ -189,7 +191,7 @@ export function FoodDetailScreen({ navigation, route }: Props) {
           <PrimaryButton icon="arrow-undo-outline" label="記録を取り消す" onPress={confirmRestore} variant="outline" />
         )}
         <PrimaryButton icon="add-circle-outline" label="もう一度登録する" onPress={() => navigation.navigate('AddFood', { reuseFoodId: food.id })} variant="outline" />
-        <PrimaryButton label="登録データを完全に削除する" onPress={confirmDelete} variant="danger" />
+        <PrimaryButton label="食材の登録を削除する" onPress={confirmDelete} variant="danger" />
       </ScrollView>
     </Screen>
   );

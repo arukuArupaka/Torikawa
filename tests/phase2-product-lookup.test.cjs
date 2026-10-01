@@ -29,16 +29,17 @@ test('Yahoo and Open Food Facts use the same classification and storage suggesti
       if (value === undefined) delete process.env[key]; else process.env[key] = value;
     }
   });
-  for (const name of ['テスト牛乳', '牛乳プリン', '米酢', '焼きそば麺', '炊飯済みご飯']) {
+  for (const [index, name] of ['テスト牛乳', '牛乳プリン', '米酢', '焼きそば麺', '炊飯済みご飯'].entries()) {
+    const testBarcode = String(Number(barcode) + index);
     const info = normalizeProductToIngredient(name);
     const defaults = getFoodRegistrationDefaults({ name, ...info });
     for (const provider of ['yahoo-shopping', 'open-food-facts']) {
       if (provider === 'yahoo-shopping') process.env.EXPO_PUBLIC_YAHOO_SHOPPING_APP_ID = 'test';
       else delete process.env.EXPO_PUBLIC_YAHOO_SHOPPING_APP_ID;
       global.fetch = async () => ({ status: 200, ok: true, json: async () => provider === 'yahoo-shopping'
-        ? { hits: [{ name, janCode: barcode, genreCategory: { name: 'milk' } }] }
+        ? { hits: [{ name, janCode: testBarcode, genreCategory: { name: 'milk' } }] }
         : { status: 1, product: { product_name_ja: name, categories: 'milk' } } });
-      const result = await lookupProductByBarcode(barcode);
+      const result = await lookupProductByBarcode(testBarcode);
       assert.equal(result.source, provider);
       assert.equal(result.product.ingredientName, info.ingredientName, name);
       assert.equal(result.product.category, info.categoryLabel, name);
@@ -53,5 +54,5 @@ test('unreadable learned catalog still permits external lookup', async (t) => {
   t.after(() => { global.fetch = originalFetch; learnedFailure = false; });
   t.mock.method(console, 'warn', () => {});
   global.fetch = async () => ({ status: 200, ok: true, json: async () => ({ status: 1, product: { product_name_ja: '外部の牛乳' } }) });
-  assert.equal((await lookupProductByBarcode(barcode)).product.ingredientName, '牛乳');
+  assert.equal((await lookupProductByBarcode('4909999987699')).product.ingredientName, '牛乳');
 });

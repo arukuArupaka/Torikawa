@@ -116,6 +116,24 @@ async function mount(t, child) {
 }
 const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
 
+test('product provenance is retained by learned corrections and portable backup restore', async () => {
+  await reset();
+  const code = '4901234567887';
+  const productSource = { provider: 'open-food-facts', barcode: code, productUrl: `https://world.openfoodfacts.org/product/${code}`,
+    fetchedAt: '2026-10-01T00:00:00.000Z', image: { url: 'https://images.openfoodfacts.org/images/products/test/front_ja.2.200.jpg', author: 'uploader', license: 'CC-BY-SA-3.0' } };
+  const learned = { ...product(undefined, productSource.image.url), productSource };
+  await saveLearnedProduct(learned);
+  await correctLearnedProduct({ barcode: code, name: '利用者が直した牛乳', ingredientName: '牛乳', category: 'dairy' });
+  assert.deepEqual((await findLearnedProduct(code)).productSource, { ...productSource, modified: true });
+  const prepared = await prepareBackup({ foods: [{ ...food(), barcode: code, productSource }], recipes: [], shoppingItems: [], notificationSettings: { enabled: false, daysBeforeList: [0], time: '18:00' } });
+  const portable = validatePayload(JSON.parse(prepared.contents));
+  assert.deepEqual(portable.data.foods[0].productSource, productSource);
+  await restoreBackup(portable);
+  const restored = await diskSnapshot();
+  assert.deepEqual(restored[keys.foods][0].productSource, productSource);
+  assert.equal(restored[keys.learnedProducts][code].productSource.modified, true);
+});
+
 test('phase 3 provider surfaces notification failure, retries on foreground and syncs restored settings before completion', async (t) => {
   await reset(); await mount(t);
   failNotifications = true;

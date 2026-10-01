@@ -2,7 +2,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { discardRestoredImage, embedImage, restoreImage } from './backupImages';
 import { AppDataSnapshot } from '../types';
 import type { LearnedProductCatalog } from './learnedProductService';
-import { commitRestoredValues, loadStoredValue, readRecoveryData, storageKeys } from './storage';
+import { commitRestoredValues, loadStoredValue, readRecoveryData, storageKeys, getStorageEpoch, assertStorageEpoch } from './storage';
 import { isObject, isTimestamp, validateSnapshot, validateEmbeddedImage } from './dataValidation';
 import { checkBackupSize, checkImageSize, MAX_TOTAL_IMAGE_BYTES, textBytes } from './backupLimits';
 import { readBackupText, shareJsonFile } from './backupFileAccess';
@@ -73,8 +73,10 @@ function validateImages(payload: BackupPayload): void {
     if (uri.startsWith(ASSET_REF) && !/^recipe-[1-8]$/.test(uri.slice(ASSET_REF.length))) throw new Error('対応していない組み込み画像です。');
   }
 }
-export type PreparedBackup = { contents: string; bytes: number; embeddedCount: number; externalCount: number };
+export type PreparedBackup = { contents: string; bytes: number; embeddedCount: number; externalCount: number; storageEpoch: number };
 export async function prepareBackup(data: AppDataSnapshot): Promise<PreparedBackup> {
+  const storageEpoch = getStorageEpoch();
+  assertStorageEpoch(storageEpoch);
   const learnedProducts = await loadStoredValue<LearnedProductCatalog>(storageKeys.learnedProducts) ?? {};
   validateSnapshot({ ...data, learnedProducts }, true);
   const images: Record<string, string> = {};
@@ -128,9 +130,11 @@ export async function prepareBackup(data: AppDataSnapshot): Promise<PreparedBack
   const contents = JSON.stringify(payload);
   const bytes = textBytes(contents);
   checkBackupSize(bytes);
-  return { contents, bytes, embeddedCount: Object.keys(images).length, externalCount };
+  assertStorageEpoch(storageEpoch);
+  return { contents, bytes, embeddedCount: Object.keys(images).length, externalCount, storageEpoch };
 }
 export async function sharePreparedBackup(backup: PreparedBackup): Promise<void> {
+  assertStorageEpoch(backup.storageEpoch);
   await shareJsonFile(backup.contents, `tabedoki-backup-${new Date().toISOString().slice(0, 10)}.json`, 'たべどき！！のバックアップを保存');
 }
 export async function shareBackup(data: AppDataSnapshot): Promise<void> {
@@ -196,7 +200,9 @@ export async function restoreBackup(
 }
 
 export async function shareRecoveryData(): Promise<void> {
+  const storageEpoch = getStorageEpoch();
   const raw = await readRecoveryData();
+  assertStorageEpoch(storageEpoch);
   await shareJsonFile(JSON.stringify({ format: 'tabedoki-recovery-original', exportedAt: new Date().toISOString(), raw }),
     `tabedoki-recovery-${Date.now()}.json`, '読み込めない保存データの原本を退避');
 }

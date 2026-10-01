@@ -1,4 +1,5 @@
-import { normalizeSharedBarcode, validateSharedProduct, SharedProduct } from '../../shared/productContract';
+import { normalizeSharedBarcode, validateSharedProduct, SharedProduct, SHARED_RULES_VERSION } from '../../shared/productContract';
+import { SharedProductRules } from '../components/SharedProductRules';
 import { isSharedProductsConfigured, shareProduct } from '../services/sharedProductService';
 import { getRecentFoods } from '../utils/recentFoods';
 import { useAppAlert } from '../context/AppAlertContext';
@@ -19,6 +20,7 @@ import { colors, radius, spacing } from '../constants/theme';
 import { useAppData } from '../context/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
 import { persistFoodImage } from '../services/imageStorage';
+import { getStorageEpoch, assertStorageEpoch } from '../services/storage';
 import { correctLearnedProduct, saveLearnedProduct } from '../services/learnedProductService';
 import { FoodCategory, FoodItem, FoodQuantityUnit, NewFoodItem, StorageLocation } from '../types';
 import { toDateString } from '../utils/date';
@@ -53,6 +55,7 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
   );
   const initialName = existingFood ? getFoodDisplayName(existingFood) : templateFood ? getFoodDisplayName(templateFood) : initialProductName ?? route.params?.initialName ?? '';
   const barcode = existingFood?.barcode ?? templateFood?.barcode ?? route.params?.initialBarcode;
+  const initialProductSource = existingFood?.productSource ?? templateFood?.productSource ?? route.params?.initialProductSource;
   const initialCategory = existingFood?.category ?? templateFood?.category
     ?? foodCategoryOptions.find((option) => option.label === route.params?.initialCategory)?.value
     ?? (initialIngredientInfo.needsReview ? inferredInitialCategory : initialIngredientInfo.category);
@@ -106,6 +109,7 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
   const [submitted, setSubmitted] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const savingLock = useRef(false);
+  const formEpoch = useRef(getStorageEpoch());
   const correctionPending = useRef(false);
   const [rememberCorrection, setRememberCorrection] = useState(true);
   const [shareSelected, setShareSelected] = useState(false);
@@ -120,15 +124,18 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
     || ingredientName.trim() !== existingFood.ingredientName || category !== existingFood.category));
   const correctionAvailable = Boolean(isEditing && barcode && (productChanged || correctionPending.current));
   const submitSharedProduct = async (product: SharedProduct) => {
+    try { assertStorageEpoch(formEpoch.current); } catch { return; }
     if (sharingLock.current) return;
     sharingLock.current = true;
     setSharePending(true);
     setShareError('');
     try {
-      const result = await shareProduct(product);
-      setShareNotice(result === 'already_exists' ? 'このバーコードは共有先に登録済みです。既存の商品情報を保持しました。' : '商品情報を共有しました。他のユーザーも検索できます。');
-    } catch {
-      setShareError('食材は登録できましたが、商品情報を共有できませんでした。通信状況を確認して再試行できます。');
+      const result = await shareProduct(product, SHARED_RULES_VERSION);
+      setShareNotice(result === 'already_exists' ? 'このバーコードは共有先に登録済みです。既存の商品情報を保持しました。'
+        : result === 'already_shared' ? 'この商品情報は公開済みです。他のユーザーも検索できます。'
+        : '商品情報を送信しました。管理者の確認後に公開します。食材はこの端末に登録済みです。');
+    } catch (error) {
+      setShareError(`食材は登録できましたが、商品情報を共有できませんでした。${error instanceof Error ? error.message : '通信状況を確認して再試行できます。'}`);
     } finally { sharingLock.current = false; setSharePending(false); }
   };
 
@@ -279,6 +286,7 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
   };
 
   const handleSave = async () => {
+    try { assertStorageEpoch(formEpoch.current); } catch { return; }
     setSubmitted(true);
     if (!name.trim() || !ingredientName.trim() || !isQuantityValid || savingLock.current || savedSharedProduct) return;
     if (canOfferSharing && sharingConfigured && shareSelected && !validateSharedProduct({ barcode: route.params?.initialBarcode, name, ingredientName, category })) {
@@ -303,6 +311,11 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
       name: name.trim(),
       productName: initialProductName || barcode ? name.trim() : null,
       ...(barcode ? { barcode } : {}),
+      ...(initialProductSource ? { productSource: {
+        ...initialProductSource,
+        modified: initialProductSource.modified || name.trim() !== initialName || ingredientName.trim() !== initialIngredientInfo.ingredientName || category !== initialCategory,
+        image: initialProductSource.image?.url === savedImage ? initialProductSource.image : undefined,
+      } } : {}),
       ingredientName: ingredientName.trim(),
       image: savedImage,
       category,
@@ -356,11 +369,13 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
           ingredientName: input.ingredientName,
           tags: input.tags,
           storage: input.storage,
+          productSource: input.productSource,
         });
       } catch (error) {
         console.warn('バーコード商品を端末へ保存できませんでした。', error);
       }
     }
+    try { assertStorageEpoch(formEpoch.current); } catch { return; }
     if (canOfferSharing && sharingConfigured && shareSelected) {
       const shared: SharedProduct = { barcode: normalizeSharedBarcode(route.params?.initialBarcode)!, name: name.trim(), ingredientName: ingredientName.trim(), category };
       setSavedSharedProduct(shared);
@@ -493,10 +508,10 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
             <Text style={styles.reuseTitle}>商品情報の共有（任意）</Text>
             <Text style={styles.reuseHint}>共有するのは次の4項目です。個人の在庫・数量・期限・購入日・保存場所・メモ・写真は送信しません。</Text>
             <Text style={styles.reuseHint}>バーコード：{route.params?.initialBarcode}{'\n'}商品名：{name.trim() || '未入力'}{'\n'}食材分類：{ingredientName.trim() || '未入力'}{'\n'}カテゴリ：{foodCategoryLabels[category]}</Text>
-            {sharingConfigured ? <Pressable accessibilityRole="checkbox" accessibilityLabel="この商品情報を他のユーザーと共有する" accessibilityState={{ checked: shareSelected }} aria-checked={shareSelected} onPress={() => setShareSelected((value) => !value)} style={styles.shareChoice}>
+            {sharingConfigured ? <><SharedProductRules /><Pressable accessibilityRole="checkbox" accessibilityLabel="投稿ルールに同意して、この商品情報を共有する" accessibilityState={{ checked: shareSelected }} aria-checked={shareSelected} onPress={() => setShareSelected((value) => !value)} style={styles.shareChoice}>
               <Ionicons name={shareSelected ? 'checkbox' : 'square-outline'} color={colors.primaryDark} size={25} />
-              <Text style={styles.shareChoiceText}>この商品情報を他のユーザーと共有する</Text>
-            </Pressable> : <Text style={styles.reuseHint}>共有機能は準備中です。今回はこの端末に商品情報を保存します。</Text>}
+              <Text style={styles.shareChoiceText}>投稿ルールに同意して、この商品情報を共有する</Text>
+            </Pressable></> : <Text style={styles.reuseHint}>共有機能は準備中です。今回はこの端末に商品情報を保存します。</Text>}
           </View> : null}
           <View style={styles.buttonArea}>
             <PrimaryButton

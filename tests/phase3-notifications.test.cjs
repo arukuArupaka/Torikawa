@@ -27,7 +27,7 @@ const api = {
 Module._load = function(request, ...args) {
   if (request === 'expo-notifications') return api;
   if (request === 'react-native') return { Platform: platform };
-  if (request === './storage') return { storageKeys: { notificationIds: 'ids' }, loadStoredValue: async () => ids,
+  if (request === './storage') return { isDataErasing: () => false, storageKeys: { notificationIds: 'ids' }, loadStoredValue: async () => ids,
     saveStoredValue: async (_key, value) => { if (failSave && os.size) throw Error('disk full'); ids = structuredClone(value); } };
   return original.call(this, request, ...args);
 };

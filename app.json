@@ -27,7 +27,8 @@
         "expo-image-picker",
         {
           "photosPermission": "食材写真を選ぶため、写真ライブラリへのアクセスを使用します。",
-          "cameraPermission": "食材写真を撮影するため、カメラを使用します。"
+          "cameraPermission": "食材写真を撮影するため、カメラを使用します。",
+          "microphonePermission": false
         }
       ],
       "@react-native-community/datetimepicker",
@@ -36,7 +37,8 @@
         "expo-camera",
         {
           "cameraPermission": "商品バーコードを読み取るため、カメラを使用します。",
-          "recordAudioAndroid": false
+          "recordAudioAndroid": false,
+          "microphonePermission": false
         }
       ],
       "expo-sharing",

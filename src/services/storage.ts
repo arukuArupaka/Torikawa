@@ -22,6 +22,39 @@ let queue: Promise<unknown> = Promise.resolve();
 let restoring = false;
 let epoch = 0;
 let uncertainCommit = false;
+export const erasureKey = '@food-manager/erasure-pending';
+let erasing = false;
+let erasureRunning = false;
+let knownGeneration: string | null | undefined;
+export class DataErasurePendingError extends Error {}
+export function isDataErasing() { return erasing; }
+export function getStorageEpoch() { return epoch; }
+export function assertStorageEpoch(expected: number) {
+  if (expected !== epoch || erasing) throw new Error('保存データが変更されています。現在の画面から操作し直してください。');
+}
+async function assertNoErasure() {
+  if (erasing || await AsyncStorage.getItem(erasureKey) !== null) {
+    erasing = true;
+    throw new DataErasurePendingError('保存データの削除が完了していません。削除を再試行してください。');
+  }
+}
+async function writableGeneration() {
+  await assertNoErasure();
+  const generation = await readGeneration();
+  if (knownGeneration !== undefined && generation !== knownGeneration) {
+    uncertainCommit = true;
+    throw new RestoreNeedsReloadError('別の画面で保存データが変わりました。再読み込みしてください。');
+  }
+  knownGeneration = generation;
+  return generation;
+}
+export function hasPendingDataErasure(): Promise<boolean> {
+  return serialized(async () => {
+    const pending = await AsyncStorage.getItem(erasureKey) !== null;
+    if (!erasureRunning) erasing = pending;
+    return pending;
+  });
+}
 function serialized<T>(operation: () => Promise<T>): Promise<T> {
   const result = queue.catch(() => undefined).then(operation);
   queue = result;
@@ -55,10 +88,15 @@ async function readValue(key: string, generation: string | null): Promise<unknow
 
 export function loadStoredValues(keys: readonly string[]): Promise<unknown[]> {
   return serialized(async () => {
+    await assertNoErasure();
     const generation = keys.some(isSnapshotKey) ? await readGeneration() : null;
+    const complete = snapshotKeys.every((key) => keys.includes(key));
+    if (!complete && keys.some(isSnapshotKey) && knownGeneration !== undefined && generation !== knownGeneration) {
+      throw new RestoreNeedsReloadError('別の画面で保存データが変わりました。再読み込みしてください。');
+    }
     const values = await Promise.all(keys.map((key) => readValue(key, generation)));
     // After an ambiguous commit, a full read is required before writing again.
-    if (snapshotKeys.every((key) => keys.includes(key))) uncertainCommit = false;
+    if (snapshotKeys.every((key) => keys.includes(key))) { uncertainCommit = false; knownGeneration = generation; }
     return values;
   });
 }
@@ -69,20 +107,22 @@ export async function loadStoredValue<T>(key: string): Promise<T | null> {
 export function saveStoredValue<T>(key: string, value: T): Promise<void> {
   const json = JSON.stringify(value);
   const writeEpoch = epoch;
+  if (erasing) return Promise.reject(new DataErasurePendingError('削除中は保存できません。'));
   if (isSnapshotKey(key) && (restoring || uncertainCommit)) return Promise.reject(new Error('復元中のため保存を待機してください。'));
   return serialized(async () => {
-    if (isSnapshotKey(key) && writeEpoch !== epoch) throw new Error('復元前の変更は保存できません。');
-    const generation = isSnapshotKey(key) ? await readGeneration() : null;
+    if (writeEpoch !== epoch) throw new Error('変更前の操作は保存できません。');
+    const generation = await writableGeneration();
     await AsyncStorage.setItem(physicalKey(key, generation), json);
   });
 }
 
 export function updateStoredValue<T>(key: string, update: (value: T | null) => T): Promise<void> {
+  if (erasing) return Promise.reject(new DataErasurePendingError('削除中は商品学習を更新できません。'));
   if (restoring || uncertainCommit) return Promise.reject(new Error('復元中は商品学習を更新できません。'));
   const writeEpoch = epoch;
   return serialized(async () => {
     if (writeEpoch !== epoch) throw new Error('復元前の変更は保存できません。');
-    const generation = await readGeneration();
+    const generation = await writableGeneration();
     const next = update(await readValue(key, generation) as T | null);
     await AsyncStorage.setItem(physicalKey(key, generation), JSON.stringify(next));
   });
@@ -91,6 +131,7 @@ export function updateStoredValue<T>(key: string, update: (value: T | null) => T
 /** Includes raw strings so malformed JSON can be exported without parsing it. */
 export function readRecoveryData(): Promise<Record<string, string | null>> {
   return serialized(async () => {
+    await assertNoErasure();
     const keys = (await AsyncStorage.getAllKeys()).filter((key) => key.startsWith('@food-manager/'));
     return Object.fromEntries(await Promise.all(keys.map(async (key) => [key, await AsyncStorage.getItem(key)])));
   });
@@ -100,10 +141,12 @@ export class RestoreNeedsReloadError extends Error {}
 
 /** Prepare images under the same lock; the head is the only commit point. */
 export async function commitRestoredValues(prepare: () => Promise<Record<string, unknown>>): Promise<void> {
+  if (erasing) throw new DataErasurePendingError('削除中は復元できません。');
   if (restoring) throw new Error('復元はすでに実行中です。');
   restoring = true;
   try {
     await serialized(async () => {
+      await assertNoErasure();
       const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
       const originalHead = await AsyncStorage.getItem(generationKey);
       let oldGeneration: string | null;
@@ -142,6 +185,7 @@ export async function commitRestoredValues(prepare: () => Promise<Record<string,
       }
       epoch += 1;
       uncertainCommit = false;
+      knownGeneration = id;
     });
   } finally {
     restoring = false;
@@ -150,10 +194,11 @@ export async function commitRestoredValues(prepare: () => Promise<Record<string,
 
 /** Delete only after durable saves, including references in retained originals. */
 export function collectStoredImages(candidates: Set<string>, liveImages: () => Set<string>, remove: (uri: string) => void): Promise<void> {
-  if (restoring || uncertainCommit || candidates.size === 0) return Promise.resolve();
+  if (restoring || erasing || uncertainCommit || candidates.size === 0) return Promise.resolve();
   const live = liveImages();
   if (![...candidates].some((uri) => !live.has(uri))) return Promise.resolve();
   return serialized(async () => {
+    await assertNoErasure();
     const protectedImages = new Set(liveImages());
     const visit = (value: unknown) => {
       if (!value || typeof value !== 'object') return;
@@ -176,4 +221,42 @@ export function collectStoredImages(candidates: Set<string>, liveImages: () => S
       catch (error) { console.warn('未使用の写真の削除を次回に延期します。', error); }
     }
   });
+}
+
+/** A durable intent prevents hydration or old writes after partial, irreversible deletion. */
+export async function eraseStoredValues(values: Record<string, unknown>, cleanup: (raw: Record<string, string | null>) => Promise<void>): Promise<void> {
+  if (restoring || erasureRunning) throw new Error('データの処理はすでに実行中です。');
+  if (!snapshotKeys.every((key) => Object.hasOwn(values, key))) throw new Error('削除後の初期データが不足しています。');
+  erasureRunning = true; erasing = true; epoch += 1;
+  try {
+    const raw = await serialized(async () => {
+      const intent = JSON.stringify({ version: 1 });
+      try { await AsyncStorage.setItem(erasureKey, intent); }
+      catch (error) { if (await AsyncStorage.getItem(erasureKey) !== intent) throw error; }
+      if (await AsyncStorage.getItem(erasureKey) !== intent) throw new Error('削除開始の記録を保存できませんでした。');
+      const keys = (await AsyncStorage.getAllKeys()).filter((key) => key.startsWith('@food-manager/'));
+      return Object.fromEntries(await Promise.all(keys.map(async (key) => [key, await AsyncStorage.getItem(key)])));
+    });
+    // Never hold the storage queue while draining notification operations that use it.
+    await cleanup(raw);
+    await serialized(async () => {
+      const ownedKeys = (await AsyncStorage.getAllKeys()).filter((key) => key.startsWith('@food-manager/') && key !== erasureKey);
+      for (const key of ownedKeys) await AsyncStorage.removeItem(key);
+      if ((await AsyncStorage.getAllKeys()).some((key) => key.startsWith('@food-manager/') && key !== erasureKey)) throw new Error('保存データを削除できませんでした。');
+      const id = `cleared-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+      for (const key of snapshotKeys) {
+        const json = JSON.stringify(values[key]);
+        const target = physicalKey(key, id);
+        await AsyncStorage.setItem(target, json);
+        if (await AsyncStorage.getItem(target) !== json) throw new Error('削除後の初期データを確認できませんでした。');
+      }
+      const head = JSON.stringify({ version: 1, id });
+      await AsyncStorage.setItem(generationKey, head);
+      if (await AsyncStorage.getItem(generationKey) !== head) throw new Error('削除後の保存先を確認できませんでした。');
+      try { await AsyncStorage.removeItem(erasureKey); }
+      catch (error) { if (await AsyncStorage.getItem(erasureKey) !== null) throw error; }
+      if (await AsyncStorage.getItem(erasureKey) !== null) throw new Error('削除の完了を確認できませんでした。');
+      knownGeneration = id; uncertainCommit = false; erasing = false;
+    });
+  } finally { erasureRunning = false; }
 }

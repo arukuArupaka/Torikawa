@@ -26,6 +26,7 @@ export type FoodItem = {
   id: string;
   sourceShoppingItemId?: string;
   barcode?: string | null;
+  productSource?: ProductSource;
   revision?: number;
   consumptionHistory?: FoodConsumption[];
   name: string;
@@ -44,6 +45,15 @@ export type FoodItem = {
   status: FoodStatus;
   usedAt: string | null;
   disposedAt: string | null;
+};
+
+export type ProductSource = {
+  provider: 'open-food-facts' | 'yahoo-shopping';
+  barcode: string;
+  productUrl: string;
+  fetchedAt: string;
+  modified?: boolean;
+  image?: { url: string; author: string; license: 'CC-BY-SA-3.0' };
 };
 
 export type NewFoodItem = Omit<

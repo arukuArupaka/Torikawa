@@ -1,7 +1,8 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import { createSampleFoods, initialNotificationSettings, initialShoppingItems, sampleRecipes } from '../data/sampleData';
-import { collectStoredImages, loadStoredValues, saveStoredValue, storageKeys, RestoreNeedsReloadError } from '../services/storage';
+import { initialNotificationSettings } from '../data/sampleData';
+import { createInitialData } from '../data/initialData';
+import { collectStoredImages, loadStoredValues, saveStoredValue, storageKeys, RestoreNeedsReloadError, DataErasurePendingError, hasPendingDataErasure } from '../services/storage';
 import { deleteStoredFoodImage } from '../services/imageStorage';
 import { queueNotificationSync } from '../services/notificationService';
 import { normalizeAppData } from '../services/appDataMigration';
@@ -21,6 +22,10 @@ type AppDataContextValue = {
   isReady: boolean;
   isRestoring: boolean;
   restoreAppData: (payload: BackupPayload) => Promise<void>;
+  eraseAppData: () => Promise<void>;
+  isErasing: boolean;
+  erasurePending: boolean;
+  erasureError: string | null;
   loadError: string | null;
   retryLoad: () => void;
   saveError: string | null;
@@ -78,6 +83,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [saveAttempt, setSaveAttempt] = useState(0);
   const [isRestoring, setIsRestoring] = useState(false);
   const restoringRef = useRef(false);
+  const [isErasing, setIsErasing] = useState(false);
+  const [erasurePending, setErasurePending] = useState(false);
+  const [erasureError, setErasureError] = useState<string | null>(null);
   const dataEpoch = useRef(0);
   const imageCandidates = useRef(new Set<string>());
   const currentImages = useRef(new Set<string>());
@@ -86,6 +94,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    const hydrationEpoch = dataEpoch.current;
     async function hydrate() {
       setLoadError(null);
       try {
@@ -95,13 +104,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         // Normalize all records before committing any state. A malformed record must
         // not trigger persistence of partial data or sample fallbacks.
         if (catalog !== null) validateStoredData('learnedProducts', catalog);
+        const initial = createInitialData();
         const next = normalizeAppData({
-          foods: storedFoods ?? createSampleFoods(),
-          recipes: storedRecipes ?? sampleRecipes,
-          shoppingItems: storedShopping ?? initialShoppingItems,
-          notificationSettings: storedSettings ?? initialNotificationSettings,
+          foods: storedFoods ?? initial.foods,
+          recipes: storedRecipes ?? initial.recipes,
+          shoppingItems: storedShopping ?? initial.shoppingItems,
+          notificationSettings: storedSettings ?? initial.notificationSettings,
         } as AppDataSnapshot);
-        if (cancelled) return;
+        if (cancelled || hydrationEpoch !== dataEpoch.current) return;
         setFoods(next.foods);
         setShoppingItems(next.shoppingItems);
         setNotificationSettings(next.notificationSettings);
@@ -109,6 +119,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         [...next.foods, ...next.recipes].forEach((item) => imageCandidates.current.add(item.image));
         setIsReady(true);
       } catch (error) {
+        if (cancelled || hydrationEpoch !== dataEpoch.current) return;
+        if (error instanceof DataErasurePendingError) {
+          if (!cancelled) { setErasurePending(true); setErasureError(error.message); }
+          return;
+        }
         console.warn('保存データを読み込めませんでした。元のデータを保持します。', error);
         if (!cancelled) setLoadError('保存データを読み込めませんでした。データは上書きせずに保護しています。' + (error instanceof Error ? `\n${error.message}` : ''));
       }
@@ -136,6 +151,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           .catch((error) => console.warn('写真の整理を延期します。', error));
       }
     }).catch((error) => {
+      if (!cancelled && savingEpoch === dataEpoch.current && error instanceof DataErasurePendingError) {
+        setIsReady(false); setErasurePending(true); setErasureError(error.message); return;
+      }
+      if (!cancelled && savingEpoch === dataEpoch.current && error instanceof RestoreNeedsReloadError) {
+        setIsReady(false); setLoadError(error.message); return;
+      }
       console.warn('変更を端末へ保存できませんでした。', error);
       if (!cancelled && savingEpoch === dataEpoch.current && !restoringRef.current) setSaveError('変更を保存できませんでした。アプリを閉じずに、保存を再試行してください。');
     });
@@ -270,7 +291,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setNotificationSettings(next.notificationSettings);
   };
 
+  const operationEpoch = dataEpoch.current;
   const restoreAppData = async (payload: BackupPayload) => {
+    if (operationEpoch !== dataEpoch.current) throw new Error('保存データが変更されています。現在の画面から操作し直してください。');
+    if (erasurePending || erasureError) throw new Error('削除が完了するまで復元できません。');
     if (restoringRef.current) throw new Error('復元はすでに実行中です。');
     restoringRef.current = true;
     dataEpoch.current += 1;
@@ -296,6 +320,27 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       restoringRef.current = false;
       setIsRestoring(false);
     }
+  };
+
+  const eraseAppData = async () => {
+    if (operationEpoch !== dataEpoch.current) throw new Error('保存データが変更されています。現在の画面から操作し直してください。');
+    if (restoringRef.current) throw new Error('データの処理はすでに実行中です。');
+    restoringRef.current = true;
+    dataEpoch.current += 1; notificationRun.current += 1;
+    setIsErasing(true); setIsReady(false); setErasureError(null); setErasurePending(true);
+    try {
+      const { eraseAppStoredData } = await import('../services/dataErasureService');
+      const empty = await eraseAppStoredData();
+      imageCandidates.current.clear(); currentImages.current.clear(); persisted.current.clear();
+      replaceAppData(empty);
+      setLoadError(null); setSaveError(null); setNotificationSyncError(null); setIsNotificationSyncing(false);
+      setErasurePending(false); setErasureError(null); setIsReady(true);
+    } catch (error) {
+      setErasureError('削除が完了していません。残っているデータや通知を削除するには再試行してください。' + (error instanceof Error ? `\n${error.message}` : ''));
+      // Even an uncertain intent write never returns old UI state to the save effects.
+      await hasPendingDataErasure().catch(() => undefined);
+      throw error;
+    } finally { restoringRef.current = false; setIsErasing(false); }
   };
 
   const recordConsumption = (request: ConsumptionRequest) => {
@@ -360,6 +405,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         isReady,
         isRestoring,
         restoreAppData,
+        eraseAppData, isErasing, erasurePending, erasureError,
         loadError,
         retryLoad: () => setLoadAttempt((attempt) => attempt + 1),
         saveError,

@@ -1,4 +1,4 @@
-import { normalizeSharedBarcode, validateSharedProduct, SharedProduct } from '../../shared/productContract';
+import { normalizeSharedBarcode, validateSharedProduct, SharedProduct, SHARED_RULES_VERSION, ProductReportReason, validateProductReport } from '../../shared/productContract';
 import { BarcodeProduct } from '../data/productCatalog';
 import { foodCategoryLabels } from '../utils/foodCategory';
 import { getFoodFallbackImage } from '../utils/foodImages';
@@ -46,16 +46,30 @@ export async function lookupSharedProduct(barcode: string): Promise<BarcodeProdu
   };
 }
 
-export type ShareResult = 'created' | 'already_shared' | 'already_exists';
-export async function shareProduct(product: SharedProduct): Promise<ShareResult> {
+export type ShareResult = 'pending' | 'already_pending' | 'already_shared' | 'already_exists';
+export async function shareProduct(product: SharedProduct, acceptedRulesVersion: string): Promise<ShareResult> {
+  if (acceptedRulesVersion !== SHARED_RULES_VERSION) throw new Error('現在の投稿ルールに同意してから共有してください。');
   // Construct a whitelist payload even if callers accidentally pass a FoodItem-like object.
   const safe = validateSharedProduct({ barcode: product.barcode, name: product.name, ingredientName: product.ingredientName, category: product.category });
   if (!safe) throw new Error('商品名・分類・バーコードを確認してください。');
-  const response = await request('/v1/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(safe) });
+  const response = await request('/v1/products', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shared-Rules-Version': acceptedRulesVersion }, body: JSON.stringify(safe) });
   if (response.status === 409) return 'already_exists';
   if (response.status === 429) throw new Error('共有回数の上限に達しました。時間をおいてお試しください。');
+  if (response.status === 428) throw new Error('投稿ルールが更新されています。アプリを更新してから共有してください。');
   if (!response.ok) throw new Error('商品情報を共有できませんでした。時間をおいてお試しください。');
   const body = response.body;
-  if (body.status !== 'created' && body.status !== 'already_shared') throw new Error('共有結果を確認できませんでした。再試行できます。');
+  if (!['pending', 'already_pending', 'already_shared'].includes(body.status)) throw new Error('共有結果を確認できませんでした。再試行できます。');
   return body.status;
+}
+
+export async function reportSharedProduct(barcode: string, reason: ProductReportReason): Promise<void> {
+  const code = normalizeSharedBarcode(barcode);
+  const report = validateProductReport({ reason });
+  if (!code || !report) throw new Error('通報する商品と理由を確認してください。');
+  const response = await request(`/v1/products/${code}/reports`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(report),
+  });
+  if (response.status === 404) throw new Error('この商品情報は現在公開されていません。');
+  if (response.status === 429) throw new Error('送信回数の上限に達しました。時間をおいてお試しください。');
+  if (response.status !== 202 || response.body?.status !== 'report_received') throw new Error('通報を送信できませんでした。時間をおいてお試しください。');
 }

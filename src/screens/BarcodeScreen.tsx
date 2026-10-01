@@ -1,4 +1,7 @@
 import { FoodImage } from '../components/FoodImage';
+import { ProductAttribution } from '../components/ProductAttribution';
+import { SharedProductReport } from '../components/SharedProductReport';
+import { ProductLookupRateLimitError } from '../services/openFoodFactsService';
 import { normalizeSharedBarcode } from '../../shared/productContract';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -48,6 +51,7 @@ export function BarcodeScreen({ navigation }: Props) {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [lookupFailed, setLookupFailed] = useState(false);
+  const [lookupNotice, setLookupNotice] = useState('');
   const [manualBarcode, setManualBarcode] = useState('');
   const scanBusy = useRef(false);
 
@@ -57,12 +61,14 @@ export function BarcodeScreen({ navigation }: Props) {
     scanBusy.current = true;
     setIsLookingUp(true);
     setLookupFailed(false);
+    setLookupNotice('');
     try {
       const lookup = await lookupProductByBarcode(barcode);
       setScanResult({ barcode, type: result.type, ...lookup });
     } catch (error) {
       console.warn('商品情報を検索できませんでした。', error);
       setLookupFailed(true);
+      if (error instanceof ProductLookupRateLimitError) setLookupNotice(error.message);
       setScanResult({ barcode, type: result.type, product: null, source: 'none' });
     } finally {
       setIsLookingUp(false);
@@ -79,19 +85,21 @@ export function BarcodeScreen({ navigation }: Props) {
     });
   };
 
-  const openManualRegistration = () => {
+  const openManualRegistration = (useProduct = true) => {
     if (!scanResult) return;
+    const product = useProduct ? scanResult.product : null;
     navigation.navigate('AddFood', {
-      initialName: scanResult.product?.name,
-      initialProductName: scanResult.product?.name,
-      initialIngredientName: scanResult.product?.ingredientName,
-      initialImage: scanResult.product?.image,
+      initialName: product?.name,
+      initialProductName: product?.name,
+      initialIngredientName: product?.ingredientName,
+      initialImage: product?.image,
       initialMemo: `バーコード: ${scanResult.barcode}`,
       initialBarcode: scanResult.barcode,
+      initialProductSource: product?.productSource,
       allowProductSharing: scanResult.source === 'none' && ['ean13', 'ean8'].includes(scanResult.type),
-      initialCategory: scanResult.product?.category,
-      initialTags: scanResult.product?.tags,
-      initialStorage: ['learned', 'local'].includes(scanResult.source) ? scanResult.product?.storage : undefined,
+      initialCategory: product?.category,
+      initialTags: product?.tags,
+      initialStorage: ['learned', 'local'].includes(scanResult.source) ? product?.storage : undefined,
     });
   };
 
@@ -142,7 +150,7 @@ export function BarcodeScreen({ navigation }: Props) {
                       {lookupFailed ? '商品情報を検索できませんでした' : '商品情報が見つかりません'}
                     </Text>
                     <Text style={styles.productCategory}>
-                      {lookupFailed ? '通信状況を確認するか、手入力してください' : '検索先に商品情報がないため、手入力できます'}
+                      {lookupNotice || (lookupFailed ? '通信状況を確認するか、手入力してください' : '検索先に商品情報がないため、手入力できます')}
                     </Text>
                     <Text style={styles.barcodeText}>{scanResult.barcode}</Text>
                   </View>
@@ -153,9 +161,10 @@ export function BarcodeScreen({ navigation }: Props) {
             <PrimaryButton
               icon="create-outline"
               label={scanResult.product ? '入力内容を確認して登録' : '手入力で登録'}
-              onPress={openManualRegistration}
+              onPress={() => openManualRegistration()}
               style={styles.actionButton}
             />
+            {scanResult.source === 'shared' && scanResult.product ? <SharedProductReport key={scanResult.barcode} barcode={scanResult.barcode} onIgnore={() => openManualRegistration(false)} /> : null}
             <Pressable
               onPress={() => {
                 setLookupFailed(false);
@@ -171,9 +180,9 @@ export function BarcodeScreen({ navigation }: Props) {
           <View style={styles.waitingArea}>
             <Text style={styles.waitingTitle}>商品バーコードをカメラに映してください</Text>
             <Text style={styles.waitingText}>読み取り後、商品情報を確認して登録できます。</Text>
-            <Pressable onPress={showSampleProduct} style={styles.sampleButton}>
+            {process.env.EXPO_PUBLIC_DEMO_DATA === 'true' ? <Pressable onPress={showSampleProduct} style={styles.sampleButton}>
               <Text style={styles.sampleButtonText}>サンプル商品で動作を試す</Text>
-            </Pressable>
+            </Pressable> : null}
           </View>
         )}
 
@@ -185,9 +194,12 @@ export function BarcodeScreen({ navigation }: Props) {
         <View style={styles.note}>
           <Ionicons color={colors.textMuted} name="information-circle-outline" size={20} />
           <Text style={styles.noteText}>
-            商品検索には端末内カタログ、共有商品データベース、Yahoo!ショッピング、Open Food Factsを使用します。共有の商品情報は利用者が登録した内容です。商品名を確認してご利用ください。データベースにない商品も、バーコード番号を引き継いで手入力できます。
+            商品検索には端末内カタログ、共有商品データベース、Yahoo!ショッピング、Open Food Factsを使用します。共有の商品情報は利用者の投稿を管理者が確認した内容です。商品名を確認してご利用ください。データベースにない商品も、バーコード番号を引き継いで手入力できます。
           </Text>
         </View>
+        {scanResult?.product ? <ProductAttribution source={scanResult.product.productSource} image={scanResult.product.image} /> : null}
+        <PrimaryButton label="商品データの出典・ライセンス" variant="outline"
+          onPress={() => navigation.navigate('AppInformation', { section: 'services' })} />
       </ScrollView>
     </Screen>
   );

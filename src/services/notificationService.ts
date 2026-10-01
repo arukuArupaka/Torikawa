@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { FoodItem, NotificationSettings } from '../types';
 import { parseDate } from '../utils/date';
 import { getFoodDisplayName } from '../utils/ingredientNormalizer';
-import { loadStoredValue, saveStoredValue, storageKeys } from './storage';
+import { loadStoredValue, saveStoredValue, storageKeys, isDataErasing } from './storage';
 
 const CHANNEL_ID = 'expiry-reminders';
 const KIND = 'tabedoki-expiry-v2';
@@ -59,6 +59,7 @@ function isManaged(item: Notifications.NotificationRequest, known: Set<string> =
 }
 async function reconcile(foods: FoodItem[], settings: NotificationSettings): Promise<void> {
   if (Platform.OS === 'web') return;
+  if (isDataErasing()) throw new Error('削除中は通知を予約できません。');
   await ensureAndroidChannel();
   const permission = await Notifications.getPermissionsAsync();
   const plan = isPermissionGranted(permission) ? buildNotificationPlan(foods, settings) : [];
@@ -111,14 +112,40 @@ export function queueNotificationSync(foods: FoodItem[], settings: NotificationS
 }
 export async function scheduleTestNotification(food?: Pick<FoodItem, 'id' | 'name' | 'productName'>): Promise<void> {
   if (Platform.OS === 'web') throw new Error('Web版では通知を利用できません。スマートフォンでお試しください。');
-  await ensureAndroidChannel();
-  await Notifications.scheduleNotificationAsync({
+  syncQueue = syncQueue.catch(() => undefined).then(async () => {
+    if (isDataErasing()) throw new Error('削除中は通知を予約できません。');
+    await ensureAndroidChannel();
+    if (isDataErasing()) throw new Error('削除中は通知を予約できません。');
+    await Notifications.scheduleNotificationAsync({
     content: { title: food ? `「${getFoodDisplayName(food)}」のテスト通知` : 'たべどき！！のテスト通知',
       body: food ? 'タップすると食材の詳細画面を開きます。' : '期限通知を受け取る準備ができました。',
       data: { kind: 'tabedoki-test', ...(food ? { foodId: food.id } : {}) }, sound: 'default' },
     trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 3,
       channelId: Platform.OS === 'android' ? CHANNEL_ID : undefined },
+    });
   });
+  return syncQueue;
+}
+
+export function clearNotificationsForErasure(rawIds: string | null): Promise<void> {
+  const known = new Set<string>();
+  try {
+    const parsed = JSON.parse(rawIds ?? '{}');
+    if (parsed && typeof parsed === 'object') for (const value of Object.values(parsed)) {
+      for (const id of Array.isArray(value) ? value : [value]) if (typeof id === 'string') known.add(id);
+    }
+  } catch { /* Managed OS metadata still identifies notifications when the index is corrupt. */ }
+  const managed = (request: Notifications.NotificationRequest) => isManaged(request, known) || request.content.data?.kind === 'tabedoki-test';
+  syncQueue = syncQueue.catch(() => undefined).then(async () => {
+    if (Platform.OS === 'web') return;
+    for (const request of await Notifications.getAllScheduledNotificationsAsync()) if (managed(request)) await Notifications.cancelScheduledNotificationAsync(request.identifier);
+    for (const notification of await Notifications.getPresentedNotificationsAsync()) if (managed(notification.request)) await Notifications.dismissNotificationAsync(notification.request.identifier);
+    const last = Notifications.getLastNotificationResponse();
+    if (last && managed(last.notification.request)) Notifications.clearLastNotificationResponse();
+    if ((await Notifications.getAllScheduledNotificationsAsync()).some(managed)
+      || (await Notifications.getPresentedNotificationsAsync()).some((item) => managed(item.request))) throw new Error('削除できていない通知があります。削除を再試行してください。');
+  });
+  return syncQueue;
 }
 export async function getNotificationStatusSummary(): Promise<NotificationStatusSummary> {
   if (Platform.OS === 'web') return { permission: 'unsupported', scheduledCount: 0 };

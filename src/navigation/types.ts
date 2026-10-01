@@ -1,5 +1,5 @@
 import { NavigatorScreenParams } from '@react-navigation/native';
-import { StorageLocation } from '../types';
+import { ProductSource, StorageLocation } from '../types';
 
 export type MainTabParamList = {
   Home: undefined;
@@ -20,6 +20,7 @@ export type RootStackParamList = {
         initialExpiryDate?: string;
         initialMemo?: string;
         initialBarcode?: string;
+        initialProductSource?: ProductSource;
         allowProductSharing?: boolean;
         initialCategory?: string;
         initialTags?: string[];
@@ -34,4 +35,6 @@ export type RootStackParamList = {
   AddRecipe: { recipeId?: string } | undefined;
   ShoppingList: undefined;
   Statistics: undefined;
+  AppInformation: { section: 'privacy' | 'services' };
+  OssLicenses: undefined;
 };

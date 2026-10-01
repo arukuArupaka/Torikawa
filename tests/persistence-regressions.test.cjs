@@ -34,6 +34,7 @@ const sharedPayloads = [];
 let sharedConfigured = true;
 let shareFailure = false;
 const productCorrections = [];
+const savedProducts = [];
 let correctionFailure = false;
 const nativeMock = {
   AppState: { addEventListener: () => ({ remove() {} }) },
@@ -56,7 +57,7 @@ Module._load = function (request, ...args) {
   if (request.endsWith('/services/notificationService')) return { queueNotificationSync: async () => {} };
   if (request.endsWith('/services/imageStorage')) return { deleteStoredFoodImage: () => {}, persistFoodImage: (uri) => uri };
   if (request.endsWith('/services/learnedProductService')) return {
-    saveLearnedProduct: async () => {},
+    saveLearnedProduct: async (value) => { savedProducts.push(structuredClone(value)); },
     correctLearnedProduct: async (value) => {
       productCorrections.push(structuredClone(value));
       if (correctionFailure) throw new Error('disk full');
@@ -64,10 +65,11 @@ Module._load = function (request, ...args) {
   };
   if (request.endsWith('/services/sharedProductService')) return {
     isSharedProductsConfigured: () => sharedConfigured,
-    shareProduct: async (product) => {
+    shareProduct: async (product, rulesVersion) => {
+      assert.equal(rulesVersion, require('../shared/productContract.js').SHARED_RULES_VERSION);
       sharedPayloads.push(structuredClone(product));
       if (shareFailure) throw new Error('offline');
-      return 'created';
+      return 'pending';
     },
   };
   return originalLoad.call(this, request, ...args);
@@ -95,11 +97,39 @@ async function mount() {
   return renderer;
 }
 function reset() {
+  // The interaction regressions intentionally exercise the sample inventory.
+  process.env.EXPO_PUBLIC_DEMO_DATA = 'true';
   store.clear(); writes.length = 0;
   readFailure = false; writeFailure = false; holdNextWrite = false;
   sharedPayloads.length = 0; sharedConfigured = true; shareFailure = false;
   productCorrections.length = 0; correctionFailure = false;
+  savedProducts.length = 0;
 }
+
+test('barcode registration carries product attribution into inventory and learned defaults; replacing a photo removes its old image credit', async (t) => {
+  reset();
+  store.set(storageKeys.foods, '[]');
+  const source = { provider: 'open-food-facts', barcode: '4909999900020', productUrl: 'https://world.openfoodfacts.org/product/4909999900020',
+    fetchedAt: '2026-10-01T00:00:00.000Z', image: { url: 'https://images.openfoodfacts.org/images/products/test/front_ja.3.200.jpg', author: 'contributor', license: 'CC-BY-SA-3.0' } };
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(AddFoodScreen, {
+    navigation: { navigate() {} }, route: { params: { initialName: 'テスト牛乳', initialProductName: 'テスト牛乳', initialIngredientName: '牛乳',
+      initialCategory: '乳製品', initialBarcode: source.barcode, initialImage: source.image.url, initialProductSource: source } },
+  }))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  await act(async () => renderer.root.findByType('PrimaryButton').props.onPress());
+  assert.equal(context.foods[0].productSource.image.author, 'contributor');
+  assert.deepEqual(savedProducts[0].productSource, context.foods[0].productSource);
+  const id = context.foods[0].id;
+  await act(async () => renderer.update(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(AddFoodScreen, {
+    navigation: { goBack() {} }, route: { params: { foodId: id } },
+  }))));
+  await act(async () => renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((text) => text.props.children === '写真・カテゴリ・購入日・メモを編集')).props.onPress());
+  await act(async () => renderer.root.findByType('FoodImagePicker').props.onChange('file:///user-photo.jpg'));
+  await act(async () => renderer.root.findByType('PrimaryButton').props.onPress());
+  assert.equal(context.foods[0].productSource.image, undefined);
+  assert.equal(context.foods[0].productSource.productUrl, source.productUrl);
+});
 
 test('phase 2 cooking displays every lot, allocates by expiry and persists a single operation after double confirmation', async (t) => {
   reset(); alerts.length = 0;
@@ -232,11 +262,14 @@ test('invalid stored food shape does not overwrite valid other collections', asy
   assert.equal(store.get(storageKeys.recipes), '[]');
   await act(async () => renderer.unmount());
 });
-test('first launch still loads and persists initial data', async () => {
+test('ordinary first launch persists empty personal inventory', async () => {
   reset();
+  delete process.env.EXPO_PUBLIC_DEMO_DATA;
   const renderer = await mount();
   assert.equal(context.isReady, true);
-  assert.ok(context.foods.length > 0);
+  assert.equal(context.foods.length, 0);
+  assert.equal(context.shoppingItems.length, 0);
+  assert.equal(context.notificationSettings.enabled, false);
   assert.ok(store.has(storageKeys.foods));
   await act(async () => renderer.unmount());
 });
@@ -899,6 +932,8 @@ test('sharing is opt-in; saving without consent never publishes a product', asyn
   const { renderer, save, destinations } = await mountSharedForm(t);
   const choice = renderer.root.findByProps({ accessibilityRole: 'checkbox' });
   assert.equal(choice.props.accessibilityState.checked, false);
+  assert.match(choice.props.accessibilityLabel, /投稿ルールに同意/);
+  assert.equal(renderer.root.findAllByType('SharedProductRules').length, 1);
   await act(async () => save());
   assert.equal(sharedPayloads.length, 0);
   assert.equal(context.foods.length, 1);
@@ -921,7 +956,7 @@ test('failed sharing keeps food saved; retry and double taps never duplicate the
   assert.equal(sharedPayloads.length, 2);
   assert.deepEqual(sharedPayloads[0], sharedPayloads[1]);
   assert.equal(context.foods.length, 1);
-  assert.ok(renderer.root.findAllByType('Text').some((node) => String(node.props.children).includes('商品情報を共有しました')));
+  assert.ok(renderer.root.findAllByType('Text').some((node) => String(node.props.children).includes('管理者の確認後に公開')));
 });
 
 test('external product registration does not offer to republish provider data', async (t) => {

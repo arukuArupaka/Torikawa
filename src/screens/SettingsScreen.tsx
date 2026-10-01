@@ -6,6 +6,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { EraseDataControl } from '../components/EraseDataControl';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { colors, radius, spacing } from '../constants/theme';
@@ -409,6 +410,12 @@ export function SettingsScreen({ navigation }: Props) {
           </Text>
         </View>
 
+        <EraseDataControl disabled={isBackingUp || isRestoring || savingNotifications || isNotificationSyncing} />
+        <Text style={styles.sectionLabel}>このアプリについて</Text>
+        <PrimaryButton icon="shield-checkmark-outline" label="データの取り扱い・お問い合わせ" variant="outline"
+          onPress={() => navigation.navigate('AppInformation', { section: 'privacy' })} />
+        <PrimaryButton icon="information-circle-outline" label="外部サービス・ライセンス" variant="outline"
+          onPress={() => navigation.navigate('AppInformation', { section: 'services' })} />
         <View style={styles.about}>
           <Text style={styles.appName}>たべどき！！</Text>
           <Text style={styles.version}>バックアップ・復元 v1.20.0</Text>

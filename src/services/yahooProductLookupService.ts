@@ -1,9 +1,11 @@
 import { BarcodeProduct } from '../data/productCatalog';
+import { publicHttpsUrl } from '../constants/publication';
 import { getFoodRegistrationDefaults } from '../utils/foodRegistrationDefaults';
 import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
 
 type YahooShoppingHit = {
   name?: string;
+  url?: string;
   description?: string;
   janCode?: string;
   image?: {
@@ -80,6 +82,7 @@ export async function lookupYahooProductByBarcode(barcode: string): Promise<Barc
       || hit.image?.medium
       || hit.image?.small
       || fallbackImage;
+    const productUrl = publicHttpsUrl(hit.url);
 
     return {
       barcode,
@@ -89,6 +92,9 @@ export async function lookupYahooProductByBarcode(barcode: string): Promise<Barc
       ingredientName: normalized.ingredientName,
       tags: normalized.tags,
       storage: getFoodRegistrationDefaults({ ingredientName: normalized.ingredientName, category: normalized.category }).storage,
+      ...(productUrl ? { productSource: {
+        provider: 'yahoo-shopping' as const, barcode, productUrl, fetchedAt: new Date().toISOString(),
+      } } : {}),
     };
   } finally {
     clearTimeout(timeout);

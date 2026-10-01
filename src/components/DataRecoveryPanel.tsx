@@ -5,6 +5,7 @@ import { useAppData } from '../context/AppDataContext';
 import { pickBackup, shareRecoveryData } from '../services/backupService';
 import { colors, spacing } from '../constants/theme';
 import { PrimaryButton } from './PrimaryButton';
+import { EraseDataControl } from './EraseDataControl';
 
 export function DataRecoveryPanel() {
   const { loadError, retryLoad, restoreAppData } = useAppData();
@@ -56,6 +57,7 @@ export function DataRecoveryPanel() {
     <PrimaryButton label="原本をファイルに退避" disabled={busy} onPress={() => void exportOriginal()} variant="outline" />
     <PrimaryButton label="バックアップから復元" disabled={busy} onPress={() => void chooseBackup()} variant="outline" />
     <Text style={styles.note}>原本ファイルには在庫やメモなどの個人データが含まれます。写真は端末内の参照情報のみで、画像本体は含まれません。調査用ファイルとして安全な場所に保管してください。</Text>
+    <EraseDataControl disabled={busy} />
   </ScrollView>;
 }
 

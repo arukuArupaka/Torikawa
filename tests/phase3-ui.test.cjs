@@ -9,6 +9,7 @@ const platform = { OS: 'ios' };
 const alerts = [];
 let update = async () => {}, permission = true, statusFailure = false, pickerFailure = false, permissionFailure = false;
 let pickerAsset = { uri: 'picked.jpg', width: 1000, height: 1000, fileSize: 100 };
+let pickerOptions;
 const data = { foods: [], recipes: [], shoppingItems: [], notificationSettings: { enabled: false, daysBeforeList: [0], time: '18:00' },
   notificationSyncError: null, isNotificationSyncing: false, resyncNotifications: async () => {},
   updateNotificationSettings: (...args) => update(...args), restoreAppData: async () => {} };
@@ -30,8 +31,8 @@ Module._load = function(request, ...args) {
   if (request === 'expo-image-picker') return {
     requestCameraPermissionsAsync: async () => { if (permissionFailure) throw Error('camera failed'); return { granted: permission }; },
     requestMediaLibraryPermissionsAsync: async () => ({ granted: permission }),
-    launchCameraAsync: async () => { if (pickerFailure) throw Error('picker failed'); return { canceled: false, assets: [pickerAsset] }; },
-    launchImageLibraryAsync: async () => ({ canceled: false, assets: [pickerAsset] }),
+    launchCameraAsync: async (options) => { pickerOptions = options; if (pickerFailure) throw Error('picker failed'); return { canceled: false, assets: [pickerAsset] }; },
+    launchImageLibraryAsync: async (options) => { pickerOptions = options; return { canceled: false, assets: [pickerAsset] }; },
   };
   return original.call(this, request, ...args);
 };
@@ -93,4 +94,31 @@ test('photo permission rejection, API failures and oversized assets preserve the
   pickerFailure = false; pickerAsset.fileSize = 6 * 1024 * 1024; await pick(); assert.match(alerts.at(-1)[1], /5MB/);
   pickerAsset.fileSize = 100; await pick(); assert.deepEqual(selected, ['picked.jpg']);
   await act(async () => renderer.unmount());
+});
+
+test('web photo selection stores portable image content and preserves the old photo on invalid or unreadable data', async () => {
+  reset(); platform.OS = 'web'; const selected = [], previousAsset = pickerAsset; let renderer;
+  const pick = async () => {
+    await act(async () => renderer.root.findByType('Pressable').props.onPress());
+    await act(async () => { alerts.at(-1)[2].find((button) => button.text === 'ライブラリから選ぶ').onPress(); await flush(); });
+  };
+  try {
+    await act(async () => { renderer = create(React.createElement(FoodImagePicker, { image: 'original.jpg', onChange: (uri) => selected.push(uri) })); });
+    pickerAsset = { uri: 'blob:temporary-photo', width: 100, height: 100, fileSize: 4, mimeType: 'image/png', base64: 'YWJjZA==' };
+    await pick();
+    assert.equal(pickerOptions.base64, true);
+    assert.deepEqual(selected, ['data:image/png;base64,YWJjZA==']);
+    assert.equal(JSON.parse(JSON.stringify({ image: selected[0] })).image, 'data:image/png;base64,YWJjZA==');
+    pickerAsset = { ...pickerAsset, base64: undefined }; await pick();
+    assert.match(alerts.at(-1)[1], /写真の保存内容を読み込めません/);
+    pickerAsset = { ...pickerAsset, mimeType: 'image/heic', base64: 'YWJjZA==' }; await pick();
+    assert.match(alerts.at(-1)[1], /JPEG・PNG・WebP・GIF/);
+    pickerAsset = { ...pickerAsset, mimeType: 'image/png', base64: 'broken' }; await pick();
+    assert.equal(selected.length, 1);
+    pickerAsset = { ...pickerAsset, fileSize: undefined, base64: Buffer.alloc(5 * 1024 * 1024 + 1).toString('base64') }; await pick();
+    assert.match(alerts.at(-1)[1], /5MB/); assert.equal(selected.length, 1);
+  } finally {
+    pickerAsset = previousAsset; reset();
+    if (renderer) await act(async () => renderer.unmount());
+  }
 });

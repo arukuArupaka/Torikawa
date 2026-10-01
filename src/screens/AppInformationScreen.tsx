@@ -1,0 +1,87 @@
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Screen } from '../components/Screen';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { SharedProductRules } from '../components/SharedProductRules';
+import { dataHandlingSections, getPublicationInformation } from '../constants/publication';
+import { colors, radius, spacing } from '../constants/theme';
+import { useAppAlert } from '../context/AppAlertContext';
+import { RootStackParamList } from '../navigation/types';
+
+type Props = NativeStackScreenProps<RootStackParamList, 'AppInformation'>;
+
+export function AppInformationScreen({ navigation, route }: Props) {
+  const alert = useAppAlert();
+  const publication = getPublicationInformation();
+  const privacy = route.params.section === 'privacy';
+  const open = async (url: string) => {
+    try { await Linking.openURL(url); }
+    catch { alert('リンクを開けませんでした', '通信環境や、ブラウザー・メールアプリの設定を確認してください。'); }
+  };
+  const link = (label: string, url: string) => (
+    <Pressable accessibilityRole="link" accessibilityLabel={label} onPress={() => void open(url)} style={styles.link}>
+      <Text style={styles.linkText}>{label}</Text>
+    </Pressable>
+  );
+  return (
+    <Screen bottomSafe>
+      <ScreenHeader onBack={navigation.goBack} title={privacy ? 'データの取り扱い' : '出典・ライセンス'} />
+      <ScrollView contentContainerStyle={styles.content}>
+        {privacy ? <>
+          {dataHandlingSections.map(({ title, body }) => <View key={title} style={styles.card}>
+            <Text accessibilityRole="header" style={styles.title}>{title}</Text>
+            <Text style={styles.body}>{body}</Text>
+          </View>)}
+          <View style={styles.card}><SharedProductRules /></View>
+          <View style={styles.card}>
+            <Text accessibilityRole="header" style={styles.title}>プライバシーポリシー・お問い合わせ</Text>
+            <Text style={styles.body}>運営者：{publication.operator ?? '公開準備中'}</Text>
+            {publication.privacyUrl ? link('プライバシーポリシーを開く', publication.privacyUrl)
+              : <Text style={styles.body}>公開用プライバシーポリシーは準備中です。この画面は現在のアプリの動作説明です。</Text>}
+            {publication.supportEmail ? <>
+              <Text selectable style={styles.body}>{publication.supportEmail}</Text>
+              {link('メールで問い合わせる', `mailto:${publication.supportEmail}`)}
+            </> : <Text style={styles.body}>公開用の問い合わせ先は準備中です。</Text>}
+          </View>
+        </> : <>
+          <View style={styles.card}>
+            <Text accessibilityRole="header" style={styles.title}>Open Food Facts</Text>
+            <Text style={styles.body}>商品データの提供：Open Food Factsとその投稿者。データベースはODbL、個々の内容はDatabase Contents License、商品画像はCC BY-SA 3.0で提供されています。</Text>
+            {link('Open Food Facts', 'https://world.openfoodfacts.org/')}
+            {link('データ・画像のライセンス案内', 'https://openfoodfacts.github.io/openfoodfacts-server/api/tutorials/license-be-on-the-legal-side/')}
+            {link('ODbL 1.0', 'https://opendatacommons.org/licenses/odbl/1-0/')}
+            {link('Database Contents License 1.0', 'https://opendatacommons.org/licenses/dbcl/1-0/')}
+            {link('CC BY-SA 3.0', 'https://creativecommons.org/licenses/by-sa/3.0/')}
+          </View>
+          <View style={styles.card}>
+            <Text accessibilityRole="header" style={styles.title}>Yahoo!ショッピング</Text>
+            <Text style={styles.body}>接続設定がある場合に商品検索を利用します。</Text>
+            <Text selectable style={styles.body}>Webサービス by Yahoo! JAPAN （https://developer.yahoo.co.jp/sitemap/）</Text>
+            {link('Yahoo!デベロッパーネットワーク', 'https://developer.yahoo.co.jp/sitemap/')}
+          </View>
+          <View style={styles.card}>
+            <Text accessibilityRole="header" style={styles.title}>イメージ写真</Text>
+            <Text style={styles.body}>食材のイメージ写真の一部はUnsplashの画像を使用しています。実際に登録した商品・食材の写真とは異なる場合があります。</Text>
+            {link('Unsplashのライセンス', 'https://unsplash.com/license')}
+          </View>
+          <View style={styles.card}>
+            <Text accessibilityRole="header" style={styles.title}>オープンソースソフトウェア</Text>
+            <Text style={styles.body}>このアプリはReact、React Native、Expoなどを使用しています。著作権表示・ライセンス本文を確認できます。</Text>
+            <Pressable accessibilityRole="button" onPress={() => navigation.navigate('OssLicenses')} style={styles.link}>
+              <Text style={styles.linkText}>OSSライセンスを確認する</Text>
+            </Pressable>
+          </View>
+        </>}
+      </ScrollView>
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create({
+  content: { gap: spacing.md, padding: spacing.md, paddingBottom: spacing.xl },
+  card: { backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, gap: spacing.sm },
+  title: { color: colors.text, fontSize: 16, fontWeight: '700' },
+  body: { color: colors.text, fontSize: 14, lineHeight: 23 },
+  link: { minHeight: 44, justifyContent: 'center', paddingVertical: spacing.sm },
+  linkText: { color: colors.primaryDark, fontSize: 14, lineHeight: 22, textDecorationLine: 'underline' },
+});

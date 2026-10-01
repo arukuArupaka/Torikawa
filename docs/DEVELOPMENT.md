@@ -27,7 +27,9 @@ VS Codeを使う場合は、リポジトリのフォルダーで `code .` を実
 | Expoの構成を診断する | `npx.cmd expo-doctor` |
 | 全プラットフォームを書き出す | `npx.cmd expo export --platform all` |
 
-Expo起動中は `a` でAndroidエミュレーター、macOSでは `i` でiOSシミュレーター、`m` で開発メニューを開けます。WindowsではiOSシミュレーターは使えません。実機iPhoneではExpo Goを利用します。
+Expo起動中は `a` でAndroidエミュレーター、macOSでは `i` でiOSシミュレーター、`m` で開発メニューを開けます。WindowsではiOSシミュレーターは使えません。実機iPhoneのExpo Goは、PCのExpo CLIと同じExpoアカウントにログインする必要があります。同じWi-Fiでも別のアカウントでは開けません。[公式の説明](https://docs.expo.dev/troubleshooting/expo-go-sign-in-required/)
+
+友達のiPhoneへ渡す場合は、専用アプリのTestFlight／Ad Hoc配布、または [Webテスト版](web-friend-testing.md) を使います。Web版では期限通知・ネイティブ固有の権限を確認できません。
 
 依存を追加する場合は `npx.cmd expo install パッケージ名` を使い、SDKに合うバージョンを選びます。通常のセットアップでは、READMEの `npm.cmd ci` だけで必要な依存を導入できます。
 
@@ -43,10 +45,16 @@ Copy-Item .env.example .env
 | --- | --- |
 | `EXPO_PUBLIC_YAHOO_SHOPPING_APP_ID` | 利用するYahoo!ショッピング商品検索APIのアプリケーションID |
 | `EXPO_PUBLIC_SHARED_PRODUCTS_URL` | 共有APIのベースURL。ローカルPCでは `http://127.0.0.1:8787` |
+| `EXPO_PUBLIC_OPERATOR_NAME` | 公開する運営者名 |
+| `EXPO_PUBLIC_SUPPORT_EMAIL` | 公開する問い合わせ先メールアドレス |
+| `EXPO_PUBLIC_PRIVACY_POLICY_URL` | 正式なプライバシーポリシーのHTTPS URL |
+| `EXPO_PUBLIC_DEMO_DATA` | 開発用サンプル在庫・商品を使う場合だけ `true`。通常・公開版は `false` |
 
 `.env` / `.env.local` はGit対象外です。設定後はExpoを再起動し、配布アプリへ反映する場合は再ビルド・再配布します。既存の `.env.local` に同じ変数がある場合は、そちらの設定も確認してください。
 
 `EXPO_PUBLIC_` の値はアプリから参照できる公開設定です。秘密鍵・DB認証情報は入れません。共有APIのサーバー設定は [server/README.md](../server/README.md) にまとめています。
+
+Yahoo Client IDも現行実装では配布物に含まれます。API規約上のIDの扱い・公開用途は未確認であり、公開設定にできることを利用許諾とは扱いません。[Phase 5：公開準備](phase5-publication.md)を確認してください。連絡先・ポリシーが未設定の場合、アプリ内では準備中と表示します。
 
 ## ファイル構成
 
@@ -92,7 +100,7 @@ Torikawa/
 
 ## 検証
 
-自動テストでは、保存・復元、材料照合・人数換算・在庫不足、確認ダイアログ、共有APIの個人項目拒否や再送などを確認します。型チェックとExpoの書き出しも合わせて実行できます。
+自動テストでは、保存・復元、材料照合・人数換算・在庫不足、確認ダイアログ、共有APIの個人項目拒否、投稿同意・旧DB移行・承認前後の検索・通報と管理操作・再送などを確認します。型チェックとExpoの書き出しも合わせて実行できます。
 
 実機では次の流れを確認してください。
 
@@ -117,3 +125,5 @@ Torikawa/
 | スマホからローカル共有APIへ接続できない | スマホのlocalhostはスマホ自身。実機用にはHTTPSの接続先を設定 |
 
 共有APIの配置・永続ディスク・CORS・投稿制限・バックアップは [共有商品DBの運用手順](../server/README.md) を参照してください。
+
+別の接続先を指定してExpo exportする場合、キャッシュに前の値が残ることがあります。接続先が反映されないときは `--clear` を付けて書き出し直し、生成物に意図した公開URLが含まれることを確認してください。確認用のURL・デモ設定を公開ビルドへ残さないでください。

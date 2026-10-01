@@ -43,6 +43,7 @@ function food(value: unknown): boolean {
   return name(value.id) && name(value.name)
     && optional(value.sourceShoppingItemId, name)
     && optional(value.barcode, (v) => v === null || text(v) && /^\d{8,14}$/.test(v))
+    && optional(value.productSource, productSource)
     && optional(value.revision, (v) => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0)
     && optional(value.consumptionHistory, consumptionHistory)
     && optional(value.status, (v) => v === 'active' || v === 'used' || v === 'disposed')
@@ -103,7 +104,23 @@ function catalog(value: unknown): boolean {
   return isObject(value) && Object.entries(value).every(([barcode, item]) =>
     /^\d{8,14}$/.test(barcode) && isObject(item) && item.barcode === barcode
     && name(item.name) && text(item.image) && text(item.category) && storage(item.storage)
-    && optional(item.ingredientName, name) && optional(item.tags, strings));
+    && optional(item.ingredientName, name) && optional(item.tags, strings)
+    && optional(item.productSource, productSource));
+}
+
+function productSource(value: unknown): boolean {
+  if (!isObject(value) || !['open-food-facts', 'yahoo-shopping'].includes(value.provider as string)
+    || !text(value.barcode) || !/^\d{8,14}$/.test(value.barcode) || !isTimestamp(value.fetchedAt)
+    || !optional(value.modified, (v) => typeof v === 'boolean') || !httpsUrl(value.productUrl)) return false;
+  if (value.provider === 'open-food-facts' && value.productUrl !== `https://world.openfoodfacts.org/product/${value.barcode}`) return false;
+  return optional(value.image, (v) => isObject(v) && value.provider === 'open-food-facts'
+    && httpsUrl(v.url) && new URL(v.url as string).hostname === 'images.openfoodfacts.org'
+    && name(v.author) && (v.author as string).length <= 120 && v.license === 'CC-BY-SA-3.0');
+}
+function httpsUrl(value: unknown): boolean {
+  if (!text(value) || value.length > 2048) return false;
+  try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password; }
+  catch { return false; }
 }
 
 export type StoredDataKind = 'foods' | 'recipes' | 'shoppingItems' | 'notificationSettings' | 'learnedProducts';

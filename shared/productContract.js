@@ -2,6 +2,8 @@
 
 const categories = ['vegetables', 'meat', 'seafood', 'dairy', 'eggs', 'staples', 'seasonings', 'beverages', 'other'];
 const fields = ['barcode', 'name', 'ingredientName', 'category'];
+const SHARED_RULES_VERSION = '2026-10-01';
+const reportReasons = ['incorrect', 'personal_information', 'inappropriate', 'rights'];
 
 function normalizeSharedBarcode(value) {
   if (typeof value !== 'string') return null;
@@ -21,4 +23,10 @@ function validateSharedProduct(value) {
   return { barcode, name: value.name.trim(), ingredientName: value.ingredientName.trim(), category: value.category };
 }
 
-module.exports = { normalizeSharedBarcode, validateSharedProduct };
+function validateProductReport(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || Object.keys(value).length !== 1 || !Object.prototype.hasOwnProperty.call(value, 'reason') || !reportReasons.includes(value.reason)) return null;
+  return { reason: value.reason };
+}
+
+module.exports = { normalizeSharedBarcode, validateSharedProduct, SHARED_RULES_VERSION, reportReasons, validateProductReport };

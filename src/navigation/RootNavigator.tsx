@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { DataRecoveryPanel } from '../components/DataRecoveryPanel';
+import { DataErasurePanel } from '../components/DataErasurePanel';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../constants/theme';
 import { useAppData } from '../context/AppDataContext';
@@ -16,6 +17,8 @@ import { RecipesScreen } from '../screens/RecipesScreen';
 import { RecipeDetailScreen } from '../screens/RecipeDetailScreen';
 import { AddRecipeScreen } from '../screens/AddRecipeScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { AppInformationScreen } from '../screens/AppInformationScreen';
+import { OssLicensesScreen } from '../screens/OssLicensesScreen';
 import { ShoppingListScreen } from '../screens/ShoppingListScreen';
 import { StatisticsScreen } from '../screens/StatisticsScreen';
 import { MainTabParamList, RootStackParamList } from './types';
@@ -73,12 +76,12 @@ function MainTabs() {
 }
 
 export function RootNavigator() {
-  const { isReady, isRestoring, loadError, saveError, retrySave, notificationSyncError, isNotificationSyncing, resyncNotifications } = useAppData();
+  const { isReady, isRestoring, erasurePending, erasureError, loadError, saveError, retrySave, notificationSyncError, isNotificationSyncing, resyncNotifications } = useAppData();
 
   if (!isReady) {
     return (
       <SafeAreaView style={styles.loading}>
-        {isRestoring ? <>
+        {erasurePending || erasureError ? <DataErasurePanel /> : isRestoring ? <>
           <ActivityIndicator color={colors.primary} size="large" />
           <Text style={styles.loadErrorText}>バックアップを復元しています…</Text>
         </> : loadError ? (
@@ -115,6 +118,8 @@ export function RootNavigator() {
         <Stack.Screen component={AddRecipeScreen} name="AddRecipe" options={{ presentation: 'modal' }} />
         <Stack.Screen component={ShoppingListScreen} name="ShoppingList" />
         <Stack.Screen component={StatisticsScreen} name="Statistics" />
+        <Stack.Screen component={AppInformationScreen} name="AppInformation" />
+        <Stack.Screen component={OssLicensesScreen} name="OssLicenses" />
       </Stack.Navigator>
     </View>
   );

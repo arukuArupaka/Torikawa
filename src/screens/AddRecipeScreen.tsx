@@ -1,7 +1,7 @@
 import { useAppAlert } from '../context/AppAlertContext';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -23,6 +23,7 @@ import { colors, radius, spacing } from '../constants/theme';
 import { useAppData } from '../context/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
 import { persistFoodImage } from '../services/imageStorage';
+import { getStorageEpoch, assertStorageEpoch } from '../services/storage';
 import { NewRecipe, RecipeCategory } from '../types';
 import { inferRecipeCategory } from '../utils/recipeCategory';
 import { isValidServings, parseServingsInput } from '../utils/recipeServings';
@@ -74,6 +75,7 @@ export function AddRecipeScreen({ navigation, route }: Props) {
   );
   const [submitted, setSubmitted] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const formEpoch = useRef(getStorageEpoch());
 
   const parsedMinutes = Number(minutes);
   const parsedServings = parseServingsInput(servings);
@@ -100,6 +102,7 @@ export function AddRecipeScreen({ navigation, route }: Props) {
   };
 
   const handleSave = () => {
+    try { assertStorageEpoch(formEpoch.current); } catch { return; }
     setSubmitted(true);
     const validIngredients = ingredients.filter((ingredient) => ingredient.name.trim());
     const validSteps = steps.filter((step) => step.text.trim());

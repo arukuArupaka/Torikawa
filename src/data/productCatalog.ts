@@ -1,4 +1,4 @@
-import { StorageLocation } from '../types';
+import { ProductSource, StorageLocation } from '../types';
 import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
 
 export type BarcodeProduct = {
@@ -9,6 +9,7 @@ export type BarcodeProduct = {
   ingredientName: string;
   tags: string[];
   storage: StorageLocation;
+  productSource?: ProductSource;
 };
 
 const sampleMilkInfo = normalizeProductToIngredient('明治おいしい牛乳');
@@ -26,5 +27,6 @@ export const sampleMilkProduct: BarcodeProduct = {
 const productCatalog: BarcodeProduct[] = [sampleMilkProduct];
 
 export function findProductByBarcode(barcode: string): BarcodeProduct | null {
+  if (process.env.EXPO_PUBLIC_DEMO_DATA !== 'true') return null;
   return productCatalog.find((product) => product.barcode === barcode) ?? null;
 }
