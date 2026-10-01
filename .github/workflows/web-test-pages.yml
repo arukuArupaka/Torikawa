@@ -1,0 +1,53 @@
+name: Publish web test
+
+# Publish explicitly so unfinished changes on main do not replace the test app.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+      - name: Export isolated web test
+        id: export
+        run: node scripts/export-web-test.cjs --github-pages --base-path "$PAGES_BASE_PATH"
+        env:
+          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ steps.export.outputs.directory }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish web test
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -4,7 +4,30 @@
 
 Apple Developer Programに未登録でも、Safariで開けるテスト版を渡せます。今回のアクセス範囲は「URLを知っている人なら開ける」です。ログイン制限は付けません。在庫は各ブラウザーに保存され、他の利用者の在庫は共有されません。
 
-## 配布用ファイルを作る
+## GitHub Pagesで公開する（今回の配布先）
+
+既存の公開リポジトリ `arukuArupaka/Torikawa` を使います。公開先は `https://arukuArupaka.github.io/Torikawa/`、案内ページは同じURLの `test-guide.html` です。初回設定と公開処理が完了するまではアクセスできません。
+
+1. リポジトリの管理権限を持つアカウントで [Settings → Pages](https://github.com/arukuArupaka/Torikawa/settings/pages) を開く。
+2. **Build and deployment → Source** を **GitHub Actions** にする。リポジトリの公開範囲やメンバーの権限は変更しない。
+3. [Actions → Publish web test](https://github.com/arukuArupaka/Torikawa/actions/workflows/web-test-pages.yml) の **Run workflow** から `main` を選んで実行する。
+4. テスト・型チェック・Web export・deployがすべて成功し、公開URLでホームと案内ページが開くことを確認してから友達へ渡す。
+
+`.github/workflows/web-test-pages.yml` は手動実行だけにしています。通常のpushでは公開版を置き換えません。更新時は変更をpushした後、同じ **Run workflow** を実行します。在庫は同じサイト・ブラウザーの保存領域に残り、PCを起動し続ける必要はありません。
+
+GitHub Actionsはロックファイルで依存関係を導入し、テストと型チェックを通してから配布用ファイルだけをアップロードします。GitHub Pagesでは共有商品APIのサーバーは実行できません。
+
+手元で同じ構成を書き出す場合：
+
+```powershell
+node scripts/export-web-test.cjs --github-pages
+```
+
+`/Torikawa` を画像・JavaScript・案内リンクの先頭に付けます。別のリポジトリなら `--base-path /repository-name` を指定してください。配布用フォルダーには `.nojekyll` と `404.html` が入り、HTMLの `noindex` を設定します。これらはログイン制限ではなく、URLを知る人は開けます。
+
+初回設定にはリポジトリの管理権限が必要です。push権限だけのアカウントで設定画面が404になる場合は、所有者に上記1〜2を行ってもらいます。
+
+## Netlify向けの配布用ファイルを作る（別の方法）
 
 ```powershell
 node scripts/export-web-test.cjs
@@ -16,7 +39,9 @@ node scripts/export-web-test.cjs
 
 個人の在庫、SQLite DB、バックアップ、`.env`、`review/` は配布用フォルダーへコピーしません。アプリのコード・同梱画像と文章・OSS通知は含みます。素材や外部サービスの利用条件の確認状況は [Phase 5](phase5-publication.md) を参照してください。
 
-## Netlifyへ配置する
+## Netlifyへ配置する（別の方法）
+
+登録なしの一時公開もありますが、CLIの匿名公開は1時間以内にアカウントへ引き取らないと削除されます。継続利用にはアカウントへ引き取ってください。
 
 1. [Netlify](https://app.netlify.com/)のアカウントを確認し、必要なら登録する。プランの料金と上限を画面で確認する。
 2. ログインした状態で [Netlify Drop](https://app.netlify.com/drop) を開く。
@@ -39,11 +64,13 @@ node scripts/export-web-test.cjs
 
 期限通知、iPhoneアプリ固有の権限や保存領域の削除は、このWebテストでは確認できません。共有商品APIは別サービスなので、この静的サイトの配置だけでは動きません。
 
-公式手順：[ExpoのWeb配布](https://docs.expo.dev/guides/publishing-websites/) · [Netlifyの手動アップロード](https://docs.netlify.com/deploy/create-deploys/)
+公式手順：[Expo SDK 57のbaseUrl](https://docs.expo.dev/versions/v57.0.0/config/app/#baseurl) · [GitHub Pagesのワークフロー](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages) · [Netlifyの手動アップロード](https://docs.netlify.com/deploy/create-deploys/)
 
 ## 2026-10-01の準備・確認
 
-配布用フォルダーは `dist-web-test/site-nUqpS4`。48ファイルで、個人の在庫・DB・バックアップを含まず、手元の共有API接続先がJSに含まれないことを確認しました。ネット上へのアップロードはまだ行っていません。
+最初のNetlify向け配布用フォルダーは `dist-web-test/site-nUqpS4`。48ファイルで、個人の在庫・DB・バックアップを含まず、手元の共有API接続先がJSに含まれないことを確認しました。
+
+GitHub Pages向けは `dist-web-test/site-GidzY3`。自動テスト195件、型チェック、Web exportが合格し、`/Torikawa/` 配下でホーム・案内ページへの移動と戻る操作、内蔵レシピ8枚の画像表示を確認しました。現在の認証ではpush権限だけがあり、Pagesの初回設定と実際の公開URLでの確認は残ります。
 
 自動テスト195件、型チェック、Web exportが合格。選んだ写真を一時的なblob URLのまま保存せず、画像の内容を保存するよう修正しました。不正な画像や読み取り失敗時は元の写真を保持します。
 
