@@ -1,6 +1,7 @@
 name: Publish web test
 
-# Publish explicitly so unfinished changes on main do not replace the test app.
+# Webテスト版を手動で公開するための設定。
+# mainへのpushだけでは公開しない。
 on:
   workflow_dispatch:
 
