@@ -4,14 +4,18 @@ import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { CompositeScreenProps } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Pressable, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SectionHeader } from '../components/SectionHeader';
 import { SwipeableFoodCard } from '../components/SwipeableFoodCard';
+import { MotionIconButton } from '../components/MotionIconButton';
+import { SelectionHighlight } from '../components/SelectionHighlight';
 import { colors, radius, spacing } from '../constants/theme';
 import { useFoodData } from '../context/AppDataContext';
 import { useCurrentDay } from '../hooks/useCurrentDay';
+import { useViewModeFade } from '../hooks/useViewModeFade';
+import { useFoodStatusFeedback } from '../hooks/useFoodStatusFeedback';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { loadStoredValue, saveStoredValue, storageKeys } from '../services/storage';
 import { FoodItem } from '../types';
@@ -41,10 +45,14 @@ const viewModeOptions: { key: HomeViewMode; label: string }[] = [
 
 export function HomeScreen({ navigation }: Props) {
   const alert = useAppAlert();
+  const statusFeedback = useFoodStatusFeedback();
   const { foods, addShoppingItem, markFoodDisposed, markFoodUsed } = useFoodData();
   const [expiredOnly, setExpiredOnly] = useState(false);
   const [query, setQuery] = useState('');
   const [viewMode, setViewMode] = useState<HomeViewMode>('expiry');
+  const listMotion = useViewModeFade(viewMode);
+  const [viewModeWidth, setViewModeWidth] = useState(0);
+  const listMotionStyle = { opacity: listMotion.opacity, transform: [{ translateY: listMotion.translateY }] };
   const currentDay = useCurrentDay();
   const swipeGuideCheckStarted = useRef(false);
   const activeFoods = useMemo(
@@ -147,11 +155,11 @@ export function HomeScreen({ navigation }: Props) {
         `「${displayName}」を使い切ったとして記録しますか？`,
         [
           { text: 'キャンセル', style: 'cancel' },
-          { text: '記録だけ', onPress: () => markFoodUsed(food.id) },
+          { text: '記録だけ', onPress: () => markFoodUsed(food.id, statusFeedback(food, 'used')) },
           {
             text: '買い物リストにも追加',
             onPress: () => {
-              markFoodUsed(food.id);
+              markFoodUsed(food.id, statusFeedback(food, 'used', true));
               addToShoppingList();
             },
           },
@@ -168,7 +176,7 @@ export function HomeScreen({ navigation }: Props) {
         {
           text: 'OK',
           style: 'destructive',
-          onPress: () => markFoodDisposed(food.id),
+          onPress: () => markFoodDisposed(food.id, statusFeedback(food, 'disposed')),
         },
       ],
     );
@@ -192,11 +200,11 @@ export function HomeScreen({ navigation }: Props) {
         maxToRenderPerBatch={10}
         windowSize={7}
         stickySectionHeadersEnabled={false}
-        renderSectionHeader={({ section }) => <SectionHeader count={section.data.length} title={section.title} tone={section.tone} />}
-        renderItem={({ item: food }) => <View style={{ marginBottom: spacing.sm }}><SwipeableFoodCard food={food}
+        renderSectionHeader={({ section }) => <Animated.View style={listMotionStyle}><SectionHeader count={section.data.length} title={section.title} tone={section.tone} /></Animated.View>}
+        renderItem={({ item: food }) => <Animated.View style={[{ marginBottom: spacing.sm }, listMotionStyle]}><SwipeableFoodCard food={food}
           onMarkDisposed={() => confirmStatusChange(food, 'disposed')}
           onMarkUsed={() => confirmStatusChange(food, 'used')}
-          onPress={() => navigation.navigate('FoodDetail', { foodId: food.id })} /></View>}
+          onPress={() => navigation.navigate('FoodDetail', { foodId: food.id })} /></Animated.View>}
         ListHeaderComponent={<>
         {expirySummary.expired > 0 ? <Pressable accessibilityRole="button" accessibilityLabel={`期限切れ${expirySummary.expired}件を確認`}
           accessibilityState={{ selected: expiredOnly }} aria-pressed={expiredOnly}
@@ -249,19 +257,17 @@ export function HomeScreen({ navigation }: Props) {
           <Pressable
             accessibilityLabel="バーコード登録"
             accessibilityRole="button"
-            onPress={() => navigation.navigate('MainTabs', { screen: 'Barcode' })}
+            onPress={() => navigation.navigate('Barcode')}
             style={styles.squareButton}
           >
             <Ionicons color={colors.text} name="barcode-outline" size={25} />
           </Pressable>
-          <Pressable
+          <MotionIconButton
             accessibilityLabel="食材を追加"
-            accessibilityRole="button"
             onPress={() => navigation.navigate('AddFood')}
+            size={27}
             style={[styles.squareButton, styles.addButton]}
-          >
-            <Ionicons color={colors.surface} name="add" size={27} />
-          </Pressable>
+          />
         </View>
 
         {expiredOnly ? <Pressable accessibilityRole="button" onPress={() => setExpiredOnly(false)} style={styles.expiredNotice}>
@@ -269,6 +275,8 @@ export function HomeScreen({ navigation }: Props) {
         </Pressable> : null}
 
         <View style={styles.viewModeTabs}>
+          <View style={styles.viewModeRow} onLayout={(event) => setViewModeWidth(event.nativeEvent.layout.width / viewModeOptions.length)}>
+          <SelectionHighlight index={viewModeOptions.findIndex((option) => option.key === viewMode)} width={viewModeWidth} />
           {viewModeOptions.map((option) => {
             const selected = viewMode === option.key;
             return (
@@ -277,12 +285,13 @@ export function HomeScreen({ navigation }: Props) {
                 accessibilityState={{ selected }} aria-pressed={selected}
                 key={option.key}
                 onPress={() => setViewMode(option.key)}
-                style={[styles.viewModeTab, selected && styles.selectedViewModeTab]}
+                style={styles.viewModeTab}
               >
                 <Text style={[styles.viewModeText, selected && styles.selectedViewModeText]}>{option.label}</Text>
               </Pressable>
             );
           })}
+          </View>
         </View>
 
         {activeFoods.length > 0 ? (
@@ -353,9 +362,9 @@ const styles = StyleSheet.create({
     width: 50,
   },
   addButton: { backgroundColor: colors.primary, borderColor: colors.primary },
-  viewModeTabs: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.sm, borderWidth: 1, flexDirection: 'row', marginTop: spacing.sm, padding: 3 },
+  viewModeTabs: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.sm, borderWidth: 1, marginTop: spacing.sm, padding: 3 },
+  viewModeRow: { flexDirection: 'row' },
   viewModeTab: { alignItems: 'center', borderRadius: 7, flex: 1, justifyContent: 'center', minHeight: 44, paddingVertical: 6 },
-  selectedViewModeTab: { backgroundColor: colors.primarySoft },
   viewModeText: { color: colors.textMuted, fontSize: 13, fontWeight: '700' },
   selectedViewModeText: { color: colors.primaryDark },
   swipeHint: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm, paddingHorizontal: 2, paddingVertical: 4 },

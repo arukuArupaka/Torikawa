@@ -7,6 +7,7 @@ import { FoodCategory } from '../types';
 import { foodCategoryLabels } from '../utils/foodCategory';
 import { getFoodRegistrationDefaults } from '../utils/foodRegistrationDefaults';
 import { getFoodFallbackImage } from '../utils/foodImages';
+import { withoutYahooImage } from '../utils/yahooImagePolicy';
 
 export type LearnedProductCatalog = Record<string, BarcodeProduct>;
 type StoredBarcodeProduct = Omit<BarcodeProduct, 'ingredientName' | 'tags'> & {
@@ -36,7 +37,7 @@ export async function findLearnedProduct(barcode: string): Promise<BarcodeProduc
   if (!product) return null;
   const normalized = normalizeProductToIngredient(product.name);
   return {
-    ...product,
+    ...withoutYahooImage(product),
     ingredientName: product.ingredientName?.trim() || normalized.ingredientName,
     tags: Array.isArray(product.tags) && product.tags.length > 0 ? product.tags : normalized.tags,
     category: product.category || normalized.categoryLabel,
@@ -47,7 +48,7 @@ export async function saveLearnedProduct(product: BarcodeProduct): Promise<void>
   await updateStoredValue<LearnedProductCatalog>(storageKeys.learnedProducts, (stored) => {
     const catalog = stored ?? {};
     validateStoredData('learnedProducts', catalog);
-    const image = copyImageForCatalog(product.image, product.barcode);
+    const image = copyImageForCatalog(withoutYahooImage(product).image, product.barcode);
     const next = { ...catalog, [product.barcode]: { ...product, image } };
     validateStoredData('learnedProducts', next);
     return next;
@@ -65,7 +66,7 @@ export async function correctLearnedProduct(correction: ProductCorrection): Prom
     const next = { ...catalog, [correction.barcode]: {
       barcode: correction.barcode, name: correction.name, ingredientName: correction.ingredientName,
       category: foodCategoryLabels[correction.category], tags: [correction.ingredientName],
-      image: previous?.image ?? getFoodFallbackImage(correction),
+      image: previous ? withoutYahooImage(previous).image : getFoodFallbackImage(correction),
       storage: previous?.storage ?? getFoodRegistrationDefaults(correction).storage,
       ...(previous?.productSource ? { productSource: { ...previous.productSource, modified: true } } : {}),
     } };

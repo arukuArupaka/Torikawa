@@ -14,6 +14,7 @@ import { migrateSampleRecipe } from '../utils/recipeMigration';
 import { isValidServings } from '../utils/recipeServings';
 
 import { validateSnapshot } from './dataValidation';
+import { withoutYahooImage } from '../utils/yahooImagePolicy';
 
 type StoredNotificationSettings = Partial<NotificationSettings> & { daysBefore?: number };
 type StoredRecipe = Omit<Recipe, 'category' | 'isFavorite' | 'createdAt'> & {
@@ -38,7 +39,7 @@ function normalizeFoods(storedFoods: StoredFoodItem[] | null): FoodItem[] {
   return source.map((food) => {
     const normalized = normalizeProductToIngredient(food.productName || food.ingredientName || food.name);
     return {
-      ...food,
+      ...withoutYahooImage(food),
       ...(food.barcode === undefined && /^バーコード: \d{8,14}$/.test(food.memo)
         ? { barcode: food.memo.slice('バーコード: '.length) } : {}),
       productName: food.productName?.trim() || null,

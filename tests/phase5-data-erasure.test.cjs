@@ -61,6 +61,7 @@ Module._load = function (request, ...args) {
   if (request === '@react-native-async-storage/async-storage') return adapter;
   if (request === 'expo-file-system') return { Directory, File, Paths: paths };
   if (request === 'expo-notifications') return notifications;
+  if (request === 'expo-constants') return { __esModule: true, default: { expoVersion: null, manifest2: null } };
   if (request === 'expo-document-picker') return {};
   if (request === 'expo-sharing') return { isAvailableAsync: async () => true, shareAsync: async () => { shared++; } };
   if (request === 'react-native') return {

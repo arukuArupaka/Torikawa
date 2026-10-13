@@ -2,101 +2,39 @@ import { BarcodeProduct } from '../data/productCatalog';
 import { publicHttpsUrl } from '../constants/publication';
 import { getFoodRegistrationDefaults } from '../utils/foodRegistrationDefaults';
 import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
+import { getFoodIcon } from '../utils/yahooImagePolicy';
+import { normalizeSharedBarcode } from '../../shared/productContract';
 
-type YahooShoppingHit = {
-  name?: string;
-  url?: string;
-  description?: string;
-  janCode?: string;
-  image?: {
-    small?: string;
-    medium?: string;
-  };
-  exImage?: {
-    url?: string;
-  };
-  genreCategory?: {
-    name?: string;
-  };
-  brand?: {
-    name?: string;
-  };
-};
-
-type YahooShoppingResponse = {
-  hits?: YahooShoppingHit[];
-};
-
-const yahooShoppingEndpoint = 'https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch';
-const fallbackImage = 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=300';
-
-function getYahooShoppingAppId() {
-  return process.env.EXPO_PUBLIC_YAHOO_SHOPPING_APP_ID?.trim() ?? '';
+export function getYahooLookupUrl(): string | null {
+  const value = process.env.EXPO_PUBLIC_YAHOO_LOOKUP_URL?.trim();
+  if (value === '/api/yahoo-product') return value;
+  return publicHttpsUrl(value);
 }
-
-function toQueryString(params: Record<string, string>) {
-  return Object.entries(params)
-    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
-    .join('&');
-}
-
-function pickBestHit(barcode: string, hits: YahooShoppingHit[]) {
-  return hits.find((hit) => hit.janCode === barcode && hit.name)
-    ?? hits.find((hit) => hit.name)
-    ?? null;
-}
-
-export function isYahooProductLookupConfigured() {
-  return getYahooShoppingAppId().length > 0;
-}
+export function isYahooProductLookupConfigured() { return Boolean(getYahooLookupUrl()); }
 
 export async function lookupYahooProductByBarcode(barcode: string): Promise<BarcodeProduct | null> {
-  const appId = getYahooShoppingAppId();
-  if (!appId) return null;
-
+  const endpoint = getYahooLookupUrl();
+  const code = normalizeSharedBarcode(barcode);
+  if (!endpoint || !code) return null;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
-  const query = toQueryString({
-    appid: appId,
-    jan_code: barcode,
-    results: '10',
-    image_size: '300',
-  });
-
   try {
-    const response = await fetch(`${yahooShoppingEndpoint}?${query}`, {
-      headers: { Accept: 'application/json' },
-      signal: controller.signal,
+    const separator = endpoint.includes('?') ? '&' : '?';
+    const response = await fetch(`${endpoint}${separator}barcode=${encodeURIComponent(code)}`, {
+      headers: { Accept: 'application/json' }, credentials: 'omit', redirect: 'error', signal: controller.signal,
     });
-    if (!response.ok) throw new Error(`Yahoo Shopping: HTTP ${response.status}`);
-
-    const data = await response.json() as YahooShoppingResponse;
-    const hit = pickBestHit(barcode, data.hits ?? []);
-    if (!hit?.name) return null;
-
-    const normalized = normalizeProductToIngredient(hit.name);
-    const category = normalized.needsReview
-      ? hit.genreCategory?.name || hit.brand?.name || normalized.categoryLabel
-      : normalized.categoryLabel;
-    const image = hit.exImage?.url
-      || hit.image?.medium
-      || hit.image?.small
-      || fallbackImage;
-    const productUrl = publicHttpsUrl(hit.url);
-
+    if (response.status === 404 || response.status === 503) return null;
+    if (!response.ok) throw new Error(`Yahoo product lookup: HTTP ${response.status}`);
+    const data = await response.json();
+    const productUrl = publicHttpsUrl(data?.productUrl);
+    if (data?.barcode !== code || typeof data.name !== 'string' || !data.name.trim()
+      || data.name.length > 300 || !productUrl) return null;
+    const normalized = normalizeProductToIngredient(data.name);
     return {
-      barcode,
-      name: hit.name,
-      image,
-      category,
-      ingredientName: normalized.ingredientName,
-      tags: normalized.tags,
+      barcode: code, name: data.name.trim(), image: getFoodIcon(normalized.category),
+      category: normalized.categoryLabel, ingredientName: normalized.ingredientName, tags: normalized.tags,
       storage: getFoodRegistrationDefaults({ ingredientName: normalized.ingredientName, category: normalized.category }).storage,
-      ...(productUrl ? { productSource: {
-        provider: 'yahoo-shopping' as const, barcode, productUrl, fetchedAt: new Date().toISOString(),
-      } } : {}),
+      productSource: { provider: 'yahoo-shopping', barcode: code, productUrl, fetchedAt: new Date().toISOString() },
     };
-  } finally {
-    clearTimeout(timeout);
-  }
+  } finally { clearTimeout(timeout); }
 }

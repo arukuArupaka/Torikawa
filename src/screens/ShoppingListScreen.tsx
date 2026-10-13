@@ -4,8 +4,11 @@ import { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { MotionIconButton } from '../components/MotionIconButton';
+import { AnimatedDisclosure } from '../components/AnimatedDisclosure';
 import { colors, radius, spacing } from '../constants/theme';
 import { useAppData } from '../context/AppDataContext';
+import { useAppToast } from '../context/AppToastContext';
 import { RootStackParamList } from '../navigation/types';
 import { ShoppingItem } from '../types';
 import { getFrequentShoppingSuggestions } from '../utils/shoppingList';
@@ -13,6 +16,7 @@ import { getFrequentShoppingSuggestions } from '../utils/shoppingList';
 type Props = NativeStackScreenProps<RootStackParamList, 'ShoppingList'>;
 
 export function ShoppingListScreen({ navigation }: Props) {
+  const toast = useAppToast();
   const { foods, shoppingItems, addShoppingItem, toggleShoppingItem, deleteShoppingItem } = useAppData();
   const [name, setName] = useState('');
   const [notice, setNotice] = useState('');
@@ -30,18 +34,18 @@ export function ShoppingListScreen({ navigation }: Props) {
   const handleAdd = () => {
     const trimmedName = name.trim();
     if (!trimmedName) return;
-    const added = addShoppingItem(trimmedName);
+    const added = addShoppingItem(trimmedName, undefined, () => toast('買い物リストに追加しました'));
     if (added) {
       setName('');
-      setNotice(`「${trimmedName}」を追加しました。`);
+      setNotice('');
       return;
     }
     setNotice(`「${trimmedName}」はすでに買うものにあります。`);
   };
 
   const handleAddFrequentItem = (itemName: string) => {
-    const added = addShoppingItem(itemName, 'よく買うものから追加');
-    setNotice(added ? `「${itemName}」を追加しました。` : `「${itemName}」はすでに買うものにあります。`);
+    const added = addShoppingItem(itemName, 'よく買うものから追加', () => toast('買い物リストに追加しました'));
+    setNotice(added ? '' : `「${itemName}」はすでに買うものにあります。`);
   };
 
   const handleToggleItem = (item: ShoppingItem) => {
@@ -144,9 +148,7 @@ export function ShoppingListScreen({ navigation }: Props) {
               style={styles.input}
               value={name}
             />
-            <Pressable accessibilityRole="button" accessibilityLabel="買い物リストに追加" accessibilityState={{ disabled: !name.trim() }} disabled={!name.trim()} onPress={handleAdd} style={[styles.addButton, !name.trim() && styles.disabled]}>
-              <Ionicons color={colors.surface} name="add" size={25} />
-            </Pressable>
+            <MotionIconButton accessibilityLabel="買い物リストに追加" disabled={!name.trim()} onPress={handleAdd} />
           </View>
 
           <View style={styles.purchaseHint}>
@@ -160,11 +162,11 @@ export function ShoppingListScreen({ navigation }: Props) {
           ListFooterComponent={<>
           {frequentItems.length > 0 ? (
             <View style={styles.frequentCard}>
-              <Pressable accessibilityRole="button" accessibilityLabel="よく買うもの" accessibilityState={{ expanded: showFrequent }} aria-expanded={showFrequent} onPress={() => setShowFrequent((value) => !value)} style={styles.sectionToggle}>
+              <AnimatedDisclosure expanded={showFrequent} header={<Pressable accessibilityRole="button" accessibilityLabel="よく買うもの" accessibilityState={{ expanded: showFrequent }} aria-expanded={showFrequent} onPress={() => setShowFrequent((value) => !value)} style={styles.sectionToggle}>
                 <Text style={styles.frequentTitle}>よく買うもの</Text>
                 <Ionicons color={colors.textMuted} name={showFrequent ? 'chevron-up' : 'chevron-down'} size={20} />
-              </Pressable>
-              {showFrequent ? <View style={styles.frequentList}>
+              </Pressable>}>
+              <View style={styles.frequentList}>
                 {frequentItems.map((item) => (
                   <Pressable
                     accessibilityRole="button"
@@ -177,7 +179,8 @@ export function ShoppingListScreen({ navigation }: Props) {
                     <Text numberOfLines={1} style={styles.frequentButtonText}>{item.name}</Text>
                   </Pressable>
                 ))}
-              </View> : null}
+              </View>
+              </AnimatedDisclosure>
             </View>
           ) : null}
           </>}
@@ -195,8 +198,6 @@ const styles = StyleSheet.create({
   content: { gap: spacing.md, padding: spacing.md },
   addRow: { flexDirection: 'row', gap: spacing.sm },
   input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, color: colors.text, flex: 1, fontSize: 16, height: 50, paddingHorizontal: 14 },
-  addButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: radius.md, height: 50, justifyContent: 'center', width: 50 },
-  disabled: { opacity: 0.4 },
   purchaseHint: { alignItems: 'center', backgroundColor: colors.primarySoft, borderRadius: radius.sm, flexDirection: 'row', gap: spacing.sm, paddingHorizontal: 12, paddingVertical: 9 },
   purchaseHintText: { color: colors.primaryDark, flex: 1, fontSize: 13, lineHeight: 20 },
   section: { gap: spacing.sm },

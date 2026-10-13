@@ -24,6 +24,7 @@ VS Codeを使う場合は、リポジトリのフォルダーで `code .` を実
 | 共有APIを起動する | `npm.cmd run shared-api` |
 | 自動テスト | `npm.cmd test` |
 | 型チェック | `npm.cmd run typecheck` |
+| Web配布用の公開設定を確認 | `npm.cmd run publication:check -- publication.local.json` |
 | Expoの構成を診断する | `npx.cmd expo-doctor` |
 | 全プラットフォームを書き出す | `npx.cmd expo export --platform all` |
 
@@ -43,7 +44,8 @@ Copy-Item .env.example .env
 
 | 環境変数 | 設定内容 |
 | --- | --- |
-| `EXPO_PUBLIC_YAHOO_SHOPPING_APP_ID` | 利用するYahoo!ショッピング商品検索APIのアプリケーションID |
+| `YAHOO_SHOPPING_APP_ID` | Yahoo検索APIのサーバーだけで使うClient ID。配布しない |
+| `EXPO_PUBLIC_YAHOO_LOOKUP_URL` | アプリから呼ぶ検索APIのHTTPS URL。Web同一サイトなら `/api/yahoo-product` |
 | `EXPO_PUBLIC_SHARED_PRODUCTS_URL` | 共有APIのベースURL。ローカルPCでは `http://127.0.0.1:8787` |
 | `EXPO_PUBLIC_OPERATOR_NAME` | 公開する運営者名 |
 | `EXPO_PUBLIC_SUPPORT_EMAIL` | 公開する問い合わせ先メールアドレス |
@@ -54,7 +56,9 @@ Copy-Item .env.example .env
 
 `EXPO_PUBLIC_` の値はアプリから参照できる公開設定です。秘密鍵・DB認証情報は入れません。共有APIのサーバー設定は [server/README.md](../server/README.md) にまとめています。
 
-Yahoo Client IDも現行実装では配布物に含まれます。API規約上のIDの扱い・公開用途は未確認であり、公開設定にできることを利用許諾とは扱いません。[Phase 5：公開準備](phase5-publication.md)を確認してください。連絡先・ポリシーが未設定の場合、アプリ内では準備中と表示します。
+Yahoo Client IDはサーバーに設定し、アプリに含めません。旧 `EXPO_PUBLIC_YAHOO_SHOPPING_APP_ID` は使用しません。検索結果の商品画像も使用せず、食材アイコンまたは自分の写真を表示します。接続手順は [Yahooの商品名検索](yahoo-name-search.md) を参照してください。利用規約上の保存・再利用範囲、商用利用などの確認が完了したことを意味しません。[Phase 5：公開準備](phase5-publication.md)を確認してください。連絡先・ポリシーが未設定の場合、アプリ内では準備中と表示します。
+
+専用Webテスト版の書き出しは `.env` と親プロセスの `EXPO_PUBLIC_` を採用しません。公開連絡先を反映する場合は、[公開設定の手順](publication-checklist.md) に従い `--publication-config publication.local.json` を明示します。指定した3項目だけをExpoの公開環境へ渡し、デモと共有DB接続はOFFのままです。動作説明は `shared/dataHandlingSections.json` をアプリと `data-handling.html` で共用します。
 
 ## ファイル構成
 

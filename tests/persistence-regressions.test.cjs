@@ -37,6 +37,7 @@ const productCorrections = [];
 const savedProducts = [];
 let correctionFailure = false;
 const nativeMock = {
+  Animated: { View: 'AnimatedView', Value: class { setValue() {} stopAnimation() {} } },
   AppState: { addEventListener: () => ({ remove() {} }) },
   Modal: 'Modal',
   Platform: { OS: 'web' }, KeyboardAvoidingView: 'KeyboardAvoidingView',
@@ -52,6 +53,8 @@ Module._load = function (request, ...args) {
   if (request === '@expo/vector-icons') return { Ionicons: (props) => React.createElement('Icon', props) };
   if (request.startsWith('../components/')) {
     const name = request.split('/').at(-1);
+    if (name === 'AnimatedDisclosure') return { AnimatedDisclosure: (props) => React.createElement(name, props,
+      props.header, props.expanded ? props.children : null) };
     return { [name]: (props) => React.createElement(name, props) };
   }
   if (request.endsWith('/services/notificationService')) return { queueNotificationSync: async () => {} };
@@ -81,11 +84,13 @@ const { RecipeDetailScreen } = require('../src/screens/RecipeDetailScreen.tsx');
 const { RecipesScreen } = require('../src/screens/RecipesScreen.tsx');
 const { AddFoodScreen } = require('../src/screens/AddFoodScreen.tsx');
 const { FoodDetailScreen } = require('../src/screens/FoodDetailScreen.tsx');
+const { HomeScreen } = require('../src/screens/HomeScreen.tsx');
+const { AppToastProvider, useToastState } = require('../src/context/AppToastContext.tsx');
 const { createSampleFoods } = require('../src/data/sampleData.ts');
 const { getRecentFoods } = require('../src/utils/recentFoods.ts');
 const { AddRecipeScreen } = require('../src/screens/AddRecipeScreen.tsx');
 const { ShoppingListScreen } = require('../src/screens/ShoppingListScreen.tsx');
-const { AppAlertProvider, useAppAlert } = require('../src/context/AppAlertContext.tsx');
+const { AppAlertProvider, useAppAlert, useIsAppAlertVisible } = require('../src/context/AppAlertContext.tsx');
 const { CalendarScreen } = require('../src/screens/CalendarScreen.tsx');
 const { sampleRecipes } = require('../src/data/sampleData.ts');
 const legacyRecipes = require('../src/data/legacySampleRecipes.v1.json');
@@ -106,6 +111,50 @@ function reset() {
   savedProducts.length = 0;
 }
 
+test('home used/disposed and detail shopping actions offer undo and restore the saved inventory', async (t) => {
+  reset(); alerts.length = 0;
+  const original = createSampleFoods()[0];
+  store.set(storageKeys.foods, JSON.stringify([original]));
+  store.set(storageKeys.shopping, '[]');
+  let toastState, renderer;
+  const destinations = [];
+  function ToastProbe() { toastState = useToastState(); return null; }
+  function app(screen) {
+    return React.createElement(AppToastProvider, null, React.createElement(AppDataProvider, null,
+      React.createElement(Consumer), React.createElement(ToastProbe), screen));
+  }
+  await act(async () => { renderer = create(app(React.createElement(HomeScreen, { navigation: {} }))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  for (const [prop, confirmation, status] of [
+    ['onMarkUsed', '記録だけ', 'used'], ['onMarkDisposed', 'OK', 'disposed'],
+  ]) {
+    const card = renderer.root.findByType('SwipeableFoodCard');
+    await act(async () => card.props[prop]());
+    assert.equal(context.foods[0].status, 'active', 'confirmation alone does not change stock');
+    await act(async () => alerts.at(-1)[2].find((button) => button.text === confirmation).onPress());
+    assert.equal(context.foods[0].status, status);
+    assert.equal(toastState.toast.action.label, '元に戻す');
+    assert.equal(renderer.root.findAllByType('SwipeableFoodCard').length, 0);
+    await act(async () => toastState.runAction(toastState.toast.id));
+    assert.equal(context.foods[0].status, 'active');
+    assert.equal(renderer.root.findAllByType('SwipeableFoodCard').length, 1);
+    assert.match(toastState.toast.message, /管理中に戻しました/);
+    assert.equal(JSON.parse(store.get(storageKeys.foods))[0].status, 'active');
+  }
+  await act(async () => renderer.update(app(React.createElement(FoodDetailScreen, {
+    route: { params: { foodId: original.id } }, navigation: { getState: () => ({ index: 1 }), popToTop() {}, navigate: (...args) => destinations.push(args) },
+  }))));
+  await act(async () => renderer.root.findAllByType('PrimaryButton').find((node) => node.props.label === '使い切った').props.onPress());
+  await act(async () => alerts.at(-1)[2].find((button) => button.text === '買い物リストにも追加').onPress());
+  assert.equal(context.foods[0].status, 'used');
+  assert.deepEqual(destinations.at(-1), ['MainTabs', { screen: 'Home' }]);
+  assert.match(toastState.toast.action.hint, /買い物リスト/);
+  assert.equal(context.shoppingItems.length, 1);
+  await act(async () => toastState.runAction(toastState.toast.id));
+  assert.equal(context.foods[0].status, 'active');
+  assert.equal(context.shoppingItems.length, 1, 'undo restores the food only');
+});
+
 test('barcode registration carries product attribution into inventory and learned defaults; replacing a photo removes its old image credit', async (t) => {
   reset();
   store.set(storageKeys.foods, '[]');
@@ -113,7 +162,7 @@ test('barcode registration carries product attribution into inventory and learne
     fetchedAt: '2026-10-01T00:00:00.000Z', image: { url: 'https://images.openfoodfacts.org/images/products/test/front_ja.3.200.jpg', author: 'contributor', license: 'CC-BY-SA-3.0' } };
   let renderer;
   await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(AddFoodScreen, {
-    navigation: { navigate() {} }, route: { params: { initialName: 'テスト牛乳', initialProductName: 'テスト牛乳', initialIngredientName: '牛乳',
+    navigation: { getState: () => ({ index: 1 }), popToTop() {}, navigate() {} }, route: { params: { initialName: 'テスト牛乳', initialProductName: 'テスト牛乳', initialIngredientName: '牛乳',
       initialCategory: '乳製品', initialBarcode: source.barcode, initialImage: source.image.url, initialProductSource: source } },
   }))); });
   t.after(async () => { await act(async () => renderer.unmount()); });
@@ -142,7 +191,7 @@ test('phase 2 cooking displays every lot, allocates by expiry and persists a sin
   store.set(storageKeys.recipes, JSON.stringify([{ ...sampleRecipes[0], id: 'milk-recipe', ingredients: ['牛乳'], ingredientAmounts: { 牛乳: '200ml' } }]));
   const destinations = [];
   let renderer;
-  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'milk-recipe' } }, navigation: { navigate: (...args) => destinations.push(args) } }))); });
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'milk-recipe' } }, navigation: { getState: () => ({ index: 1 }), popToTop() {}, navigate: (...args) => destinations.push(args) } }))); });
   const button = (label) => renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((text) => text.props.children === label));
   assert.equal(renderer.root.findAllByType('View').filter((node) => node.props.testID?.startsWith('consumption-')).length, 3);
   await act(async () => button('使った分を自動選択').props.onPress());
@@ -169,7 +218,7 @@ test('phase 2 cooking displays every lot, allocates by expiry and persists a sin
 test('phase 2 confirmation rejects all lots after one has been edited, preserving new metadata', async () => {
   reset(); alerts.length = 0;
   let renderer;
-  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-4' } }, navigation: { navigate: () => assert.fail('must remain on screen') } }))); });
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-4' } }, navigation: { getState: () => ({ index: 1 }), popToTop() {}, navigate: () => assert.fail('must remain on screen') } }))); });
   const button = renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((text) => text.props.children === '使った分を自動選択'));
   await act(async () => button.props.onPress());
   await act(async () => renderer.root.findAllByType('PrimaryButton').find((node) => node.props.label === 'このレシピを作った').props.onPress());
@@ -367,7 +416,7 @@ test('expired inventory is identified in materials but cannot be selected or con
   await act(async () => {
     renderer = create(React.createElement(AppDataProvider, null,
       React.createElement(Consumer),
-      React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-2' } }, navigation: { navigate: () => {} } }),
+      React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-2' } }, navigation: { getState: () => ({ index: 1 }), popToTop() {}, navigate: () => {} } }),
     ));
   });
   const expiredLabel = renderer.root.findAllByType('Text').find((node) =>
@@ -411,6 +460,59 @@ test('rapid saves cannot finish in reverse order and restore old data', async ()
   await Promise.all([first, second]);
   assert.deepEqual(JSON.parse(store.get('queue-test')), { value: 2 });
 });
+
+test('completion callbacks wait for the committed current food, including batched changes', async () => {
+  reset(); store.set(storageKeys.foods, '[]');
+  const renderer = await mount();
+  const confirmed = [];
+  holdNextWrite = true;
+  let food;
+  await act(async () => { food = context.addFood(createSampleFoods()[0], undefined, () => confirmed.push('added')); });
+  await new Promise(setImmediate);
+  assert.deepEqual(confirmed, []);
+  await act(async () => context.updateFood(food.id, { ...food, name: '保存する変更' }, () => confirmed.push('edited')));
+  assert.deepEqual(confirmed, []);
+  await act(async () => { releaseWrite(); await new Promise(setImmediate); });
+  assert.deepEqual(confirmed, ['added', 'edited']);
+  assert.equal(JSON.parse(store.get(storageKeys.foods))[0].name, '保存する変更');
+  await act(async () => context.retrySave());
+  assert.deepEqual(confirmed, ['added', 'edited']);
+  await act(async () => renderer.unmount());
+});
+
+test('failed shopping save produces no completion; retry completes once and duplicate input stays silent', async () => {
+  reset(); const renderer = await mount();
+  let confirmed = 0; writeFailure = true;
+  const warn = console.warn; console.warn = () => {};
+  try {
+    await act(async () => {
+      assert.equal(context.addShoppingItem('完了通知の確認用', undefined, () => confirmed++), true);
+      assert.equal(context.addShoppingItem('完了通知の確認用', undefined, () => confirmed++), false);
+    });
+    assert.equal(confirmed, 0);
+    assert.match(context.saveError, /保存できません/);
+    writeFailure = false;
+    await act(async () => context.retrySave());
+    assert.equal(confirmed, 1);
+    assert.equal(context.saveError, null);
+    await act(async () => context.retrySave());
+    assert.equal(confirmed, 1);
+  } finally { console.warn = warn; await act(async () => renderer.unmount()); }
+});
+
+test('replacing inventory cancels pending completion from the former data', async () => {
+  reset(); store.set(storageKeys.foods, '[]');
+  const renderer = await mount();
+  let confirmed = 0; holdNextWrite = true;
+  await act(async () => context.addFood(createSampleFoods()[0], undefined, () => confirmed++));
+  await new Promise(setImmediate);
+  await act(async () => context.replaceAppData({ foods: [], recipes: context.recipes,
+    shoppingItems: context.shoppingItems, notificationSettings: context.notificationSettings }));
+  await act(async () => { releaseWrite(); await new Promise(setImmediate); });
+  assert.equal(confirmed, 0);
+  assert.deepEqual(JSON.parse(store.get(storageKeys.foods)), []);
+  await act(async () => renderer.unmount());
+});
 test('a rejected write does not block the next write for that key', async () => {
   reset(); writeFailure = true;
   await assert.rejects(saveStoredValue('queue-test', 1), /Disk full/);
@@ -425,7 +527,7 @@ test('recording the actual recipe screen keeps remaining cabbage and eggs', asyn
   await act(async () => {
     renderer = create(React.createElement(AppDataProvider, null,
       React.createElement(Consumer),
-      React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-4' } }, navigation: { navigate: (...args) => { destination = args; } } }),
+      React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-4' } }, navigation: { getState: () => ({ index: 1 }), popToTop() {}, navigate: (...args) => { destination = args; } } }),
     ));
   });
   const autoSelect = renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((text) => text.props.children === '使った分を自動選択'));
@@ -457,7 +559,7 @@ test('changing people updates visible quantities and usage, clears stale selecti
   await act(async () => {
     renderer = create(React.createElement(AppDataProvider, null,
       React.createElement(Consumer),
-      React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-4' } }, navigation: { navigate() {} } }),
+      React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-4' } }, navigation: { getState: () => ({ index: 1 }), popToTop() {}, navigate() {} } }),
     ));
   });
   t.after(async () => { await act(async () => renderer.unmount()); });
@@ -582,7 +684,7 @@ test('shopping check is reversible without navigation, registration carries the 
   let renderer;
   await act(async () => {
     renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
-      React.createElement(ShoppingListScreen, { navigation: { navigate: (...args) => destinations.push(args) } })));
+      React.createElement(ShoppingListScreen, { navigation: { getState: () => ({ index: 1 }), popToTop() {}, navigate: (...args) => destinations.push(args) } })));
   });
   t.after(async () => { await act(async () => renderer.unmount()); });
   const control = (label) => renderer.root.findAllByType('Pressable').find((node) => node.props.accessibilityLabel === label);
@@ -631,7 +733,7 @@ test('a cooking confirmation held across midnight cannot consume newly expired f
   let renderer;
   await act(async () => {
     renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
-      React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-4' } }, navigation: { navigate() {} } })));
+      React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-4' } }, navigation: { getState: () => ({ index: 1 }), popToTop() {}, navigate() {} } })));
   });
   t.after(async () => { await act(async () => renderer.unmount()); });
   const egg = context.foods.find((item) => item.name === '卵');
@@ -704,16 +806,27 @@ test('device alerts preserve native options and callbacks', async (t) => {
   alerts.length = 0;
   nativeMock.Platform.OS = 'ios';
   t.after(() => { nativeMock.Platform.OS = 'web'; });
-  let show;
-  function DialogConsumer() { show = useAppAlert(); return null; }
+  let show, visible;
+  function DialogConsumer() { show = useAppAlert(); visible = useIsAppAlertVisible(); return null; }
   let renderer;
   await act(async () => { renderer = create(React.createElement(AppAlertProvider, null, React.createElement(DialogConsumer))); });
   t.after(async () => { await act(async () => renderer.unmount()); });
-  const buttons = [{ text: '取消', style: 'cancel', onPress() {} }];
+  let pressed = 0;
+  const buttons = [{ text: '取消', style: 'cancel', onPress() { pressed++; } }];
   const options = { cancelable: false };
   await act(async () => show('端末の確認', '本文', buttons, options));
-  assert.deepEqual(alerts.at(-1), ['端末の確認', '本文', buttons, options]);
+  assert.deepEqual(alerts.at(-1).slice(0, 2), ['端末の確認', '本文']);
+  assert.equal(alerts.at(-1)[2][0].text, '取消');
+  assert.equal(alerts.at(-1)[2][0].style, 'cancel');
+  assert.equal(alerts.at(-1)[3].cancelable, false);
+  assert.equal(visible, true);
   assert.equal(renderer.root.findAllByType('Modal').length, 0);
+  await act(async () => { alerts.at(-1)[2][0].onPress(); alerts.at(-1)[2][0].onPress(); });
+  assert.equal(visible, false); assert.equal(pressed, 1);
+  let dismissed = 0;
+  await act(async () => show('キャンセル可能', '本文', undefined, { onDismiss() { dismissed++; } }));
+  await act(async () => { alerts.at(-1)[3].onDismiss(); alerts.at(-1)[3].onDismiss(); });
+  assert.equal(visible, false); assert.equal(dismissed, 1);
 });
 
 test('web cooking dialog cancels without changes and records a partial amount once after confirmation', async (t) => {
@@ -723,7 +836,7 @@ test('web cooking dialog cancels without changes and records a partial amount on
   await act(async () => {
     renderer = create(React.createElement(AppAlertProvider, null,
       React.createElement(AppDataProvider, null, React.createElement(Consumer),
-        React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-4' } }, navigation: { navigate: (...args) => destinations.push(args) } }))));
+        React.createElement(RecipeDetailScreen, { route: { params: { recipeId: 'recipe-4' } }, navigation: { getState: () => ({ index: 1 }), popToTop() {}, navigate: (...args) => destinations.push(args) } }))));
   });
   t.after(async () => { await act(async () => renderer.unmount()); });
   const button = (label) => renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((text) => text.props.children === label));
@@ -830,7 +943,7 @@ test('repeat registration carries settings but starts fresh quantity, dates, mem
   store.set(storageKeys.foods, JSON.stringify([original]));
   const navigation = [];
   let renderer;
-  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(AddFoodScreen, { route: { params: { reuseFoodId: original.id } }, navigation: { navigate: (...args) => navigation.push(args) } }))); });
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(AddFoodScreen, { route: { params: { reuseFoodId: original.id } }, navigation: { getState: () => ({ index: 1 }), popToTop() {}, navigate: (...args) => navigation.push(args) } }))); });
   t.after(async () => { await act(async () => renderer.unmount()); });
   const quantity = renderer.root.findByProps({ accessibilityLabel: '今回の購入量' });
   assert.equal(quantity.props.value, '');
@@ -873,12 +986,23 @@ test('choosing a previous registration retains incoming shopping memo and calend
   const press = (text) => renderer.root.findAllByType('Pressable').find((node) => node.findAllByType('Text').some((label) => label.props.children === text));
   await act(async () => press('前の登録から選ぶ').props.onPress());
   assert.equal(renderer.root.findByProps({ accessibilityLabel: '前の登録を検索' }).props.value, '卵');
+  await act(async () => renderer.root.findByProps({ accessibilityLabel: '前の登録を検索' }).props.onChangeText('牛乳'));
+  await act(async () => press('前の登録から選ぶ').props.onPress());
+  assert.equal(renderer.root.findAllByProps({ accessibilityLabel: '前の登録を検索' }).length, 0);
+  await act(async () => press('前の登録から選ぶ').props.onPress());
+  assert.equal(renderer.root.findByProps({ accessibilityLabel: '前の登録を検索' }).props.value, '牛乳');
+  await act(async () => renderer.root.findByProps({ accessibilityLabel: '前の登録を検索' }).props.onChangeText('卵'));
   await act(async () => renderer.root.findByProps({ accessibilityLabel: '卵の前回の設定を使う' }).props.onPress());
   assert.equal(renderer.root.findByProps({ accessibilityLabel: '今回の購入量' }).props.value, '');
   assert.equal(renderer.root.findAllByType('DatePickerField').find((node) => node.props.label === '期限日').props.value, '2026-12-01');
   assert.equal(renderer.root.findAllByType('FormField').filter((node) => node.props.label === 'メモ（任意）').length, 0);
   await act(async () => press('写真・カテゴリ・購入日・メモを編集').props.onPress());
   assert.equal(renderer.root.findAllByType('FormField').find((node) => node.props.label === 'メモ（任意）').props.value, '買い物のメモ');
+  await act(async () => renderer.root.findAllByType('FormField').find((node) => node.props.label === 'メモ（任意）').props.onChangeText('追記した買い物のメモ'));
+  await act(async () => press('その他の項目を閉じる').props.onPress());
+  assert.equal(renderer.root.findAllByType('FormField').filter((node) => node.props.label === 'メモ（任意）').length, 0);
+  await act(async () => press('写真・カテゴリ・購入日・メモを編集').props.onPress());
+  assert.equal(renderer.root.findAllByType('FormField').find((node) => node.props.label === 'メモ（任意）').props.value, '追記した買い物のメモ');
   assert.equal(renderer.root.findByType('StorageSelector').props.value, 'refrigerated');
   assert.equal(renderer.root.findByType('QuantityUnitSelector').props.value, 'piece');
 });
@@ -905,7 +1029,7 @@ test('food detail reopens used history as a separate new registration', async (t
   store.set(storageKeys.foods, JSON.stringify([original]));
   const destinations = [];
   let renderer;
-  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(FoodDetailScreen, { route: { params: { foodId: original.id } }, navigation: { navigate: (...args) => destinations.push(args) } }))); });
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(FoodDetailScreen, { route: { params: { foodId: original.id } }, navigation: { getState: () => ({ index: 1 }), popToTop() {}, navigate: (...args) => destinations.push(args) } }))); });
   t.after(async () => { await act(async () => renderer.unmount()); });
   await act(async () => renderer.root.findAllByType('PrimaryButton').find((node) => node.props.label === 'もう一度登録する').props.onPress());
   assert.deepEqual(destinations, [['AddFood', { reuseFoodId: original.id }]]);
@@ -922,7 +1046,7 @@ async function mountSharedForm(t, params = {}) {
       initialBarcode: '4901234567887', allowProductSharing: true,
       initialName: '共有テスト牛乳', initialIngredientName: '牛乳', initialCategory: '乳製品',
       initialMemo: 'PRIVATE memo', initialStorage: 'frozen', ...params,
-    } }, navigation: { navigate: (...args) => destinations.push(args) } })));
+    } }, navigation: { getState: () => ({ index: 1 }), popToTop() {}, navigate: (...args) => destinations.push(args) } })));
   });
   t.after(async () => { await act(async () => renderer.unmount()); });
   return { renderer, destinations, save: () => renderer.root.findAllByType('PrimaryButton').find((node) => node.props.label === '保存する').props.onPress() };
@@ -985,7 +1109,7 @@ test('phase 4 shopping registration shows its linked food and prevents repeating
   const original = { ...createSampleFoods()[0], id: 'linked-food', sourceShoppingItemId: 'purchase-1' };
   store.set(storageKeys.foods, JSON.stringify([original]));
   const destinations = []; let renderer;
-  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(ShoppingListScreen, { navigation: { navigate: (...args) => destinations.push(args) } }))); });
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(ShoppingListScreen, { navigation: { getState: () => ({ index: 1 }), popToTop() {}, navigate: (...args) => destinations.push(args) } }))); });
   t.after(async () => { await act(async () => renderer.unmount()); });
   const control = (label) => renderer.root.findAllByType('Pressable').find((node) => node.props.accessibilityLabel === label);
   await act(async () => control('購入済み1件').props.onPress());

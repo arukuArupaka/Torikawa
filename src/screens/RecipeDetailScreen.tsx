@@ -12,6 +12,7 @@ import { colors, radius, spacing } from '../constants/theme';
 import { useAppData } from '../context/AppDataContext';
 import { useCurrentDay } from '../hooks/useCurrentDay';
 import { RootStackParamList } from '../navigation/types';
+import { returnToMainTab } from '../navigation/returnToMainTab';
 import { FoodItem } from '../types';
 import { createId } from '../utils/id';
 import { daysUntil, getRemainingLabel } from '../utils/date';
@@ -260,7 +261,7 @@ export function RecipeDetailScreen({ navigation, route }: Props) {
       }
       operationId.current = createId('cooking');
       clearActions();
-      navigation.navigate('MainTabs', { screen: 'Home' });
+      returnToMainTab(navigation);
     };
     const buttons: AlertButton[] = [
       { text: 'キャンセル', style: 'cancel' },
@@ -287,7 +288,7 @@ export function RecipeDetailScreen({ navigation, route }: Props) {
         style: 'destructive',
         onPress: () => {
           deleteRecipe(recipe.id);
-          navigation.navigate('MainTabs', { screen: 'Recipes' });
+          returnToMainTab(navigation, 'Recipes');
         },
       },
     ]);

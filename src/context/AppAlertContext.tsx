@@ -6,15 +6,34 @@ type ShowAlert = typeof Alert.alert;
 type Dialog = { title: string; message?: string; buttons: AlertButton[]; options?: AlertOptions };
 const nativeAlert: ShowAlert = (...args) => Alert.alert(...args);
 const AppAlertContext = createContext<ShowAlert>(nativeAlert);
+const AppAlertVisibilityContext = createContext(false);
 
 /** Keep native alerts on devices and provide the same choices in the web app. */
 export function AppAlertProvider({ children }: PropsWithChildren) {
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const pending = useRef<Dialog[]>([]);
   const current = useRef<Dialog | null>(null);
+  const nativeDialogs = useRef(new Set<number>());
+  const nativeId = useRef(0);
+  const [nativeVisible, setNativeVisible] = useState(false);
   const showAlert = useCallback<ShowAlert>((title, message, buttons, options) => {
     if (Platform.OS !== 'web') {
-      nativeAlert(title, message, buttons, options);
+      const id = ++nativeId.current;
+      nativeDialogs.current.add(id);
+      setNativeVisible(true);
+      const finishNative = () => {
+        if (!nativeDialogs.current.delete(id)) return false;
+        setNativeVisible(nativeDialogs.current.size > 0);
+        return true;
+      };
+      const nativeButtons = (buttons?.length ? buttons : [{ text: 'OK' }]).map((button) => ({ ...button,
+        onPress: () => { if (finishNative()) button.onPress?.(); },
+      }));
+      try {
+        nativeAlert(title, message, nativeButtons, { ...options,
+          onDismiss: () => { if (finishNative()) options?.onDismiss?.(); },
+        });
+      } catch (error) { finishNative(); throw error; }
       return;
     }
     const next = { title, message, buttons: buttons?.length ? buttons : [{ text: 'OK' }], options };
@@ -43,6 +62,7 @@ export function AppAlertProvider({ children }: PropsWithChildren) {
   };
 
   return (
+    <AppAlertVisibilityContext.Provider value={dialog !== null || nativeVisible}>
     <AppAlertContext.Provider value={showAlert}>
       {children}
       {dialog ? (
@@ -70,10 +90,12 @@ export function AppAlertProvider({ children }: PropsWithChildren) {
         </Modal>
       ) : null}
     </AppAlertContext.Provider>
+    </AppAlertVisibilityContext.Provider>
   );
 }
 
 export function useAppAlert() { return useContext(AppAlertContext); }
+export function useIsAppAlertVisible() { return useContext(AppAlertVisibilityContext); }
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(23,32,26,0.45)', alignItems: 'center', justifyContent: 'center', padding: spacing.md },

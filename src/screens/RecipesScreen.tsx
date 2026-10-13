@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { AnimatedDisclosure } from '../components/AnimatedDisclosure';
 import { colors, radius, spacing } from '../constants/theme';
 import { useAppData } from '../context/AppDataContext';
 import { useCurrentDay } from '../hooks/useCurrentDay';
@@ -77,6 +78,7 @@ export function RecipesScreen({ navigation, route }: Props) {
   const [selectedFilter, setSelectedFilter] = useState<RecipeFilter>(route?.params?.initialFilter ?? 'all');
   const [selectedCategory, setSelectedCategory] = useState<RecipeCategory | 'all'>('all');
   const [showLocalIdeas, setShowLocalIdeas] = useState(false);
+  const [hasRequestedIdeas, setHasRequestedIdeas] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showExplore, setShowExplore] = useState(false);
   const [expandedRecipes, setExpandedRecipes] = useState<Record<string, boolean>>({});
@@ -104,7 +106,8 @@ export function RecipesScreen({ navigation, route }: Props) {
   const expiredCount = foods.filter(
     (food) => food.status === 'active' && daysUntil(food.expiryDate) < 0,
   ).length;
-  const localIdeas = useMemo(() => showExplore && showLocalIdeas ? generateLocalRecipeIdeas(foods) : [], [foods, currentDay, showExplore, showLocalIdeas]);
+  // Keep requested results available while nested panels finish closing.
+  const localIdeas = useMemo(() => hasRequestedIdeas ? generateLocalRecipeIdeas(foods) : [], [foods, currentDay, hasRequestedIdeas]);
   const cookpadSearchFoods = useMemo(() => pickCookpadSearchFoods(foods), [foods, currentDay]);
   const cookpadKeyword = cookpadSearchFoods.map((food) => getFoodIngredientName(food)).join(' ');
 
@@ -222,7 +225,7 @@ export function RecipesScreen({ navigation, route }: Props) {
         title="おすすめレシピ"
       />
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.searchRow}>
+        <AnimatedDisclosure expanded={showFilters} contentStyle={styles.disclosureContent} header={<View style={styles.searchRow}>
           <View style={styles.searchBox}>
             <Ionicons color={colors.textMuted} name="search" size={19} />
             <TextInput
@@ -250,9 +253,7 @@ export function RecipesScreen({ navigation, route }: Props) {
             <Ionicons color={colors.primaryDark} name="options-outline" size={20} />
             <Text style={styles.filterToggleText}>絞り込み</Text>
           </Pressable>
-        </View>
-
-        {showFilters ? (
+        </View>}>
           <View style={styles.filterPanel}>
             <Text style={styles.controlLabel}>条件</Text>
             <View style={styles.filterWrap}>
@@ -299,7 +300,7 @@ export function RecipesScreen({ navigation, route }: Props) {
               <Text style={styles.detailButtonText}>{displayedSuggestions.length}件のレシピを見る</Text>
             </Pressable>
           </View>
-        ) : null}
+        </AnimatedDisclosure>
 
         {activeFilterLabels.length > 0 ? (
           <View style={styles.activeFilters}>
@@ -311,7 +312,7 @@ export function RecipesScreen({ navigation, route }: Props) {
           </View>
         ) : null}
 
-        <View style={styles.sectionHeading}>
+        <AnimatedDisclosure expanded={showExplore} contentStyle={styles.disclosureContent} header={<View style={styles.sectionHeading}>
           <View style={styles.resultHeading}>
             <Text accessibilityRole="header" style={styles.sectionTitle}>{hasSearchConditions ? '検索結果' : '今日のおすすめ'}</Text>
             <Text accessibilityLiveRegion="polite" style={styles.resultSummary}>{displayedSuggestions.length}件</Text>
@@ -325,9 +326,7 @@ export function RecipesScreen({ navigation, route }: Props) {
             <Text style={styles.textLink}>もっと探す</Text>
             <Ionicons color={colors.primaryDark} name={showExplore ? 'chevron-up' : 'chevron-down'} size={16} />
           </Pressable>
-        </View>
-
-        {showExplore ? (
+        </View>}>
           <View style={styles.explorePanel}>
             <View style={styles.intro}>
               <Ionicons color={colors.primary} name="sparkles-outline" size={22} />
@@ -365,7 +364,7 @@ export function RecipesScreen({ navigation, route }: Props) {
             </View>
 
             <View style={styles.localIdeaPanel}>
-              <View style={styles.localIdeaHeader}>
+              <AnimatedDisclosure expanded={showLocalIdeas} header={<View style={styles.localIdeaHeader}>
                 <View style={styles.localIdeaTitleArea}>
                   <Ionicons color={colors.primary} name="bulb-outline" size={20} />
                   <View style={styles.localIdeaCopy}>
@@ -377,13 +376,12 @@ export function RecipesScreen({ navigation, route }: Props) {
                   accessibilityRole="button"
                   accessibilityLabel="食材からレシピ候補を作る"
                   accessibilityState={{ expanded: showLocalIdeas }} aria-expanded={showLocalIdeas}
-                  onPress={() => setShowLocalIdeas((current) => !current)}
+                  onPress={() => { setHasRequestedIdeas(true); setShowLocalIdeas((current) => !current); }}
                   style={styles.localIdeaToggle}
                 >
                   <Text style={styles.localIdeaToggleText}>{showLocalIdeas ? '閉じる' : '表示'}</Text>
                 </Pressable>
-              </View>
-              {showLocalIdeas ? (
+              </View>}>
                 <View style={styles.localIdeaList}>
                   {localIdeas.length === 0 ? (
                     <Text style={styles.localIdeaEmpty}>使える食材が増えると、ここに候補が出ます。</Text>
@@ -421,10 +419,10 @@ export function RecipesScreen({ navigation, route }: Props) {
                     );
                   })}
                 </View>
-              ) : null}
+              </AnimatedDisclosure>
             </View>
           </View>
-        ) : null}
+        </AnimatedDisclosure>
 
         {displayedSuggestions.length === 0 ? (
           <View style={styles.emptyRecipes}>
@@ -497,7 +495,7 @@ export function RecipesScreen({ navigation, route }: Props) {
                   </View>
                 ) : null}
 
-                <Pressable
+                <AnimatedDisclosure expanded={expanded} header={<Pressable
                   accessibilityLabel={`${recipe.name}の材料の確認`}
                   accessibilityRole="button"
                   accessibilityState={{ expanded }} aria-expanded={expanded}
@@ -511,8 +509,7 @@ export function RecipesScreen({ navigation, route }: Props) {
                     <Text style={styles.textLink}>{expanded ? '閉じる' : '確認'}</Text>
                     <Ionicons color={colors.primaryDark} name={expanded ? 'chevron-up' : 'chevron-down'} size={16} />
                   </View>
-                </Pressable>
-                {expanded ? (
+                </Pressable>}>
                   <View style={styles.materialDetails}>
                     <Text style={styles.amountNote}>登録分量で判定しています。人数変更・要確認の材料は詳細で確認できます。</Text>
                     <View style={styles.metrics}>
@@ -597,7 +594,7 @@ export function RecipesScreen({ navigation, route }: Props) {
                       </View>
                     )}
                   </View>
-                ) : null}
+                </AnimatedDisclosure>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`${recipe.name}の材料と作り方を見る`}
@@ -659,6 +656,7 @@ function Metric({
 
 const styles = StyleSheet.create({
   content: { gap: spacing.md, padding: spacing.md, paddingBottom: spacing.xl },
+  disclosureContent: { paddingTop: spacing.md },
   searchRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
   clearQuery: { alignItems: 'center', justifyContent: 'center', minHeight: 44, width: 36 },
   filterToggle: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, flexDirection: 'row', gap: 6, minHeight: 48, paddingHorizontal: 12 },

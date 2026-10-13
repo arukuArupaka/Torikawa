@@ -78,19 +78,24 @@ Yahoo!ショッピング検索や共有商品DBを利用する場合は、リポ
 
 | 環境変数 | 用途 |
 | --- | --- |
-| `EXPO_PUBLIC_YAHOO_SHOPPING_APP_ID` | Yahoo!ショッピング商品検索APIのアプリケーションID |
+| `YAHOO_SHOPPING_APP_ID` | Yahoo検索APIのサーバーだけで使うClient ID。アプリには含めない |
+| `EXPO_PUBLIC_YAHOO_LOOKUP_URL` | アプリから呼ぶ商品名検索APIのURL |
 | `EXPO_PUBLIC_SHARED_PRODUCTS_URL` | 共有商品APIのURL |
 
 設定後はExpoを再起動します。`EXPO_PUBLIC_` の値はアプリに含まれるため、秘密鍵やDBの認証情報は設定しません。詳しくは [環境変数の設定](docs/DEVELOPMENT.md#環境変数の設定) を参照してください。
 
-YahooのClient IDも現在はアプリに含まれます。公開版でのIDの扱いとAPI利用条件は確認中です。公開設定という技術的な性質だけで、第三者への開示が許可されるわけではありません。運営者・問い合わせ先・ポリシーURLの設定と残作業は [Phase 5：公開準備](docs/phase5-publication.md) にまとめています。
+Yahoo検索はサーバー経由で商品名を取得し、Yahooの商品画像は使いません。食材アイコンまたは自分の写真を表示します。[接続手順](docs/yahoo-name-search.md)を参照してください。商品名の保存・再利用などの利用条件は引き続き確認が必要です。
+
+公開用の連絡先とポリシーをWebテスト版へ反映するには、専用の公開設定ファイルを使います。設定項目・未完了の確認は [公開前チェックリスト](docs/publication-checklist.md)、これまでの実装は [Phase 5：公開準備](docs/phase5-publication.md) にまとめています。
 
 ## 詳しいガイド
 
 | 目的 | 読むページ |
 | --- | --- |
 | 公開前の画像・API・プライバシー等の課題を確認する | [公開前の権利・規約確認](docs/publication-compliance-review.md) |
+| アイコン・レシピ画像・文章の出所を確認する | [素材の確認記録](docs/asset-sources.md) |
 | Phase 5の公開準備・未確定事項を確認する | [Phase 5：公開準備](docs/phase5-publication.md) |
+| 公開設定と実機確認を進める | [公開前チェックリスト](docs/publication-checklist.md) |
 | Phase 1〜4の確認結果と残る作業を見る | [横断確認の結果](docs/phases1-4-verification.md) |
 | 食材・バーコード・レシピ・買い物を使う | [使い方ガイド](docs/USAGE.md) |
 | 通知やバックアップを設定する | [使い方ガイド](docs/USAGE.md#期限通知) |

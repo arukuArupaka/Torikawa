@@ -16,6 +16,7 @@ Module._load = function (request, ...args) {
       return { remove: () => listeners.delete(listener) };
     } },
     StyleSheet: { create: (styles) => styles }, Alert: { alert() {} }, SectionList: require('./native-section-list.cjs'),
+    Animated: { View: 'AnimatedView', Value: class { setValue() {} stopAnimation() {} } },
     Pressable: 'Pressable', ScrollView: 'ScrollView', Text: 'Text', TextInput: 'TextInput', View: 'View', Image: 'Image',
   };
   if (request === '@expo/vector-icons') return { Ionicons: 'Icon' };
@@ -25,6 +26,8 @@ Module._load = function (request, ...args) {
   };
   if (request.startsWith('../components/')) {
     const name = request.split('/').at(-1);
+    if (name === 'AnimatedDisclosure') return { AnimatedDisclosure: (props) => React.createElement(name, props,
+      props.header, props.expanded ? props.children : null) };
     return { [name]: (props) => React.createElement(name, props) };
   }
   return originalLoad.call(this, request, ...args);
@@ -56,7 +59,7 @@ async function mount(t, element) {
 }
 const labeledButton = (root, label) => root.findByProps({ accessibilityRole: 'button', accessibilityLabel: label });
 const textButton = (root, label) => root.findAllByType('Pressable').find((node) =>
-  node.findAllByType('Text').some((text) => text.props.children === label));
+  node.findAllByType('Text').some((text) => [text.props.children].flat().join('') === label));
 const recipeTitles = (root) => root.findAllByType('Pressable')
   .map((node) => node.props.accessibilityLabel).filter((label) => label?.endsWith('の材料と作り方を見る'));
 
@@ -86,6 +89,28 @@ test('Home opens all recipes when no food is due soon; empty inventory has no su
   await act(async () => renderer.update(React.createElement(HomeScreen, { navigation })));
   assert.equal(renderer.root.findAllByProps({ accessibilityLabel: '今日まで 0件' }).length, 0);
   assert.equal(renderer.root.findAllByType('Text').filter((node) => node.props.children === '食材を登録してみましょう').length, 1);
+});
+
+test('Home grouping changes apply the latest selection immediately and retain search and stock', async (t) => {
+  const milk = { ...food('牛乳', 7), category: 'dairy' }, frozen = { ...food('冷凍ごはん', 8), storage: 'frozen' };
+  data = { foods: [milk, frozen] };
+  const renderer = await mount(t, React.createElement(HomeScreen, { navigation: {} }));
+  const root = renderer.root;
+  await act(async () => root.findByType('TextInput').props.onChangeText('牛乳'));
+  await act(async () => {
+    textButton(root, '保存場所別').props.onPress();
+    textButton(root, 'カテゴリ別').props.onPress();
+    textButton(root, '保存場所別').props.onPress();
+  });
+  assert.equal(root.findByType('TextInput').props.value, '牛乳');
+  assert.equal(textButton(root, '保存場所別').props.accessibilityState.selected, true);
+  for (const label of ['期限順', 'カテゴリ別']) assert.equal(textButton(root, label).props.accessibilityState.selected, false);
+  assert.deepEqual(root.findAllByType('SectionHeader').map((node) => node.props.title), ['冷蔵']);
+  assert.strictEqual(root.findByType('SwipeableFoodCard').props.food, milk);
+  await act(async () => root.findByType('TextInput').props.onChangeText(''));
+  assert.deepEqual(root.findAllByType('SectionHeader').map((node) => node.props.title), ['冷蔵', '冷凍']);
+  assert.equal(root.findAllByType('SwipeableFoodCard').length, 2);
+  assert.deepEqual(data.foods, [milk, frozen]);
 });
 
 test('Home recipe entry clears old search/category, consumes its request, and works on repeated visits', async (t) => {
@@ -166,4 +191,43 @@ test('phase 4 expired-only entry clears search and shows only expired active foo
   assert.deepEqual(root.findAllByType('SwipeableFoodCard').map((node) => node.props.food.name), ['牛乳']);
   await act(async () => textButton(root, '期限切れのみ表示中 · すべての食材に戻す').props.onPress());
   assert.equal(root.findAllByType('SwipeableFoodCard').length, 2);
+});
+
+test('recipe accordions retain the query, category and selected condition after closing and reopening', async (t) => {
+  data = { foods: [food('牛乳', 7)], shoppingItems: [], recipes: [recipe('牛乳スープ', '牛乳', 'soup'), recipe('卵料理', '卵')] };
+  const renderer = await mount(t, React.createElement(RecipesScreen, { route: { params: {} }, navigation: {} }));
+  const root = renderer.root;
+  await act(async () => root.findByProps({ accessibilityLabel: '料理名・食材で検索' }).props.onChangeText('牛乳'));
+  await act(async () => labeledButton(root, '絞り込み').props.onPress());
+  await act(async () => textButton(root, '10分以内').props.onPress());
+  await act(async () => textButton(root, '汁物').props.onPress());
+  await act(async () => textButton(root, '1件のレシピを見る').props.onPress());
+  assert.equal(labeledButton(root, '絞り込み').props.accessibilityState.expanded, false);
+  assert.equal(root.findByProps({ accessibilityLabel: '料理名・食材で検索' }).props.value, '牛乳');
+  assert.deepEqual(recipeTitles(root), ['牛乳スープの材料と作り方を見る']);
+  await act(async () => labeledButton(root, '絞り込み').props.onPress());
+  assert.equal(textButton(root, '汁物').props.accessibilityState.selected, true);
+  assert.equal(textButton(root, '10分以内').props.accessibilityState.selected, true);
+  await act(async () => labeledButton(root, '牛乳スープの材料の確認').props.onPress());
+  assert.ok(root.findAllByType('Text').some((node) => String(node.props.children).includes('登録分量で判定')));
+  await act(async () => labeledButton(root, '牛乳スープの材料の確認').props.onPress());
+  assert.equal(root.findAllByType('Text').some((node) => String(node.props.children).includes('登録分量で判定')), false);
+  assert.equal(recipeTitles(root).length, 1, 'collapsing material details does not remove the recipe action');
+});
+
+test('nested recipe ideas retain their expanded selection when the outer panel is closed and reopened', async (t) => {
+  data = { foods: [food('卵', 2), food('牛乳', 7)], shoppingItems: [], recipes: [recipe('卵料理', '卵')] };
+  const renderer = await mount(t, React.createElement(RecipesScreen, { route: { params: {} }, navigation: {} }));
+  const root = renderer.root;
+  await act(async () => textButton(root, 'もっと探す').props.onPress());
+  await act(async () => labeledButton(root, '食材からレシピ候補を作る').props.onPress());
+  const ideasBefore = root.findAllByType('Pressable').map((node) => node.props.accessibilityLabel)
+    .filter((label) => label?.endsWith('をマイレシピへ保存'));
+  assert.ok(ideasBefore.length > 0);
+  await act(async () => textButton(root, 'もっと探す').props.onPress());
+  assert.equal(root.findAllByProps({ accessibilityLabel: '食材からレシピ候補を作る' }).length, 0);
+  await act(async () => textButton(root, 'もっと探す').props.onPress());
+  assert.equal(labeledButton(root, '食材からレシピ候補を作る').props.accessibilityState.expanded, true);
+  assert.deepEqual(root.findAllByType('Pressable').map((node) => node.props.accessibilityLabel)
+    .filter((label) => label?.endsWith('をマイレシピへ保存')), ideasBefore);
 });

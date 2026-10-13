@@ -24,6 +24,7 @@ Module._load = function (request, ...args) {
   if (request.endsWith('/services/productLookupService')) return { lookupProductByBarcode: async () => ({ product, source }) };
   if (request.endsWith('/services/openFoodFactsService')) return { ProductLookupRateLimitError: class extends Error {} };
   if (request.endsWith('/services/sharedProductService')) return {
+    isSharedProductsConfigured: () => true,
     reportSharedProduct: async (barcode, reason) => {
       reports.push({ barcode, reason });
       if (hold) await new Promise((resolve) => { release = resolve; });

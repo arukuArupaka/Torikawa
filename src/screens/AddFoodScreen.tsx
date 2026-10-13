@@ -3,6 +3,7 @@ import { SharedProductRules } from '../components/SharedProductRules';
 import { isSharedProductsConfigured, shareProduct } from '../services/sharedProductService';
 import { getRecentFoods } from '../utils/recentFoods';
 import { useAppAlert } from '../context/AppAlertContext';
+import { useAppToast } from '../context/AppToastContext';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useRef, useState } from 'react';
@@ -12,6 +13,7 @@ import { CategorySelector } from '../components/CategorySelector';
 import { FoodImagePicker } from '../components/FoodImagePicker';
 import { FormField } from '../components/FormField';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { AnimatedDisclosure } from '../components/AnimatedDisclosure';
 import { QuantityUnitSelector } from '../components/QuantityUnitSelector';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -19,6 +21,7 @@ import { StorageSelector } from '../components/StorageSelector';
 import { colors, radius, spacing } from '../constants/theme';
 import { useAppData } from '../context/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
+import { returnToMainTab } from '../navigation/returnToMainTab';
 import { persistFoodImage } from '../services/imageStorage';
 import { getStorageEpoch, assertStorageEpoch } from '../services/storage';
 import { correctLearnedProduct, saveLearnedProduct } from '../services/learnedProductService';
@@ -42,6 +45,7 @@ export function AddFoodScreen(props: Props) {
 
 function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { templateFood?: FoodItem; onReuse: (id: string) => void }) {
   const alert = useAppAlert();
+  const toast = useAppToast();
   const { foods, addFood, updateFood } = useAppData();
   const existingFood = foods.find((food) => food.id === route.params?.foodId);
   const isEditing = Boolean(existingFood);
@@ -335,7 +339,7 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
 
     if (existingFood) {
       correctionPending.current = rememberCorrection && correctionAvailable;
-      updateFood(existingFood.id, input);
+      updateFood(existingFood.id, input, () => toast('食材の変更を保存しました'));
       if (correctionPending.current && barcode) {
         try {
           await correctLearnedProduct({ barcode, name: input.name, ingredientName: input.ingredientName, category: input.category });
@@ -352,7 +356,7 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
     }
 
     try {
-      addFood(input, route.params?.shoppingItemId);
+      addFood(input, route.params?.shoppingItemId, () => toast('食材を登録しました'));
     } catch (error) {
       alert('食材を登録できませんでした', error instanceof Error ? error.message : '内容を確認して再試行してください。');
       setIsSaving(false);
@@ -383,16 +387,16 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
       setIsSaving(false);
       return;
     }
-    navigation.navigate('MainTabs', { screen: 'Home' });
+    returnToMainTab(navigation);
   };
 
   if (savedSharedProduct) return <Screen bottomSafe>
-    <ScreenHeader title="食材を登録しました" onBack={() => navigation.navigate('MainTabs', { screen: 'Home' })} />
+    <ScreenHeader title="食材を登録しました" onBack={() => returnToMainTab(navigation)} />
     <View style={styles.shareResult}>
       <Text style={styles.reuseName}>{savedSharedProduct.name}</Text>
       <Text accessibilityLiveRegion="polite" style={styles.reuseHint}>{sharePending ? '商品情報を共有しています...' : shareError || shareNotice}</Text>
       {shareError ? <PrimaryButton label="商品情報の共有を再試行" disabled={sharePending} onPress={() => void submitSharedProduct(savedSharedProduct)} variant="outline" /> : null}
-      <PrimaryButton label="ホームへ" onPress={() => navigation.navigate('MainTabs', { screen: 'Home' })} />
+      <PrimaryButton label="ホームへ" onPress={() => returnToMainTab(navigation)} />
     </View>
   </Screen>;
 
@@ -411,11 +415,13 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
           ) : null}
           {!isEditing && !templateFood && !route.params?.initialBarcode && !formEdited && foods.length > 0 ? (
             <View style={styles.reusePanel}>
+              <AnimatedDisclosure expanded={showPrevious} contentStyle={styles.previousContent} header={<View style={styles.previousHeading}>
               <Pressable accessibilityRole="button" accessibilityState={{ expanded: showPrevious }} aria-expanded={showPrevious} onPress={() => setShowPrevious((value) => !value)} style={styles.reuseToggle}>
                 <Text style={styles.reuseTitle}>前の登録から選ぶ</Text>
                 <Ionicons name={showPrevious ? 'chevron-up' : 'chevron-down'} size={19} color={colors.primaryDark} />
               </Pressable>
-              {showPrevious ? <>
+              <Text style={styles.reuseHint}>保存場所や単位を引き継いで入力を省略できます。</Text>
+              </View>}>
                 <TextInput accessibilityLabel="前の登録を検索" placeholder="食材名・商品名で検索" value={previousQuery} onChangeText={setPreviousQuery} style={styles.reuseSearch} />
                 {recentFoods.length === 0 ? <Text style={styles.reuseHint}>一致する登録はありません。下のフォームから登録できます。</Text> : recentFoods.map((food) => (
                   <Pressable key={food.id} accessibilityRole="button" accessibilityLabel={`${getFoodDisplayName(food)}の前回の設定を使う`} onPress={() => onReuse(food.id)} style={styles.reuseChoice}>
@@ -427,7 +433,7 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
                   </Pressable>
                 ))}
                 <Text style={styles.reuseHint}>最近の登録を最大8件表示しています。</Text>
-              </> : <Text style={styles.reuseHint}>保存場所や単位を引き継いで入力を省略できます。</Text>}
+              </AnimatedDisclosure>
             </View>
           ) : null}
           {templateFood ? <View style={styles.reusePanel}>
@@ -486,11 +492,10 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
             <Text style={styles.reuseTitle}>{rememberCorrection ? '☑' : '☐'} 次回のスキャンにも商品名・分類を反映</Text>
             <Text style={styles.reuseHint}>この端末の商品候補だけを更新します。今回の期限・残量・保存場所・メモは反映しません。</Text>
           </Pressable> : null}
-          <Pressable accessibilityRole="button" accessibilityState={{ expanded: showDetails }} aria-expanded={showDetails} onPress={() => setShowDetails((value) => !value)} style={styles.reuseToggle}>
+          <AnimatedDisclosure expanded={showDetails} contentStyle={styles.detailsContent} header={<Pressable accessibilityRole="button" accessibilityState={{ expanded: showDetails }} aria-expanded={showDetails} onPress={() => setShowDetails((value) => !value)} style={styles.reuseToggle}>
             <Text style={styles.reuseTitle}>{showDetails ? 'その他の項目を閉じる' : '写真・カテゴリ・購入日・メモを編集'}</Text>
             <Ionicons name={showDetails ? 'chevron-up' : 'chevron-down'} size={19} color={colors.primaryDark} />
-          </Pressable>
-          {showDetails ? <>
+          </Pressable>}>
             <FoodImagePicker image={image} onChange={handleImageChange} />
           <FormField label="カテゴリ">
             <CategorySelector onChange={handleCategoryChange} value={category} />
@@ -503,7 +508,7 @@ function AddFoodForm({ navigation, route, templateFood, onReuse }: Props & { tem
             placeholder="使い道や補足情報など"
             value={memo}
           />
-          </> : null}
+          </AnimatedDisclosure>
           {canOfferSharing ? <View style={styles.reusePanel}>
             <Text style={styles.reuseTitle}>商品情報の共有（任意）</Text>
             <Text style={styles.reuseHint}>共有するのは次の4項目です。個人の在庫・数量・期限・購入日・保存場所・メモ・写真は送信しません。</Text>
@@ -534,6 +539,8 @@ const styles = StyleSheet.create({
   shareChoice: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 48 },
   shareChoiceText: { flex: 1, color: colors.primaryDark, fontSize: 14, lineHeight: 22, fontWeight: '700' },
   reusePanel: { backgroundColor: colors.primarySoft, borderRadius: radius.md, padding: spacing.md, gap: spacing.sm },
+  previousHeading: { gap: spacing.sm },
+  previousContent: { gap: spacing.sm, paddingTop: spacing.sm },
   reuseToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, minHeight: 44 },
   reuseTitle: { color: colors.primaryDark, fontSize: 15, fontWeight: '700', flexShrink: 1 },
   reuseName: { color: colors.text, fontSize: 17, fontWeight: '700', lineHeight: 24 },
@@ -543,6 +550,7 @@ const styles = StyleSheet.create({
   reuseSearch: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.sm, padding: 12, fontSize: 16, color: colors.text, minHeight: 48 },
   flex: { flex: 1 },
   content: { gap: 22, padding: spacing.md, paddingBottom: spacing.xl },
+  detailsContent: { gap: 22, paddingTop: 22 },
   barcodeNotice: { alignItems: 'flex-start', backgroundColor: colors.primarySoft, borderRadius: radius.md, flexDirection: 'row', gap: spacing.sm, padding: 13 },
   barcodeNoticeText: { color: colors.primaryDark, flex: 1, fontSize: 13, lineHeight: 19 },
   productInfoCard: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, padding: spacing.md },

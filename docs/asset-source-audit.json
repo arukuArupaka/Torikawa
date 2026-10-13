@@ -1,0 +1,300 @@
+{
+  "schemaVersion": 1,
+  "checkedDate": "2026-10-08",
+  "scope": "Bundled image files, built-in recipe text sources and fixed Unsplash image references; runtime OFF images, user photos, fonts and all other software notices are separate.",
+  "expoRevision": "a7f291bd4679b15c1ee64ffca97e68b25c6dda15",
+  "expoLicenseUrl": "https://raw.githubusercontent.com/expo/expo/a7f291bd4679b15c1ee64ffca97e68b25c6dda15/LICENSE",
+  "images": [
+    {
+      "path": "assets/android-icon-background.png",
+      "sha256": "fb139c2dee362ebf2070e23b96da6fc0d43f8492de38b8af1fd7223e19b5861d",
+      "status": "source-verified",
+      "sourceUrl": "https://raw.githubusercontent.com/expo/expo/a7f291bd4679b15c1ee64ffca97e68b25c6dda15/templates/expo-template-blank-typescript/assets/android-icon-background.png",
+      "copyright": "2015-present 650 Industries, Inc. (aka Expo)",
+      "license": "MIT",
+      "licenseUrl": "https://raw.githubusercontent.com/expo/expo/a7f291bd4679b15c1ee64ffca97e68b25c6dda15/LICENSE",
+      "evidence": "Local bytes match the official template at the recorded revision. This identifies the source; it is not a trademark clearance."
+    },
+    {
+      "path": "assets/android-icon-foreground.png",
+      "sha256": "9e3d0315a33c6799de601dd34cd8bf8cc3a8d16f3bf75592baec2ceb7240b391",
+      "status": "source-verified",
+      "sourceUrl": "https://raw.githubusercontent.com/expo/expo/a7f291bd4679b15c1ee64ffca97e68b25c6dda15/templates/expo-template-blank-typescript/assets/android-icon-foreground.png",
+      "copyright": "2015-present 650 Industries, Inc. (aka Expo)",
+      "license": "MIT",
+      "licenseUrl": "https://raw.githubusercontent.com/expo/expo/a7f291bd4679b15c1ee64ffca97e68b25c6dda15/LICENSE",
+      "evidence": "Local bytes match the official template at the recorded revision. This identifies the source; it is not a trademark clearance."
+    },
+    {
+      "path": "assets/android-icon-monochrome.png",
+      "sha256": "6371fc2c12e33ad2215a86c281db3d682a81bebe7c957a842c13b8bf00cceb83",
+      "status": "source-verified",
+      "sourceUrl": "https://raw.githubusercontent.com/expo/expo/a7f291bd4679b15c1ee64ffca97e68b25c6dda15/templates/expo-template-blank-typescript/assets/android-icon-monochrome.png",
+      "copyright": "2015-present 650 Industries, Inc. (aka Expo)",
+      "license": "MIT",
+      "licenseUrl": "https://raw.githubusercontent.com/expo/expo/a7f291bd4679b15c1ee64ffca97e68b25c6dda15/LICENSE",
+      "evidence": "Local bytes match the official template at the recorded revision. This identifies the source; it is not a trademark clearance."
+    },
+    {
+      "path": "assets/favicon.png",
+      "sha256": "a4e030697a7571b3e95d31860e4da55d2f98e5e861e2b55e414f45a8556828ba",
+      "status": "source-verified",
+      "sourceUrl": "https://raw.githubusercontent.com/expo/expo/a7f291bd4679b15c1ee64ffca97e68b25c6dda15/templates/expo-template-blank-typescript/assets/favicon.png",
+      "copyright": "2015-present 650 Industries, Inc. (aka Expo)",
+      "license": "MIT",
+      "licenseUrl": "https://raw.githubusercontent.com/expo/expo/a7f291bd4679b15c1ee64ffca97e68b25c6dda15/LICENSE",
+      "evidence": "Local bytes match the official template at the recorded revision. This identifies the source; it is not a trademark clearance."
+    },
+    {
+      "path": "assets/icon.png",
+      "sha256": "119462bb78eb240a65c869fc067ee599639b3cb5a41953f25c07b17d2a8c7e0f",
+      "status": "source-verified",
+      "sourceUrl": "https://raw.githubusercontent.com/expo/expo/a7f291bd4679b15c1ee64ffca97e68b25c6dda15/templates/expo-template-blank-typescript/assets/icon.png",
+      "copyright": "2015-present 650 Industries, Inc. (aka Expo)",
+      "license": "MIT",
+      "licenseUrl": "https://raw.githubusercontent.com/expo/expo/a7f291bd4679b15c1ee64ffca97e68b25c6dda15/LICENSE",
+      "evidence": "Local bytes match the official template at the recorded revision. This identifies the source; it is not a trademark clearance."
+    },
+    {
+      "path": "assets/splash-icon.png",
+      "sha256": "5f4c0a732b6325bf4071d9124d2ae67e037cb24fcc9c482ef82bea742109a3b8",
+      "status": "source-verified",
+      "sourceUrl": "https://raw.githubusercontent.com/expo/expo/a7f291bd4679b15c1ee64ffca97e68b25c6dda15/templates/expo-template-blank-typescript/assets/splash-icon.png",
+      "copyright": "2015-present 650 Industries, Inc. (aka Expo)",
+      "license": "MIT",
+      "licenseUrl": "https://raw.githubusercontent.com/expo/expo/a7f291bd4679b15c1ee64ffca97e68b25c6dda15/LICENSE",
+      "evidence": "Local bytes match the official template at the recorded revision. This identifies the source; it is not a trademark clearance."
+    },
+    {
+      "path": "assets/recipes/cabbage-egg-stir-fry.jpg",
+      "sha256": "699a1a3ab71dda6b80fbd8f011a761458eee9ab9ef5ac8542983553f6fa20634",
+      "status": "unverified",
+      "sourceUrl": null,
+      "copyright": null,
+      "license": null,
+      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata."
+    },
+    {
+      "path": "assets/recipes/egg-sandwich.jpg",
+      "sha256": "c35037377f2fd16ece2f0f6283a94f4303531e846d6d01ddac0f829d297481d8",
+      "status": "unverified",
+      "sourceUrl": null,
+      "copyright": null,
+      "license": null,
+      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata."
+    },
+    {
+      "path": "assets/recipes/fluffy-omelette.jpg",
+      "sha256": "e3f41095c1e05586fa896215b47e81106e20cb4a5044fc0f14d2e79b8f68acf4",
+      "status": "unverified",
+      "sourceUrl": null,
+      "copyright": null,
+      "license": null,
+      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata."
+    },
+    {
+      "path": "assets/recipes/milk-potage.jpg",
+      "sha256": "1d34d3918042947bf0c5303abd55d962d9f6c64f0a9736f4322f189b3c47fdfc",
+      "status": "unverified",
+      "sourceUrl": null,
+      "copyright": null,
+      "license": null,
+      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata."
+    },
+    {
+      "path": "assets/recipes/pork-cabbage-miso-stir-fry.jpg",
+      "sha256": "213569e9c75b1578bf3753ce2680be297c416b7630a845e1b5ba5936107ae8bd",
+      "status": "unverified",
+      "sourceUrl": null,
+      "copyright": null,
+      "license": null,
+      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata."
+    },
+    {
+      "path": "assets/recipes/tofu-steak.jpg",
+      "sha256": "c5a3a2c474a0f92e168ab829c1f733eca26705018eebec175cf11d5dce26f707",
+      "status": "unverified",
+      "sourceUrl": null,
+      "copyright": null,
+      "license": null,
+      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata."
+    },
+    {
+      "path": "assets/recipes/tofu-wakame-miso-soup.jpg",
+      "sha256": "32a0dfaaef5055ae909779163435344e9255f30aa56fd520f811de4d053893c8",
+      "status": "unverified",
+      "sourceUrl": null,
+      "copyright": null,
+      "license": null,
+      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata."
+    },
+    {
+      "path": "assets/recipes/vegetable-soup.jpg",
+      "sha256": "72da9f9f58050eff8bf41be1ce4757e6afa313c8558c895d992c33705073d882",
+      "status": "unverified",
+      "sourceUrl": null,
+      "copyright": null,
+      "license": null,
+      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata."
+    }
+  ],
+  "textSources": [
+    {
+      "path": "src/data/sampleData.ts",
+      "sha256": "5af645eed76f845e016879e49c3784384bce69a8061c9bc187461162721c16bb",
+      "status": "unverified",
+      "sourceUrl": null,
+      "evidence": "Recipe text is in the repository, but original authorship or third-party permission has not been established. This is not a finding of infringement."
+    },
+    {
+      "path": "src/data/legacySampleRecipes.v1.json",
+      "sha256": "9a6bbb543ebbb0832a0e0a9154c7609cf080d071fd7bfe71e5ec2a58914f669d",
+      "status": "unverified",
+      "sourceUrl": null,
+      "evidence": "Recipe text is in the repository, but original authorship or third-party permission has not been established. This is not a finding of infringement."
+    },
+    {
+      "path": "src/services/localRecipeSuggestionService.ts",
+      "sha256": "3f5c826de1b80881aed995c866bbf014db532cd8b1e04e56b09becbd88d9aa43",
+      "status": "unverified",
+      "sourceUrl": null,
+      "evidence": "Recipe text is in the repository, but original authorship or third-party permission has not been established. This is not a finding of infringement."
+    }
+  ],
+  "externalImageReferences": [
+    {
+      "url": "https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=800",
+      "usedIn": [
+        "src/data/sampleData.ts",
+        "src/utils/recipeImages.ts"
+      ],
+      "status": "unverified",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1510693206972-df098062cb71?w=800",
+      "usedIn": [
+        "src/data/sampleData.ts"
+      ],
+      "status": "unverified",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1607301405390-d831c242f59b?w=800",
+      "usedIn": [
+        "src/data/sampleData.ts"
+      ],
+      "status": "unverified",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1512058564366-18510be2db19?w=800",
+      "usedIn": [
+        "src/data/sampleData.ts",
+        "src/utils/recipeImages.ts"
+      ],
+      "status": "unverified",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=800",
+      "usedIn": [
+        "src/data/sampleData.ts",
+        "src/utils/recipeImages.ts"
+      ],
+      "status": "unverified",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1617692855027-33b14f061079?w=800",
+      "usedIn": [
+        "src/data/sampleData.ts",
+        "src/utils/recipeImages.ts"
+      ],
+      "status": "unverified",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1547592180-85f173990554?w=800",
+      "usedIn": [
+        "src/data/sampleData.ts",
+        "src/utils/recipeImages.ts"
+      ],
+      "status": "unverified",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=800",
+      "usedIn": [
+        "src/data/sampleData.ts"
+      ],
+      "status": "unverified",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1563636619-e9143da7973b?w=300",
+      "usedIn": [
+        "src/data/sampleData.ts",
+        "src/data/productCatalog.ts"
+      ],
+      "status": "unverified",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1604329760661-e71dc83f8f26?w=300",
+      "usedIn": [
+        "src/data/sampleData.ts"
+      ],
+      "status": "unverified",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1506976785307-8732e854ad03?w=300",
+      "usedIn": [
+        "src/data/sampleData.ts"
+      ],
+      "status": "unverified",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1594282486552-05b4d80fbb9f?w=300",
+      "usedIn": [
+        "src/data/sampleData.ts"
+      ],
+      "status": "unverified",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=800",
+      "usedIn": [
+        "src/utils/recipeImages.ts"
+      ],
+      "status": "unverified",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1543352634-a1c51d9f1fa7?w=800",
+      "usedIn": [
+        "src/utils/recipeImages.ts"
+      ],
+      "status": "unverified",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=800",
+      "usedIn": [
+        "src/utils/recipeImages.ts"
+      ],
+      "status": "unverified",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800",
+      "usedIn": [
+        "src/utils/recipeImages.ts"
+      ],
+      "status": "unverified",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+    }
+  ]
+}

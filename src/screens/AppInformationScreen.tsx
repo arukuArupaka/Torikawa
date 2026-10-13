@@ -3,6 +3,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SharedProductRules } from '../components/SharedProductRules';
+import expoTemplateAssetNotice from '../data/expoTemplateAssetNotice.json';
 import { dataHandlingSections, getPublicationInformation } from '../constants/publication';
 import { colors, radius, spacing } from '../constants/theme';
 import { useAppAlert } from '../context/AppAlertContext';
@@ -45,6 +46,12 @@ export function AppInformationScreen({ navigation, route }: Props) {
           </View>
         </> : <>
           <View style={styles.card}>
+            <Text accessibilityRole="header" style={styles.title}>アプリアイコン（Expoテンプレート）</Text>
+            <Text style={styles.body}>標準アイコン画像はExpoのテンプレートに由来します。MITライセンスの著作権表示と本文を掲載します。</Text>
+            {link('アイコンの元ファイル', expoTemplateAssetNotice.sourceUrl)}
+            <Text selectable style={styles.body}>{expoTemplateAssetNotice.text}</Text>
+          </View>
+          <View style={styles.card}>
             <Text accessibilityRole="header" style={styles.title}>Open Food Facts</Text>
             <Text style={styles.body}>商品データの提供：Open Food Factsとその投稿者。データベースはODbL、個々の内容はDatabase Contents License、商品画像はCC BY-SA 3.0で提供されています。</Text>
             {link('Open Food Facts', 'https://world.openfoodfacts.org/')}
@@ -55,13 +62,13 @@ export function AppInformationScreen({ navigation, route }: Props) {
           </View>
           <View style={styles.card}>
             <Text accessibilityRole="header" style={styles.title}>Yahoo!ショッピング</Text>
-            <Text style={styles.body}>接続設定がある場合に商品検索を利用します。</Text>
+            <Text style={styles.body}>接続設定がある場合、検索APIを経由して商品名を取得します。Yahoo!ショッピングの商品画像は使用せず、食材アイコンまたは選んだ写真で表示します。分類・保存場所はアプリで推定しています。</Text>
             <Text selectable style={styles.body}>Webサービス by Yahoo! JAPAN （https://developer.yahoo.co.jp/sitemap/）</Text>
             {link('Yahoo!デベロッパーネットワーク', 'https://developer.yahoo.co.jp/sitemap/')}
           </View>
           <View style={styles.card}>
             <Text accessibilityRole="header" style={styles.title}>イメージ写真</Text>
-            <Text style={styles.body}>食材のイメージ写真の一部はUnsplashの画像を使用しています。実際に登録した商品・食材の写真とは異なる場合があります。</Text>
+            <Text style={styles.body}>食材の初期表示にはアイコンを使用します。レシピや開発用サンプルのイメージ写真の一部はUnsplashの画像を使用しています。実際の商品・料理とは異なる場合があります。</Text>
             {link('Unsplashのライセンス', 'https://unsplash.com/license')}
           </View>
           <View style={styles.card}>

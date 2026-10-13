@@ -72,6 +72,26 @@ test('Web explicitly disables notification saving and tests', async () => {
   assert.ok(renderer.root.findAllByType('Text').some((node) => node.props.children === 'Web版は通知非対応'));
   await act(async () => renderer.unmount());
 });
+
+test('Settings keeps notification failure details and manual retry available after the home notice is dismissed', async () => {
+  reset(); let renderer, retries = 0;
+  const failure = '端末の通知予約が予定と一致しません';
+  data.notificationSyncError = failure;
+  data.resyncNotifications = async () => { retries++; throw Error(failure); };
+  try {
+    await act(async () => { renderer = create(React.createElement(SettingsScreen, { navigation: {} })); });
+    assert.ok(renderer.root.findAllByType('Text').some((node) => node.props.children === failure));
+    await act(async () => {
+      renderer.root.findAllByType('PrimaryButton').find((node) => node.props.label === '通知を再同期').props.onPress();
+      await flush();
+    });
+    assert.equal(retries, 1); assert.equal(data.notificationSyncError, failure);
+    assert.equal(alerts.at(-1)[0], '通知を再同期できませんでした');
+  } finally {
+    data.notificationSyncError = null; data.resyncNotifications = async () => {};
+    if (renderer) await act(async () => renderer.unmount());
+  }
+});
 test('image errors display a local placeholder and changing the URI retries the image', async () => {
   reset(); let renderer;
   await act(async () => { renderer = create(React.createElement(FoodImage, { source: { uri: 'missing.jpg' } })); });
@@ -81,6 +101,18 @@ test('image errors display a local placeholder and changing the URI retries the 
   assert.equal(renderer.root.findByType('Image').props.source.uri, 'another.jpg');
   await act(async () => renderer.unmount());
 });
+test('food icons and legacy Yahoo hosts never mount a remote Image; a selected photo still renders', async () => {
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(FoodImage, { source: { uri: 'food-icon:dairy' } })); });
+  assert.equal(renderer.root.findAllByType('Image').length, 0);
+  assert.equal(renderer.root.findByType('Icon').props.name, 'water-outline');
+  await act(async () => renderer.update(React.createElement(FoodImage, { source: { uri: 'https://item-shopping.c.yimg.jp/photo.jpg' } })));
+  assert.equal(renderer.root.findAllByType('Image').length, 0);
+  await act(async () => renderer.update(React.createElement(FoodImage, { source: { uri: 'file:///document/my-photo.jpg' } })));
+  assert.equal(renderer.root.findByType('Image').props.source.uri, 'file:///document/my-photo.jpg');
+  await act(async () => renderer.unmount());
+});
+
 test('photo permission rejection, API failures and oversized assets preserve the original image and allow retry', async () => {
   reset(); let renderer; const selected = [];
   await act(async () => { renderer = create(React.createElement(FoodImagePicker, { image: 'original.jpg', onChange: (uri) => selected.push(uri) })); });

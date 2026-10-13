@@ -3,6 +3,7 @@ import { StyleProp, StyleSheet, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../constants/theme';
 import { WebTestNotice } from './WebTestNotice';
+import { YahooCredit } from './YahooCredit';
 
 export function Screen({
   children,
@@ -20,6 +21,7 @@ export function Screen({
     >
       <WebTestNotice />
       {children}
+      <YahooCredit />
     </SafeAreaView>
   );
 }

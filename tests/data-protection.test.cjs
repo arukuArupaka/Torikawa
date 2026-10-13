@@ -47,6 +47,7 @@ const adapter = {
   },
 };
 const native = {
+  Animated: { View: 'View', Value: class { setValue() {} stopAnimation() {} } },
   AppState: { addEventListener: (_event, callback) => { appListeners.add(callback); return { remove: () => appListeners.delete(callback) }; } },
   Image: { resolveAssetSource: () => ({ uri: 'test-image' }) },
   Alert: { alert: (...args) => alerts.push(args) },
@@ -115,6 +116,29 @@ async function mount(t, child) {
   return renderer;
 }
 const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
+
+test('legacy Yahoo images are excluded from catalog reuse, migration and backups without removing user photos', async () => {
+  await reset();
+  const code = '4901234567887';
+  const source = { provider: 'yahoo-shopping', barcode: code, productUrl: 'https://store.shopping.yahoo.co.jp/test/milk.html', fetchedAt: '2026-10-03T00:00:00.000Z' };
+  const oldImage = 'https://item-shopping.c.yimg.jp/old-photo.jpg';
+  await storage.saveStoredValue(keys.learnedProducts, { [code]: { ...product(code, oldImage), productSource: source } });
+  assert.equal((await findLearnedProduct(code)).image, 'food-icon:dairy');
+  const input = data();
+  input.foods = [food({ image: oldImage, productSource: source }), food({ id: 'own-photo', productSource: source })];
+  const { normalizeAppData } = require('../src/services/appDataMigration.ts');
+  const migrated = normalizeAppData(input);
+  assert.equal(migrated.foods[0].image, 'food-icon:dairy');
+  assert.equal(migrated.foods[1].image, input.foods[1].image);
+  const prepared = await prepareBackup(input);
+  assert.equal(prepared.contents.includes('yimg.jp'), false);
+  const exported = JSON.parse(prepared.contents);
+  assert.equal(exported.data.learnedProducts[code].image, 'food-icon:dairy');
+  assert.equal(exported.data.foods[0].image, 'food-icon:dairy');
+  assert.equal(prepared.embeddedCount, 1);
+  await correctLearnedProduct({ barcode: code, name: '牛乳', ingredientName: '牛乳', category: 'dairy' });
+  assert.equal((await storage.loadStoredValue(keys.learnedProducts))[code].image, 'food-icon:dairy');
+});
 
 test('product provenance is retained by learned corrections and portable backup restore', async () => {
   await reset();
@@ -623,4 +647,99 @@ test('phase 4 registration rejects stale purchase state and malformed duplicate 
   assert.throws(() => validatePayload(invalid), /同じ購入分/);
   invalid.data.foods.pop(); invalid.data.foods[0].sourceShoppingItemId = 123;
   assert.throws(() => validatePayload(invalid));
+});
+
+test('used and disposed undo waits for commit, restores only its food, and runs once', async (t) => {
+  await reset(); await mount(t);
+  for (const [method, status] of [['markFoodUsed', 'used'], ['markFoodDisposed', 'disposed']]) {
+    const before = context.foods[0];
+    const gate = deferred(); let holding = true;
+    beforeWrite = async (key) => { if (key === keys.foods && holding) { holding = false; await gate.promise; } };
+    let undo; let notices = 0;
+    await act(async () => context[method](before.id, (action) => { notices++; undo = action; }));
+    assert.equal(context.foods[0].status, status);
+    assert.equal(notices, 0, 'no success or undo action before storage commits');
+    await act(async () => gate.resolve());
+    assert.equal(notices, 1);
+    beforeWrite = async () => {};
+    // An unrelated edit and an optional shopping addition must survive undo.
+    await act(async () => {
+      context.addFood(food({ name: '別の食材', memo: 'この編集は残す', image: '' }));
+      context.addShoppingItem('牛乳', '使い切った食材から追加');
+    });
+    let restoredNotice = 0;
+    await act(async () => {
+      assert.equal(undo(() => restoredNotice++), true);
+      assert.equal(undo(() => restoredNotice++), false);
+    });
+    const restored = context.foods.find((item) => item.id === before.id);
+    assert.equal(restored.status, 'active');
+    assert.equal(restored.usedAt, null); assert.equal(restored.disposedAt, null);
+    assert.equal(restored.quantity, before.quantity);
+    assert.deepEqual(restored.consumptionHistory, before.consumptionHistory);
+    assert.equal(restored.revision, (before.revision ?? 0) + 2);
+    assert.equal(restoredNotice, 1);
+    assert.ok(context.foods.some((item) => item.memo === 'この編集は残す'));
+    assert.ok(context.shoppingItems.some((item) => item.name === '牛乳'));
+    assert.equal((await diskSnapshot())[keys.foods].find((item) => item.id === before.id).status, 'active');
+    // Return the fixture food to the front for the next status path.
+    await act(async () => context.replaceAppData({ ...context, foods: [restored] }));
+  }
+});
+
+test('status and undo save failures show completion only after one successful retry', async (t) => {
+  await reset(); await mount(t);
+  failWrite = (key) => key === keys.foods;
+  let notices = 0, undo, restoredNotices = 0;
+  await act(async () => context.markFoodUsed('food-1', (action) => { notices++; undo = action; }));
+  assert.ok(context.saveError); assert.equal(notices, 0);
+  failWrite = () => false;
+  await act(async () => context.retrySave());
+  assert.equal(notices, 1);
+  failWrite = (key) => key === keys.foods;
+  await act(async () => assert.equal(undo(() => restoredNotices++), true));
+  assert.ok(context.saveError); assert.equal(restoredNotices, 0);
+  failWrite = () => false;
+  await act(async () => context.retrySave());
+  await act(async () => context.retrySave());
+  assert.equal(notices, 1); assert.equal(restoredNotices, 1);
+  assert.equal((await diskSnapshot())[keys.foods][0].status, 'active');
+});
+
+test('undo rejects edits, deletion, history restore, and replacement using the same id', async (t) => {
+  await reset(); await mount(t);
+  for (const change of [
+    () => context.updateFood('food-1', { ...context.foods[0], memo: '後の編集' }),
+    () => context.deleteFood('food-1'),
+    () => context.restoreFood('food-1'),
+    () => context.replaceAppData({ ...data(), foods: [food({ status: 'used', usedAt: '2026-10-13' })] }),
+  ]) {
+    await act(async () => context.replaceAppData(data()));
+    let undo;
+    await act(async () => context.markFoodDisposed('food-1', (action) => { undo = action; }));
+    await act(async () => change());
+    const current = context.foods;
+    await act(async () => assert.equal(undo(), false));
+    assert.strictEqual(context.foods, current);
+  }
+});
+
+test('late status callbacks are cancelled by edits and backup restore; unmounted undo is inert', async (t) => {
+  await reset(); const renderer = await mount(t);
+  failWrite = (key) => key === keys.foods;
+  let notices = 0;
+  await act(async () => context.markFoodUsed('food-1', () => notices++));
+  await act(async () => context.updateFood('food-1', { ...context.foods[0], memo: '後から編集' }));
+  failWrite = () => false;
+  await act(async () => context.retrySave());
+  assert.equal(notices, 0);
+  await act(async () => context.restoreFood('food-1'));
+  let undo;
+  await act(async () => context.markFoodDisposed('food-1', (action) => { undo = action; }));
+  await act(async () => context.restoreAppData(payload()));
+  await act(async () => assert.equal(undo(), false));
+  const id = context.foods[0].id;
+  await act(async () => context.markFoodUsed(id, (action) => { undo = action; }));
+  await act(async () => renderer.unmount());
+  assert.equal(undo(), false);
 });

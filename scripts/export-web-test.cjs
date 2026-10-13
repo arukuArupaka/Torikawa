@@ -1,33 +1,35 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { readPublicationConfig, createWebTestEnvironment } = require('./publication-config.cjs');
+const { createDataHandlingHtml, renderTestGuide } = require('./web-data-handling.cjs');
 
 const args = process.argv.slice(2);
 const githubPages = args.includes('--github-pages');
+const yahooEnabled = args.includes('--yahoo');
+if (githubPages && yahooEnabled) throw new Error('GitHub Pagesには検索APIを配置できません。別途HTTPSの検索APIを設定してください。');
 const basePathIndex = args.indexOf('--base-path');
 const basePath = basePathIndex >= 0 ? args[basePathIndex + 1] : githubPages ? '/Torikawa' : '';
 if (basePath === undefined || (basePath && !/^\/[A-Za-z0-9_-]+$/.test(basePath))) {
   throw new Error('--base-pathは /repository-name または空文字で指定してください。');
 }
 const root = path.resolve(__dirname, '..');
+const publicationIndex = args.indexOf('--publication-config');
+let publication = null;
+if (publicationIndex >= 0) {
+  const file = args[publicationIndex + 1];
+  if (!file || file.startsWith('--') || args.filter(arg => arg === '--publication-config').length !== 1) {
+    throw new Error('--publication-config の後に公開設定ファイルを1つ指定してください。');
+  }
+  publication = readPublicationConfig(path.resolve(file));
+}
 const exportsRoot = path.join(root, 'dist-web-test');
 fs.mkdirSync(exportsRoot, { recursive: true });
 const output = fs.mkdtempSync(path.join(exportsRoot, 'site-'));
 
 // Never read local .env files or inherit a developer's API identifiers and
 // private-network URLs into the files being handed to friends.
-const environment = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('EXPO_PUBLIC_')));
-Object.assign(environment, {
-  EXPO_NO_DOTENV: '1',
-  EXPO_PUBLIC_WEB_TEST: 'true',
-  EXPO_PUBLIC_WEB_BASE_PATH: basePath,
-  EXPO_PUBLIC_DEMO_DATA: 'false',
-  EXPO_PUBLIC_YAHOO_SHOPPING_APP_ID: '',
-  EXPO_PUBLIC_SHARED_PRODUCTS_URL: '',
-  EXPO_PUBLIC_OPERATOR_NAME: '',
-  EXPO_PUBLIC_SUPPORT_EMAIL: '',
-  EXPO_PUBLIC_PRIVACY_POLICY_URL: '',
-});
+const environment = createWebTestEnvironment(process.env, { basePath, yahooEnabled, publication });
 
 const result = spawnSync(process.execPath, [path.join(root, 'node_modules/expo/bin/cli'), 'export',
   '--platform', 'web', '--max-workers', '2', '--clear', '--output-dir', output], {
@@ -39,7 +41,9 @@ if (result.error || result.status !== 0) {
 }
 if (!fs.existsSync(path.join(output, 'index.html'))) throw new Error('index.htmlがありません。配布を中止します。');
 
-fs.copyFileSync(path.join(root, 'web-test/test-guide.html'), path.join(output, 'test-guide.html'));
+fs.writeFileSync(path.join(output, 'test-guide.html'), renderTestGuide(
+  fs.readFileSync(path.join(root, 'web-test/test-guide.html'), 'utf8'), { publication, yahooEnabled }));
+fs.writeFileSync(path.join(output, 'data-handling.html'), createDataHandlingHtml({ publication, yahooEnabled }));
 const indexFile = path.join(output, 'index.html');
 const indexHtml = fs.readFileSync(indexFile, 'utf8').replace('</head>',
   '<meta name="robots" content="noindex, nofollow, noarchive"></head>');

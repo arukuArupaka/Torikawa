@@ -1,4 +1,5 @@
 import * as DocumentPicker from 'expo-document-picker';
+import { withoutYahooImage } from '../utils/yahooImagePolicy';
 import { discardRestoredImage, embedImage, restoreImage } from './backupImages';
 import { AppDataSnapshot } from '../types';
 import type { LearnedProductCatalog } from './learnedProductService';
@@ -107,11 +108,17 @@ export async function prepareBackup(data: AppDataSnapshot): Promise<PreparedBack
   };
   // Bound peak memory: one image read at a time, with shared image references.
   const foods = [];
-  for (const food of data.foods) foods.push({ ...food, image: await image(food.image) });
+  for (const food of data.foods) {
+    const safeFood = withoutYahooImage(food);
+    foods.push({ ...safeFood, image: await image(safeFood.image) });
+  }
   const recipes = [];
   for (const recipe of data.recipes) recipes.push({ ...recipe, image: await image(recipe.image) });
   const learned: LearnedProductCatalog = {};
-  for (const [barcode, product] of Object.entries(learnedProducts)) learned[barcode] = { ...product, image: await image(product.image) };
+  for (const [barcode, product] of Object.entries(learnedProducts)) {
+    const safeProduct = withoutYahooImage(product);
+    learned[barcode] = { ...safeProduct, image: await image(safeProduct.image) };
+  }
 
   const payload: BackupPayload = {
     format: BACKUP_FORMAT,

@@ -2,6 +2,8 @@ import { FoodImage } from '../components/FoodImage';
 import { ProductAttribution } from '../components/ProductAttribution';
 import { SharedProductReport } from '../components/SharedProductReport';
 import { ProductLookupRateLimitError } from '../services/openFoodFactsService';
+import { isYahooProductLookupConfigured } from '../services/yahooProductLookupService';
+import { isSharedProductsConfigured } from '../services/sharedProductService';
 import { normalizeSharedBarcode } from '../../shared/productContract';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -194,7 +196,7 @@ export function BarcodeScreen({ navigation }: Props) {
         <View style={styles.note}>
           <Ionicons color={colors.textMuted} name="information-circle-outline" size={20} />
           <Text style={styles.noteText}>
-            商品検索には端末内カタログ、共有商品データベース、Yahoo!ショッピング、Open Food Factsを使用します。共有の商品情報は利用者の投稿を管理者が確認した内容です。商品名を確認してご利用ください。データベースにない商品も、バーコード番号を引き継いで手入力できます。
+            商品検索には端末内の商品候補、{isSharedProductsConfigured() ? '共有商品データベース、' : ''}{isYahooProductLookupConfigured() ? 'Yahoo!ショッピング（商品名のみ）、' : ''}Open Food Factsを使用します。商品名を確認してご利用ください。見つからない商品も、バーコード番号を引き継いで手入力できます。Yahoo!ショッピングの商品画像は使用しません。
           </Text>
         </View>
         {scanResult?.product ? <ProductAttribution source={scanResult.product.productSource} image={scanResult.product.image} /> : null}

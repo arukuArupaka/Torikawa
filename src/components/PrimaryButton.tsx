@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
 import { colors, radius, spacing } from '../constants/theme';
+import { usePressMotion } from '../hooks/usePressMotion';
 
 export function PrimaryButton({
   label,
@@ -17,21 +18,28 @@ export function PrimaryButton({
   style?: ViewStyle;
   variant?: 'primary' | 'outline' | 'danger';
 }) {
+  const { scale, onPressIn, onPressOut } = usePressMotion(disabled);
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
       style={({ pressed }) => [
-        styles.base,
-        variant === 'outline' && styles.outline,
-        variant === 'danger' && styles.danger,
-        disabled && styles.disabled,
+        styles.touchTarget,
         pressed && styles.pressed,
         style,
       ]}
     >
+      <Animated.View pointerEvents="none" style={[
+        styles.base,
+        variant === 'outline' && styles.outline,
+        variant === 'danger' && styles.danger,
+        disabled && styles.disabled,
+        { transform: [{ scale }] },
+      ]}>
       {icon ? (
         <Ionicons
           color={variant === 'primary' ? colors.surface : variant === 'danger' ? colors.danger : colors.primary}
@@ -48,11 +56,13 @@ export function PrimaryButton({
       >
         {label}
       </Text>
+      </Animated.View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  touchTarget: { minHeight: 50 },
   base: {
     alignItems: 'center',
     backgroundColor: colors.primary,

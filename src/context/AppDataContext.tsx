@@ -14,6 +14,9 @@ import { createId } from '../utils/id';
 import { hasPendingShoppingItem } from '../utils/shoppingList';
 import { applyFoodConsumption, ConsumptionRequest } from '../utils/foodConsumption';
 
+export type UndoFoodStatus = (onSaved?: () => void) => boolean;
+type FoodStatusSaved = (undo: UndoFoodStatus) => void;
+
 type AppDataContextValue = {
   foods: FoodItem[];
   recipes: Recipe[];
@@ -30,11 +33,11 @@ type AppDataContextValue = {
   retryLoad: () => void;
   saveError: string | null;
   retrySave: () => void;
-  addFood: (food: NewFoodItem, shoppingItemId?: string) => FoodItem;
-  updateFood: (id: string, food: NewFoodItem) => void;
-  markFoodUsed: (id: string) => void;
+  addFood: (food: NewFoodItem, shoppingItemId?: string, onSaved?: () => void) => FoodItem;
+  updateFood: (id: string, food: NewFoodItem, onSaved?: () => void) => void;
+  markFoodUsed: (id: string, onSaved?: FoodStatusSaved) => void;
   recordConsumption: (request: ConsumptionRequest) => boolean;
-  markFoodDisposed: (id: string) => void;
+  markFoodDisposed: (id: string, onSaved?: FoodStatusSaved) => void;
   restoreFood: (id: string) => void;
   deleteFood: (id: string) => void;
   addRecipe: (recipe: NewRecipe) => Recipe;
@@ -42,7 +45,7 @@ type AppDataContextValue = {
   deleteRecipe: (id: string) => void;
   toggleRecipeFavorite: (id: string) => void;
   replaceAppData: (data: AppDataSnapshot) => void;
-  addShoppingItem: (name: string, memo?: string) => boolean;
+  addShoppingItem: (name: string, memo?: string, onSaved?: () => void) => boolean;
   toggleShoppingItem: (id: string) => void;
   deleteShoppingItem: (id: string) => void;
   updateNotificationSettings: (settings: NotificationSettings) => Promise<void>;
@@ -74,6 +77,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [notificationSettings, setNotificationSettings] =
     useState<NotificationSettings>(initialNotificationSettings);
   const [isReady, setIsReady] = useState(false);
+  const readyRef = useRef(false);
+  readyRef.current = isReady;
   const [notificationSyncError, setNotificationSyncError] = useState<string | null>(null);
   const [isNotificationSyncing, setIsNotificationSyncing] = useState(false);
   const notificationRun = useRef(0);
@@ -90,12 +95,39 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const imageCandidates = useRef(new Set<string>());
   const currentImages = useRef(new Set<string>());
   const persisted = useRef(new Map<string, unknown>());
+  const pendingSaveCallbacks = useRef<{ key: string; id: string; onSaved: () => void; isCurrent?: () => boolean }[]>([]);
+  const mounted = useRef(true);
   currentImages.current = new Set([...foods, ...recipes].map((item) => item.image));
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; pendingSaveCallbacks.current = []; };
+  }, []);
+
+  const rememberSaved = (key: string, id: string, onSaved?: () => void, isCurrent?: () => boolean) => {
+    if (onSaved) pendingSaveCallbacks.current.push({ key, id, onSaved, isCurrent });
+  };
+  const confirmCommittedSaves = () => {
+    const callbacks = pendingSaveCallbacks.current;
+    pendingSaveCallbacks.current = [];
+    for (const callback of callbacks) {
+      if (callback.isCurrent && !callback.isCurrent()) continue;
+      const current = callback.key === storageKeys.foods ? foodsRef.current : shoppingRef.current;
+      const item = current.find((record) => record.id === callback.id);
+      // A removed or replaced record must not produce a stale success notice.
+      if (!item) continue;
+      const saved = persisted.current.get(callback.key);
+      if (Array.isArray(saved) && saved.includes(item)) {
+        try { callback.onSaved(); } catch (error) { console.warn('保存完了の表示を更新できませんでした。', error); }
+      } else pendingSaveCallbacks.current.push(callback);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
     const hydrationEpoch = dataEpoch.current;
     async function hydrate() {
+      pendingSaveCallbacks.current = [];
       setLoadError(null);
       try {
         const [storedFoods, storedShopping, storedSettings, storedRecipes, catalog] = await loadStoredValues([
@@ -147,14 +179,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     })).then(() => {
       if (!cancelled && savingEpoch === dataEpoch.current && !restoringRef.current) {
         setSaveError(null);
+        confirmCommittedSaves();
         void collectStoredImages(imageCandidates.current, () => currentImages.current, deleteStoredFoodImage)
           .catch((error) => console.warn('写真の整理を延期します。', error));
       }
     }).catch((error) => {
       if (!cancelled && savingEpoch === dataEpoch.current && error instanceof DataErasurePendingError) {
+        pendingSaveCallbacks.current = [];
         setIsReady(false); setErasurePending(true); setErasureError(error.message); return;
       }
       if (!cancelled && savingEpoch === dataEpoch.current && error instanceof RestoreNeedsReloadError) {
+        pendingSaveCallbacks.current = [];
         setIsReady(false); setLoadError(error.message); return;
       }
       console.warn('変更を端末へ保存できませんでした。', error);
@@ -194,7 +229,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     await resyncNotifications(settings);
   };
 
-  const addFood = (input: NewFoodItem, shoppingItemId?: string) => {
+  const addFood = (input: NewFoodItem, shoppingItemId?: string, onSaved?: () => void) => {
     if (shoppingItemId) {
       const existing = foodsRef.current.find((food) => food.sourceShoppingItemId === shoppingItemId);
       if (existing) throw new Error('この購入分は食材に登録済みです。買い物リストから登録済みの食材を確認してください。');
@@ -211,6 +246,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       disposedAt: null,
     };
     setFoods((current) => [food, ...current]);
+    rememberSaved(storageKeys.foods, food.id, onSaved);
     return food;
   };
 
@@ -218,7 +254,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setFoods((current) => current.filter((food) => food.id !== id));
   };
 
-  const updateFood = (id: string, input: NewFoodItem) => {
+  const updateFood = (id: string, input: NewFoodItem, onSaved?: () => void) => {
     setFoods((current) =>
       current.map((food) => {
         if (food.id !== id) return food;
@@ -227,25 +263,34 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           consumptionHistory: food.consumptionHistory, revision: (food.revision ?? 0) + 1 };
       }),
     );
+    if (foodsRef.current.some((food) => food.id === id)) rememberSaved(storageKeys.foods, id, onSaved);
   };
 
-  const markFoodUsed = (id: string) => {
+  const markFoodStatus = (id: string, status: 'used' | 'disposed', onSaved?: FoodStatusSaved) => {
+    const previous = foodsRef.current.find((food) => food.id === id);
+    if (!previous || previous.status !== 'active') return;
     const today = toDateString(new Date());
-    setFoods((current) => current.map((food) =>
-      food.id === id
-        ? { ...food, status: 'used', usedAt: today, disposedAt: null, revision: (food.revision ?? 0) + 1 }
-        : food,
-    ));
+    const recorded: FoodItem = { ...previous, status, usedAt: status === 'used' ? today : null,
+      disposedAt: status === 'disposed' ? today : null, revision: (previous.revision ?? 0) + 1 };
+    const epoch = dataEpoch.current;
+    const isCurrent = () => mounted.current && epoch === dataEpoch.current
+      && foodsRef.current.find((food) => food.id === id) === recorded;
+    setFoods((current) => current.map((food) => food.id === id ? recorded : food));
+    if (onSaved) rememberSaved(storageKeys.foods, id, () => onSaved((onRestored) => {
+      // Check the exact record, not a captured inventory snapshot. Edits, deletion,
+      // another restore, or a backup replacement invalidate this one-use action.
+      if (!isCurrent() || !readyRef.current || restoringRef.current) return false;
+      const restored: FoodItem = { ...recorded, status: 'active', usedAt: null, disposedAt: null,
+        revision: (recorded.revision ?? 0) + 1 };
+      setFoods((current) => current.map((food) => food.id === id ? restored : food));
+      rememberSaved(storageKeys.foods, id, onRestored, () => epoch === dataEpoch.current
+        && foodsRef.current.find((food) => food.id === id) === restored);
+      return true;
+    }), isCurrent);
   };
 
-  const markFoodDisposed = (id: string) => {
-    const today = toDateString(new Date());
-    setFoods((current) => current.map((food) =>
-      food.id === id
-        ? { ...food, status: 'disposed', usedAt: null, disposedAt: today, revision: (food.revision ?? 0) + 1 }
-        : food,
-    ));
-  };
+  const markFoodUsed = (id: string, onSaved?: FoodStatusSaved) => markFoodStatus(id, 'used', onSaved);
+  const markFoodDisposed = (id: string, onSaved?: FoodStatusSaved) => markFoodStatus(id, 'disposed', onSaved);
 
   const restoreFood = (id: string) => {
     setFoods((current) => current.map((food) =>
@@ -285,6 +330,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const replaceAppData = (data: AppDataSnapshot) => {
     const next = normalizeAppData(data);
+    pendingSaveCallbacks.current = [];
     setFoods(next.foods);
     setRecipes(next.recipes);
     setShoppingItems(next.shoppingItems);
@@ -297,6 +343,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     if (erasurePending || erasureError) throw new Error('削除が完了するまで復元できません。');
     if (restoringRef.current) throw new Error('復元はすでに実行中です。');
     restoringRef.current = true;
+    pendingSaveCallbacks.current = [];
     dataEpoch.current += 1;
     setIsRestoring(true);
     try {
@@ -326,6 +373,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     if (operationEpoch !== dataEpoch.current) throw new Error('保存データが変更されています。現在の画面から操作し直してください。');
     if (restoringRef.current) throw new Error('データの処理はすでに実行中です。');
     restoringRef.current = true;
+    pendingSaveCallbacks.current = [];
     dataEpoch.current += 1; notificationRun.current += 1;
     setIsErasing(true); setIsReady(false); setErasureError(null); setErasurePending(true);
     try {
@@ -359,24 +407,21 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     };
   }
 
-  const addShoppingItem = (name: string, memo?: string) => {
+  const addShoppingItem = (name: string, memo?: string, onSaved?: () => void) => {
     const trimmedName = name.trim();
     if (!trimmedName) return false;
     if (hasPendingShoppingItem(shoppingRef.current, trimmedName)) return false;
     const trimmedMemo = memo?.trim();
+    const item: ShoppingItem = { id: createId('shopping'), name: trimmedName, memo: trimmedMemo || undefined,
+      checked: false, createdAt: new Date().toISOString() };
     setShoppingItems((current) => {
       if (hasPendingShoppingItem(current, trimmedName)) return current;
       return [
         ...current,
-        {
-          id: createId('shopping'),
-          name: trimmedName,
-          memo: trimmedMemo || undefined,
-          checked: false,
-          createdAt: new Date().toISOString(),
-        },
+        item,
       ];
     });
+    rememberSaved(storageKeys.shopping, item.id, onSaved);
     return true;
   };
 

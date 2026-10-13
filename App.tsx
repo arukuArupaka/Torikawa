@@ -1,4 +1,7 @@
 import { AppAlertProvider } from './src/context/AppAlertContext';
+import { AppToastProvider } from './src/context/AppToastContext';
+import { MotionPreferenceProvider } from './src/context/MotionPreferenceContext';
+import { AppToast } from './src/components/AppToast';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
@@ -18,15 +21,20 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AppAlertProvider>
-          <AppDataProvider>
-            <NavigationContainer ref={navigationRef} onReady={() => setNavigationReady(true)}>
-              <StatusBar style="dark" />
-              <RootNavigator />
-            </NavigationContainer>
-            <NotificationNavigationHandler navigationReady={navigationReady} />
-          </AppDataProvider>
-        </AppAlertProvider>
+        <MotionPreferenceProvider>
+          <AppToastProvider>
+            <AppAlertProvider>
+              <AppDataProvider>
+                <NavigationContainer ref={navigationRef} onReady={() => setNavigationReady(true)}>
+                  <StatusBar style="dark" />
+                  <RootNavigator />
+                </NavigationContainer>
+                <NotificationNavigationHandler navigationReady={navigationReady} />
+              </AppDataProvider>
+              <AppToast />
+            </AppAlertProvider>
+          </AppToastProvider>
+        </MotionPreferenceProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

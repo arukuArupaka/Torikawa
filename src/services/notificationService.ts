@@ -1,4 +1,5 @@
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { FoodItem, NotificationSettings } from '../types';
 import { parseDate } from '../utils/date';
@@ -52,7 +53,20 @@ export function buildNotificationPlan(foods: FoodItem[], settings: NotificationS
     });
   }).sort((a, b) => a.date.getTime() - b.date.getTime());
 }
+function getCurrentScope(): string | null {
+  if (!Constants.expoVersion) return null;
+  const scope = Constants.manifest2?.extra?.scopeKey;
+  if (!scope) throw new Error('アプリの通知情報を確認できません。Expo Goでアプリを開き直してください。');
+  return scope;
+}
+function isInCurrentScope(item: Notifications.NotificationRequest): boolean {
+  // Expo Go on iOS lists every experience's reservations, but cancellation is scoped.
+  // Old connections must not be mistaken for reservations this experience can remove.
+  const scope = getCurrentScope();
+  return !scope || (item.content.data?.scopeKey ?? item.content.data?.experienceId) === scope;
+}
 function isManaged(item: Notifications.NotificationRequest, known: Set<string> = new Set()): boolean {
+  if (!isInCurrentScope(item)) return false;
   const data = item.content.data;
   return data?.kind === KIND || known.has(item.identifier)
     || (!data?.kind && typeof data?.foodId === 'string' && typeof data?.daysBefore === 'number');
@@ -60,6 +74,7 @@ function isManaged(item: Notifications.NotificationRequest, known: Set<string> =
 async function reconcile(foods: FoodItem[], settings: NotificationSettings): Promise<void> {
   if (Platform.OS === 'web') return;
   if (isDataErasing()) throw new Error('削除中は通知を予約できません。');
+  getCurrentScope();
   await ensureAndroidChannel();
   const permission = await Notifications.getPermissionsAsync();
   const plan = isPermissionGranted(permission) ? buildNotificationPlan(foods, settings) : [];
@@ -98,11 +113,21 @@ async function reconcile(foods: FoodItem[], settings: NotificationSettings): Pro
     // A failure later in this food's day list must not lose earlier reservations.
     await saveStoredValue(storageKeys.notificationIds, ids);
   }
-  const verified = (await Notifications.getAllScheduledNotificationsAsync()).filter((item) => isManaged(item, known));
-  const keys = verified.map((item) => item.content.data?.planKey);
-  if (keys.length !== plan.length || new Set(keys).size !== plan.length || plan.some((item) => !keys.includes(item.key))) {
-    throw new Error('端末の通知予約が予定と一致しません。「通知を再同期」で再試行してください。');
+  // OS cancellation can reach the pending list after the native call resolves.
+  // Recheck briefly without rescheduling, then keep reporting a real mismatch.
+  let matches = false;
+  for (const delay of [0, 150, 350, 750]) {
+    if (delay) await new Promise<void>((resolve) => setTimeout(resolve, delay));
+    const verified = (await Notifications.getAllScheduledNotificationsAsync()).filter((item) => isManaged(item, known));
+    const keys = verified.map((item) => item.content.data?.planKey);
+    matches = keys.length === plan.length && new Set(keys).size === plan.length
+      && verified.every((item) => {
+        const expected = desired.get(String(item.content.data?.planKey ?? ''));
+        return expected && item.content.title === expected.title && item.content.body === expected.body;
+      });
+    if (matches) break;
   }
+  if (!matches) throw new Error(`端末の通知予約が予定と一致しません（予定${plan.length}件）。「通知を再同期」で再試行してください。`);
   if (settings.enabled && !isPermissionGranted(permission)) throw new Error('通知が許可されていません。端末の設定で通知を許可して再同期してください。');
 }
 export function queueNotificationSync(foods: FoodItem[], settings: NotificationSettings): Promise<void> {
@@ -135,9 +160,11 @@ export function clearNotificationsForErasure(rawIds: string | null): Promise<voi
       for (const id of Array.isArray(value) ? value : [value]) if (typeof id === 'string') known.add(id);
     }
   } catch { /* Managed OS metadata still identifies notifications when the index is corrupt. */ }
-  const managed = (request: Notifications.NotificationRequest) => isManaged(request, known) || request.content.data?.kind === 'tabedoki-test';
+  const managed = (request: Notifications.NotificationRequest) => isInCurrentScope(request)
+    && (isManaged(request, known) || request.content.data?.kind === 'tabedoki-test');
   syncQueue = syncQueue.catch(() => undefined).then(async () => {
     if (Platform.OS === 'web') return;
+    getCurrentScope();
     for (const request of await Notifications.getAllScheduledNotificationsAsync()) if (managed(request)) await Notifications.cancelScheduledNotificationAsync(request.identifier);
     for (const notification of await Notifications.getPresentedNotificationsAsync()) if (managed(notification.request)) await Notifications.dismissNotificationAsync(notification.request.identifier);
     const last = Notifications.getLastNotificationResponse();
@@ -150,6 +177,7 @@ export function clearNotificationsForErasure(rawIds: string | null): Promise<voi
 export async function getNotificationStatusSummary(): Promise<NotificationStatusSummary> {
   if (Platform.OS === 'web') return { permission: 'unsupported', scheduledCount: 0 };
   await syncQueue.catch(() => undefined);
+  getCurrentScope();
   const [permission, scheduled] = await Promise.all([Notifications.getPermissionsAsync(), Notifications.getAllScheduledNotificationsAsync()]);
   return { permission: isPermissionGranted(permission) ? 'granted' : permission.status === 'denied' ? 'denied' : 'undetermined',
     scheduledCount: scheduled.filter((item) => isManaged(item)).length };

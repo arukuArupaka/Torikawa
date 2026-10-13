@@ -1,16 +1,20 @@
 import { FoodImage } from '../components/FoodImage';
 import { ProductAttribution } from '../components/ProductAttribution';
 import { useCurrentDay } from '../hooks/useCurrentDay';
+import { useFoodStatusFeedback } from '../hooks/useFoodStatusFeedback';
 import { useAppAlert } from '../context/AppAlertContext';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { AnimatedDisclosure } from '../components/AnimatedDisclosure';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { colors, radius, spacing } from '../constants/theme';
 import { useAppData } from '../context/AppDataContext';
 import { RootStackParamList } from '../navigation/types';
+import { returnToMainTab } from '../navigation/returnToMainTab';
 import { FoodStatus, StorageLocation } from '../types';
 import { daysUntil, formatDateJa, getRemainingLabel } from '../utils/date';
 import { foodCategoryLabels } from '../utils/foodCategory';
@@ -33,9 +37,11 @@ const statusLabels: Record<FoodStatus, string> = {
 
 export function FoodDetailScreen({ navigation, route }: Props) {
   const alert = useAppAlert();
+  const statusFeedback = useFoodStatusFeedback();
   useCurrentDay();
   const { foods, recipes, addShoppingItem, deleteFood, markFoodDisposed, markFoodUsed, restoreFood } = useAppData();
   const food = foods.find((item) => item.id === route.params.foodId);
+  const [historyFoodId, setHistoryFoodId] = useState<string | null>(null);
 
   if (!food) {
     return (
@@ -52,7 +58,7 @@ export function FoodDetailScreen({ navigation, route }: Props) {
   const displayName = getFoodDisplayName(food);
   const ingredientName = getFoodIngredientName(food);
 
-  const returnHome = () => navigation.navigate('MainTabs', { screen: 'Home' });
+  const returnHome = () => returnToMainTab(navigation);
   const addToShoppingList = () => {
     const added = addShoppingItem(displayName, '使い切った食材から追加');
     if (!added) {
@@ -66,14 +72,14 @@ export function FoodDetailScreen({ navigation, route }: Props) {
       {
         text: '記録だけ',
         onPress: () => {
-          markFoodUsed(food.id);
+          markFoodUsed(food.id, statusFeedback(food, 'used'));
           returnHome();
         },
       },
       {
         text: '買い物リストにも追加',
         onPress: () => {
-          markFoodUsed(food.id);
+          markFoodUsed(food.id, statusFeedback(food, 'used', true));
           addToShoppingList();
           returnHome();
         },
@@ -88,7 +94,7 @@ export function FoodDetailScreen({ navigation, route }: Props) {
         text: 'OK',
         style: 'destructive',
         onPress: () => {
-          markFoodDisposed(food.id);
+          markFoodDisposed(food.id, statusFeedback(food, 'disposed'));
           returnHome();
         },
       },
@@ -166,13 +172,22 @@ export function FoodDetailScreen({ navigation, route }: Props) {
 
         {food.consumptionHistory?.length ? (
           <View style={styles.infoCard}>
-            <Text style={styles.ingredientName}>調理での使用履歴（新しい順）</Text>
+            <AnimatedDisclosure expanded={historyFoodId === food.id} header={<Pressable
+              accessibilityRole="button" accessibilityLabel="調理での使用履歴"
+              accessibilityState={{ expanded: historyFoodId === food.id }} aria-expanded={historyFoodId === food.id}
+              onPress={() => setHistoryFoodId((current) => current === food.id ? null : food.id)} style={styles.historyToggle}>
+              <Text style={styles.historyTitle}>調理での使用履歴</Text>
+              <Text style={styles.historyCount}>{food.consumptionHistory.length}件</Text>
+              <Ionicons name={historyFoodId === food.id ? 'chevron-up' : 'chevron-down'} size={19} color={colors.primaryDark} />
+            </Pressable>}>
+            <Text style={styles.historyNote}>新しい順に表示しています。</Text>
             {[...food.consumptionHistory].reverse().map((entry, index) => (
               <DetailRow key={entry.operationId} icon="restaurant-outline"
                 label={new Date(entry.recordedAt).toLocaleDateString('ja-JP')}
                 value={`${recipes.find((recipe) => recipe.id === entry.recipeId)?.name ?? '削除済みレシピ'}：${formatFoodQuantity(entry.amount, entry.unit)}使用／当時の残量 ${formatFoodQuantity(entry.after, entry.unit)}`}
                 last={index === food.consumptionHistory!.length - 1} />
             ))}
+            </AnimatedDisclosure>
           </View>
         ) : null}
 
@@ -234,6 +249,10 @@ const styles = StyleSheet.create({
   statusText: { color: colors.primaryDark, fontWeight: '800' },
   disposedText: { color: colors.danger },
   infoCard: { backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing.md },
+  historyToggle: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm },
+  historyTitle: { flex: 1, color: colors.primaryDark, fontSize: 14, fontWeight: '700' },
+  historyCount: { color: colors.textMuted, fontSize: 13 },
+  historyNote: { color: colors.textMuted, fontSize: 12, paddingTop: spacing.sm },
   detailRow: { borderBottomColor: colors.border, borderBottomWidth: 1, paddingVertical: 17 },
   lastRow: { borderBottomWidth: 0 },
   detailLabel: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
