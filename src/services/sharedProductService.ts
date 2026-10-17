@@ -24,7 +24,7 @@ async function request(path: string, options: RequestInit = {}) {
   const timeout = setTimeout(() => controller.abort(), 4000);
   try {
     const response = await fetch(`${base}${path}`, { ...options, credentials: 'omit', signal: controller.signal });
-    const body = await response.json();
+    const body = await response.json().catch(() => null);
     return { status: response.status, ok: response.ok, body };
   } finally { clearTimeout(timeout); }
 }
@@ -58,7 +58,7 @@ export async function shareProduct(product: SharedProduct, acceptedRulesVersion:
   if (response.status === 428) throw new Error('投稿ルールが更新されています。アプリを更新してから共有してください。');
   if (!response.ok) throw new Error('商品情報を共有できませんでした。時間をおいてお試しください。');
   const body = response.body;
-  if (!['pending', 'already_pending', 'already_shared'].includes(body.status)) throw new Error('共有結果を確認できませんでした。再試行できます。');
+  if (!['pending', 'already_pending', 'already_shared'].includes(body?.status)) throw new Error('共有結果を確認できませんでした。再試行できます。');
   return body.status;
 }
 

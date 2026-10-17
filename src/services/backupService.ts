@@ -1,3 +1,4 @@
+import { version } from '../../package.json';
 import * as DocumentPicker from 'expo-document-picker';
 import { withoutYahooImage } from '../utils/yahooImagePolicy';
 import { discardRestoredImage, embedImage, restoreImage } from './backupImages';
@@ -124,7 +125,7 @@ export async function prepareBackup(data: AppDataSnapshot): Promise<PreparedBack
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
-    appVersion: '1.20.0',
+    appVersion: version,
     images,
     data: {
       ...data,

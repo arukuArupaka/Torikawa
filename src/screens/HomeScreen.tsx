@@ -71,6 +71,10 @@ export function HomeScreen({ navigation }: Props) {
   }, [activeFoods, currentDay]);
   const hasUrgentFoods = expirySummary.today + expirySummary.soon > 0;
 
+  useEffect(() => {
+    if (expiredOnly && expirySummary.expired === 0) setExpiredOnly(false);
+  }, [expiredOnly, expirySummary.expired]);
+
   const sections = useMemo<FoodSection[]>(() => {
     const today = parseDate(currentDay);
     const normalizedQuery = query.trim().toLocaleLowerCase('ja-JP');
@@ -312,7 +316,9 @@ export function HomeScreen({ navigation }: Props) {
         ) : null}
 
         {activeFoods.length > 0 && sections.every((section) => section.foods.length === 0) ? (
-          <Text style={styles.noResults}>「{query}」に一致する食材はありません。</Text>
+          <Text style={styles.noResults}>{query.trim()
+            ? `「${query}」に一致する食材はありません。`
+            : expiredOnly ? '「期限切れ」の食材はありません。' : '食材はありません。'}</Text>
         ) : null}
         </>}
       />
