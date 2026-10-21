@@ -1,4 +1,5 @@
 import { FoodImage } from '../components/FoodImage';
+import { isGeneratedRecipeImage } from '../data/generatedRecipeImages';
 import { allocateRecipeStock, getRecipeStock, getStockLabel } from '../utils/recipeStock';
 import { useAppAlert } from '../context/AppAlertContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -306,7 +307,9 @@ export function RecipeDetailScreen({ navigation, route }: Props) {
         title="レシピ詳細"
       />
       <ScrollView contentContainerStyle={styles.content}>
-        <FoodImage source={{ uri: recipe.image }} style={styles.heroImage} />
+        <FoodImage source={{ uri: recipe.image }} style={styles.heroImage}
+          accessibilityLabel={`${recipe.name}${isGeneratedRecipeImage(recipe) ? 'のAI生成イメージ' : 'の画像'}`} />
+        {isGeneratedRecipeImage(recipe) ? <Text style={styles.generatedImageNote}>AI生成のイメージです。実際の調理写真ではありません。</Text> : null}
         <View>
           <Text style={styles.recipeName}>{recipe.name}</Text>
           <View style={styles.metaRow}>
@@ -608,6 +611,7 @@ function ActionOption({
 }
 
 const styles = StyleSheet.create({
+  generatedImageNote: { color: colors.textMuted, fontSize: 12, lineHeight: 18 },
   content: { gap: spacing.lg, padding: spacing.md, paddingBottom: spacing.xl },
   heroImage: { backgroundColor: colors.primarySoft, borderRadius: radius.md, height: 205, width: '100%' },
   recipeName: { color: colors.text, fontSize: 23, fontWeight: '800' },

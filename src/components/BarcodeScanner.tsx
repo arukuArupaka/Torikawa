@@ -5,8 +5,9 @@ import {
   useCameraPermissions,
 } from 'expo-camera';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing } from '../constants/theme';
+import { useAppAlert } from '../context/AppAlertContext';
 
 export function BarcodeScanner({
   active,
@@ -15,6 +16,7 @@ export function BarcodeScanner({
   active: boolean;
   onScanned: (result: BarcodeScanningResult) => void;
 }) {
+  const alert = useAppAlert();
   const [permission, requestPermission] = useCameraPermissions();
   const [torchEnabled, setTorchEnabled] = useState(false);
   const scanLocked = useRef(false);
@@ -27,6 +29,17 @@ export function BarcodeScanner({
     if (scanLocked.current || !active) return;
     scanLocked.current = true;
     onScanned(result);
+  };
+
+  const allowCamera = async () => {
+    try {
+      if (permission?.canAskAgain) await requestPermission();
+      else if (Platform.OS === 'web') {
+        alert('カメラの許可を確認してください', 'ブラウザーのサイト設定でカメラを許可してから、ページを開き直してください。');
+      } else await Linking.openSettings();
+    } catch {
+      alert('カメラを利用できませんでした', 'カメラの許可や端末の設定を確認して、もう一度お試しください。番号を入力して検索することもできます。');
+    }
   };
 
   if (!permission) {
@@ -45,11 +58,11 @@ export function BarcodeScanner({
         <Text style={styles.permissionTitle}>カメラの許可が必要です</Text>
         <Text style={styles.permissionText}>商品のバーコードを読み取るためにカメラを使用します。</Text>
         <Pressable
-          onPress={() => permission.canAskAgain ? void requestPermission() : void Linking.openSettings()}
+          onPress={allowCamera}
           style={styles.permissionButton}
         >
           <Text style={styles.permissionButtonText}>
-            {permission.canAskAgain ? 'カメラを許可' : '端末の設定を開く'}
+            {permission.canAskAgain ? 'カメラを許可' : Platform.OS === 'web' ? 'ブラウザーの設定を確認' : '端末の設定を開く'}
           </Text>
         </Pressable>
       </View>

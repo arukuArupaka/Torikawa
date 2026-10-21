@@ -1,24 +1,27 @@
-import { ReactNode } from 'react';
+import { ReactNode, Ref } from 'react';
 import { StyleSheet, Text, TextInput, TextInputProps, View } from 'react-native';
-import { colors, radius, spacing } from '../constants/theme';
+import { colors, radius } from '../constants/theme';
 
 export function FormField({
   label,
   hint,
   error,
   children,
+  inputRef,
   ...inputProps
 }: TextInputProps & {
   label: string;
   hint?: string;
   error?: string;
   children?: ReactNode;
+  inputRef?: Ref<TextInput>;
 }) {
   return (
     <View style={styles.group}>
       <Text style={styles.label}>{label}</Text>
       {children ?? (
         <TextInput
+          ref={inputRef}
           accessibilityLabel={label}
           accessibilityHint={error ?? hint}
           placeholderTextColor={colors.textMuted}

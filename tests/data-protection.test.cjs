@@ -11,8 +11,11 @@ const files = new Map();
 const deleted = [];
 const alerts = [];
 const writes = [];
+const removals = [];
 let failWrite = () => false;
 let failRead = () => false;
+let failRemove = () => false;
+let beforeRemove = async () => {};
 let beforeWrite = async () => {};
 let failImage = false;
 let truncateImage = false;
@@ -44,6 +47,12 @@ const adapter = {
     await beforeWrite(key, value);
     if (failWrite(key)) throw new Error('disk full');
     store.set(key, value);
+  },
+  async removeItem(key) {
+    removals.push(key);
+    await beforeRemove(key);
+    if (failRemove(key)) throw new Error('remove failed');
+    store.delete(key);
   },
 };
 const native = {
@@ -93,7 +102,8 @@ const payload = () => ({ format: 'refrigerator-note-backup', version: 1, appVers
 const entries = (d) => ({ [keys.foods]: d.foods, [keys.recipes]: d.recipes, [keys.shopping]: d.shoppingItems, [keys.notifications]: d.notificationSettings, [keys.learnedProducts]: d.learnedProducts });
 async function reset() {
   await storage.loadStoredValues([]); // Drain previously queued maintenance.
-  store.clear(); files.clear(); deleted.length = 0; alerts.length = 0; writes.length = 0;
+  store.clear(); files.clear(); deleted.length = 0; alerts.length = 0; writes.length = 0; removals.length = 0;
+  failRemove = () => false; beforeRemove = async () => {};
   failWrite = () => false; failRead = () => false; beforeWrite = async () => {}; failImage = false; truncateImage = false; failDelete = false; pickerCanceled = false;
   notificationSyncs.length = 0; failNotifications = false;
   Object.entries(entries(data())).forEach(([key, value]) => store.set(key, JSON.stringify(value)));
@@ -116,6 +126,213 @@ async function mount(t, child) {
   return renderer;
 }
 const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
+const generationPrefix = '@food-manager/generation/';
+async function seedGenerations(amount = 5, currentIndex = amount - 1) {
+  const ids = Array.from({ length: amount }, (_, index) => `${(Date.UTC(2026, 9, 1) + index).toString(36)}-seed${index}`);
+  for (const [index, id] of ids.entries()) {
+    store.set(`${generationPrefix}${id}/original`, JSON.stringify({ [keys.foods]: JSON.stringify([food({ image: `file:///document/archive-${index}.jpg` })]) }));
+    for (const [key, value] of Object.entries(entries(data()))) store.set(`${generationPrefix}${id}/${key.split('/').at(-1)}`, JSON.stringify(value));
+  }
+  store.set(generationKey, JSON.stringify({ version: 1, id: ids[currentIndex] }));
+  await storage.loadStoredValues(snapshotKeys);
+  return ids;
+}
+const originalKeys = () => [...store.keys()].filter(key => key.startsWith(generationPrefix) && key.endsWith('/original'));
+const generationDataKeys = () => [...store.keys()].filter(key => key.startsWith(generationPrefix) && !key.endsWith('/original'));
+
+test('five successful restores retain two originals and only current generation data, preserving legacy keys and later saves', async (t) => {
+  await reset();
+  const legacy = new Map(store), ids = [], base = Date.UTC(2026, 9, 16);
+  t.mock.timers.enable({ apis: ['Date'], now: base });
+  assert.equal(storage.RETAINED_GENERATIONS, 2);
+  for (let index = 0; index < 5; index++) {
+    t.mock.timers.setTime(base + index);
+    const backup = payload(); backup.data.foods[0].id = `restored-${index}`;
+    await restoreBackup(backup);
+    ids.push(JSON.parse(store.get(generationKey)).id);
+    assert.ok(originalKeys().length <= 2);
+  }
+  assert.deepEqual(originalKeys().sort(), ids.slice(-2).map(id => `${generationPrefix}${id}/original`).sort());
+  assert.deepEqual(generationDataKeys().sort(), snapshotKeys.map(key => `${generationPrefix}${ids.at(-1)}/${key.split('/').at(-1)}`).sort());
+  for (const [key, value] of legacy) assert.equal(store.get(key), value);
+  assert.equal((await diskSnapshot())[keys.foods][0].id, 'restored-4');
+  await storage.saveStoredValue(keys.shopping, []);
+  assert.deepEqual((await diskSnapshot())[keys.shopping], []);
+  assert.equal(store.get(keys.shopping), legacy.get(keys.shopping));
+});
+
+test('partial pruning removal failure warns without failing reads, saves or restoration, and the next pruning retries', async (t) => {
+  await reset(); const ids = await seedGenerations();
+  const currentPrefix = `${generationPrefix}${ids.at(-1)}/`;
+  const current = new Map([...store].filter(([key]) => key.startsWith(currentPrefix)));
+  const warnings = []; t.mock.method(console, 'warn', (...args) => warnings.push(args));
+  failRemove = () => removals.length >= 2;
+  await assert.doesNotReject(storage.pruneGenerations());
+  assert.equal(removals.length, 2);
+  assert.match(warnings[0][0], /古い復元データの整理を次回に延期/);
+  for (const [key, value] of current) assert.equal(store.get(key), value);
+  assert.equal((await storage.loadStoredValue(keys.foods))[0].id, 'food-1');
+  await storage.saveStoredValue(keys.shopping, []);
+  assert.deepEqual((await diskSnapshot())[keys.shopping], []);
+  const beforeEpoch = storage.getStorageEpoch();
+  await assert.doesNotReject(restoreBackup(payload()));
+  assert.equal(storage.getStorageEpoch(), beforeEpoch + 1);
+  assert.equal((await diskSnapshot())[keys.foods][0].id, 'restored');
+  failRemove = () => false;
+  await storage.pruneGenerations();
+  assert.equal(originalKeys().length, 2);
+  const active = JSON.parse(store.get(generationKey)).id;
+  assert.equal(generationDataKeys().length, snapshotKeys.length);
+  assert.ok(generationDataKeys().every(key => key.startsWith(`${generationPrefix}${active}/`)));
+});
+
+test('an uncertain commit prevents every pruning deletion until a complete read resolves the generation', async () => {
+  await reset(); await seedGenerations();
+  beforeWrite = async (key, value) => {
+    if (key === generationKey) { store.set(key, value); failRead = candidate => candidate === generationKey; throw Error('lost acknowledgement'); }
+  };
+  await assert.rejects(restoreBackup(payload()), /再読み込み/);
+  const uncertain = new Map(store);
+  await storage.pruneGenerations();
+  assert.deepEqual(store, uncertain); assert.equal(removals.length, 0);
+  failRead = () => false; beforeWrite = async () => {};
+  await storage.pruneGenerations();
+  assert.deepEqual(store, uncertain); assert.equal(removals.length, 0);
+  await assert.rejects(storage.saveStoredValue(keys.foods, []), /復元中/);
+  await storage.loadStoredValues(snapshotKeys);
+  await storage.pruneGenerations();
+  assert.ok(removals.length > 0);
+  assert.equal((await diskSnapshot())[keys.foods][0].id, 'restored');
+});
+
+test('pruning always pins the active generation and keeps unknown IDs, malformed generation paths and unrelated keys intact', async () => {
+  await reset(); const ids = await seedGenerations(5, 0);
+  const retained = new Map([...store].filter(([key]) => key.startsWith(`${generationPrefix}${ids[0]}/`)));
+  for (const id of ['unknown', 'not-a-time', 'cleared-mggggggg-random', '000abc-random', 'zzzzzzzzzzzzzzzz-random']) {
+    for (const suffix of ['original', 'foods', 'extra/nested']) {
+      const key = `${generationPrefix}${id}/${suffix}`, value = 'unparseable raw data';
+      store.set(key, value); retained.set(key, value);
+    }
+  }
+  for (const key of ['unrelated-key', '@food-manager/generation-other/key', `${generationPrefix}${ids[1]}`, `${generationPrefix}/original`]) {
+    store.set(key, 'keep'); retained.set(key, 'keep');
+  }
+  const head = store.get(generationKey);
+  await storage.pruneGenerations();
+  for (const [key, value] of retained) assert.equal(store.get(key), value, key);
+  assert.equal(store.get(generationKey), head);
+  assert.ok(store.has(`${generationPrefix}${ids.at(-1)}/original`));
+  assert.equal(store.has(`${generationPrefix}${ids[1]}/original`), false);
+  assert.equal(removals.some(key => !key.startsWith(generationPrefix) || key.startsWith(`${generationPrefix}${ids[0]}/`)), false);
+});
+
+test('hydration prunes after complete validated reads but preserves archives on unreadable or invalid current data', async () => {
+  for (const failure of [null, 'read', 'validation']) {
+    await reset(); const ids = await seedGenerations();
+    if (failure === 'read') failRead = key => key.endsWith('/recipes');
+    if (failure === 'validation') store.set(`${generationPrefix}${ids.at(-1)}/foods`, JSON.stringify([food(), food()]));
+    const before = new Map(store); let renderer;
+    try {
+      await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer))); });
+      if (!failure) {
+        assert.equal(context.isReady, true); assert.equal(context.loadError, null);
+        assert.equal(originalKeys().length, 2); assert.equal(generationDataKeys().length, snapshotKeys.length);
+      } else {
+        assert.equal(context.isReady, false); assert.ok(context.loadError);
+        assert.equal(removals.length, 0); assert.deepEqual(store, before);
+      }
+    } finally {
+      if (renderer) await act(async () => renderer.unmount());
+      failRead = () => false;
+    }
+  }
+});
+
+test('retention uses numeric base36 timestamps and a changed head aborts cleanup before deleting any generation', async () => {
+  await reset();
+  for (const id of ['z-older', '10-newer', '5-active']) {
+    store.set(`${generationPrefix}${id}/original`, '{}');
+    for (const [key, value] of Object.entries(entries(data()))) store.set(`${generationPrefix}${id}/${key.split('/').at(-1)}`, JSON.stringify(value));
+  }
+  store.set(generationKey, JSON.stringify({ version: 1, id: '5-active' }));
+  await storage.loadStoredValues(snapshotKeys);
+  await storage.pruneGenerations();
+  assert.deepEqual(originalKeys().sort(), [`${generationPrefix}10-newer/original`, `${generationPrefix}5-active/original`]);
+  assert.ok(generationDataKeys().every(key => key.startsWith(`${generationPrefix}5-active/`)));
+
+  await reset(); const ids = await seedGenerations();
+  let reads = 0;
+  failRead = key => {
+    if (key === generationKey && ++reads === 2) store.set(generationKey, JSON.stringify({ version: 1, id: ids[0] }));
+    return false;
+  };
+  const before = new Map(store);
+  await storage.pruneGenerations();
+  before.set(generationKey, store.get(generationKey));
+  assert.deepEqual(store, before); assert.equal(removals.length, 0);
+  failRead = () => false;
+});
+
+test('photos referenced only by pruned originals become collectible while live and retained originals remain protected', async () => {
+  await reset(); const ids = await seedGenerations();
+  const unknown = `${generationPrefix}opaque/original`;
+  store.set(unknown, JSON.stringify({ [keys.foods]: JSON.stringify([food({ image: 'file:///document/unknown.jpg' })]) }));
+  await storage.pruneGenerations();
+  const candidates = new Set(['file:///document/archive-0.jpg', 'file:///document/archive-3.jpg',
+    'file:///document/archive-4.jpg', 'file:///document/unknown.jpg', 'file:///document/old.jpg']);
+  const removed = [];
+  await storage.collectStoredImages(candidates, () => new Set(), uri => removed.push(uri));
+  assert.deepEqual(removed, ['file:///document/archive-0.jpg']);
+  assert.ok(store.has(`${generationPrefix}${ids[3]}/original`));
+  assert.ok(store.has(unknown));
+});
+
+test('pruning shares the save queue, skips a restoration in progress and does not run after a failed commit', async () => {
+  await reset(); await seedGenerations();
+  const stopped = deferred(), resume = deferred();
+  beforeRemove = async () => { stopped.resolve(); await resume.promise; };
+  const pruning = storage.pruneGenerations(); await stopped.promise;
+  const beforeWrites = writes.length;
+  const saving = storage.saveStoredValue(keys.shopping, []);
+  try {
+    await new Promise(setImmediate);
+    assert.equal(writes.length, beforeWrites, 'save must wait while cleanup holds the storage queue');
+  } finally { resume.resolve(); }
+  await Promise.all([pruning, saving]); beforeRemove = async () => {};
+  assert.deepEqual((await diskSnapshot())[keys.shopping], []);
+
+  await reset(); await seedGenerations();
+  const prepared = deferred(), finish = deferred();
+  const restoration = storage.commitRestoredValues(async () => { prepared.resolve(); await finish.promise; throw Error('preparation failed'); });
+  await prepared.promise;
+  const during = new Map(store); let skipped = false;
+  const skippedPrune = storage.pruneGenerations().then(() => { skipped = true; });
+  try {
+    await new Promise(setImmediate);
+    assert.equal(skipped, true); assert.deepEqual(store, during); assert.equal(removals.length, 0);
+  } finally { finish.resolve(); }
+  await assert.rejects(restoration, /preparation failed/); await skippedPrune;
+  assert.equal(removals.length, 0);
+});
+
+test('pruning skips an erasure in progress and aborts safely when the active head cannot be confirmed', async () => {
+  await reset(); await seedGenerations();
+  const started = deferred(), finish = deferred();
+  const erasure = storage.eraseStoredValues(entries(data()), async () => { started.resolve(); await finish.promise; });
+  await started.promise; const during = new Map(store);
+  try {
+    await storage.pruneGenerations();
+    assert.deepEqual(store, during); assert.equal(removals.length, 0);
+  } finally { finish.resolve(); }
+  await erasure;
+  for (const head of [null, 'broken', JSON.stringify({ version: 9, id: 'wrong' })]) {
+    await reset(); await seedGenerations();
+    if (head === null) store.delete(generationKey); else store.set(generationKey, head);
+    const before = new Map(store);
+    await assert.doesNotReject(storage.pruneGenerations());
+    assert.deepEqual(store, before); assert.equal(removals.length, 0);
+  }
+});
 
 test('legacy Yahoo images are excluded from catalog reuse, migration and backups without removing user photos', async () => {
   await reset();
@@ -220,6 +437,34 @@ test('phase 3 bundled recipe images use stable asset IDs and remote images remai
   const originalAsset = assets['recipe-1']; assets['recipe-1'] = 'another-device-bundle.jpg';
   try { assert.equal((await restoreBackup(exported)).recipes[0].image, 'another-device-bundle.jpg'); }
   finally { assets['recipe-1'] = originalAsset; }
+});
+
+test('generated recipe photos use portable backup references without embedding the image files', async () => {
+  await reset();
+  const { sampleRecipes, sampleRecipeImages: assets } = require('../src/data/sampleData.ts');
+  const imageIds = ['recipe-1', 'recipe-8', 'recipe-9', 'recipe-100', 'recipe-101', 'recipe-120', 'recipe-121', 'recipe-127', 'recipe-128', 'recipe-136'];
+  const input = { ...data(), foods: [], recipes: imageIds.map(id => ({
+    ...structuredClone(sampleRecipes.find(recipe => recipe.id === id)), isFavorite: true,
+  })) };
+  const prepared = await prepareBackup(input);
+  const exported = JSON.parse(prepared.contents);
+  assert.equal(exported.version, 2);
+  assert.equal(prepared.embeddedCount, 0);
+  assert.equal(prepared.externalCount, 0);
+  assert.deepEqual(exported.data.recipes.map(recipe => recipe.image), imageIds.map(id => `tabedoki-asset:${id}`));
+  const originalImages = input.recipes.map(recipe => assets[recipe.id]);
+  input.recipes.forEach(recipe => { assets[recipe.id] = `another-device/${recipe.id}.jpg`; });
+  try {
+    const restored = await restoreBackup(exported);
+    assert.deepEqual(restored.recipes.map(recipe => recipe.image), imageIds.map(id => `another-device/${id}.jpg`));
+    assert.ok(restored.recipes.every(recipe => recipe.isFavorite));
+    assert.deepEqual(restored.recipes.map(recipe => recipe.ingredientAmounts), input.recipes.map(recipe => recipe.ingredientAmounts));
+  } finally { input.recipes.forEach((recipe, index) => { assets[recipe.id] = originalImages[index]; }); }
+  const broken = structuredClone(exported);
+  broken.data.recipes[0].image = 'tabedoki-asset:recipe-unknown';
+  const before = await diskSnapshot();
+  await assert.rejects(restoreBackup(broken), /画像/);
+  assert.deepEqual(await diskSnapshot(), before);
 });
 
 test('phase 3 rejects missing image references and oversized photos before committing any restored data', async () => {
@@ -647,6 +892,185 @@ test('phase 4 registration rejects stale purchase state and malformed duplicate 
   assert.throws(() => validatePayload(invalid), /同じ購入分/);
   invalid.data.foods.pop(); invalid.data.foods[0].sourceShoppingItemId = 123;
   assert.throws(() => validatePayload(invalid));
+});
+
+test('quantity-only updates preserve metadata and history, wait for commit, and undo only the selected food once', async (t) => {
+  await reset();
+  const history = [{ operationId: 'old-cooking', recipeId: 'recipe-user', recordedAt: '2026-09-29T00:00:00.000Z',
+    amount: 200, before: 1200, after: 1000, unit: 'ml' }];
+  store.set(keys.foods, JSON.stringify([food({ quantity: 1000, memo: '残すメモ', consumptionHistory: history }), food({ id: 'other-food' })]));
+  await mount(t);
+  const before = context.foods[0];
+  const gate = deferred(); let holding = true;
+  beforeWrite = async key => { if (key === keys.foods && holding) { holding = false; await gate.promise; } };
+  let undo, notices = 0;
+  await act(async () => assert.equal(context.updateFoodQuantity(before.id, 700, before, action => { undo = action; notices++; }), true));
+  assert.deepEqual(context.foods[0], { ...before, quantity: 700, revision: (before.revision ?? 0) + 1 });
+  assert.equal(notices, 0, 'no success message or undo until storage commits');
+  await act(async () => gate.resolve());
+  assert.equal(notices, 1);
+  beforeWrite = async () => {};
+  await act(async () => {
+    context.updateFood('other-food', { ...context.foods[1], memo: '後の編集' });
+    context.addShoppingItem('にんじん');
+  });
+  let undoneNotices = 0;
+  await act(async () => { assert.equal(undo(() => undoneNotices++), true); assert.equal(undo(), false); });
+  assert.equal(undoneNotices, 1);
+  assert.deepEqual(context.foods[0], { ...before, revision: (before.revision ?? 0) + 2 });
+  assert.equal(context.foods[1].memo, '後の編集');
+  assert.ok(context.shoppingItems.some(item => item.name === 'にんじん'));
+  assert.equal((await diskSnapshot())[keys.foods][0].quantity, 1000);
+});
+
+test('quantity-only updates reject invalid values and stale records, and leave unchanged legacy precision intact', async t => {
+  await reset(); await mount(t);
+  const before = context.foods[0];
+  for (const quantity of [0, -1, 100000, 10.001, NaN, Infinity, '50']) {
+    assert.throws(() => context.updateFoodQuantity(before.id, quantity, before), /残量/);
+    assert.strictEqual(context.foods[0], before);
+  }
+  assert.equal(context.updateFoodQuantity(before.id, before.quantity, before), false);
+  await act(async () => context.updateFood(before.id, { ...before, memo: '変更後のメモ' }));
+  assert.throws(() => context.updateFoodQuantity(before.id, 70, before), /確認中に/);
+  assert.equal(context.foods[0].memo, '変更後のメモ'); assert.equal(context.foods[0].quantity, before.quantity);
+  await act(async () => context.replaceAppData({ ...data(), foods: [food({ quantity: 1.234 })] }));
+  const legacy = context.foods[0];
+  assert.equal(context.updateFoodQuantity(legacy.id, legacy.quantity, legacy), false);
+  assert.strictEqual(context.foods[0], legacy);
+  await act(async () => context.replaceAppData({ ...data(), foods: [{ ...legacy, memo: '同じIDと残量の別の内容' }] }));
+  assert.throws(() => context.updateFoodQuantity(legacy.id, 1, legacy), /確認中に/);
+});
+
+test('quantity save and undo failures offer completion only after a successful retry', async t => {
+  await reset(); await mount(t);
+  failWrite = key => key === keys.foods;
+  let undo, notices = 0, undoneNotices = 0;
+  await act(async () => context.updateFoodQuantity('food-1', 70, context.foods[0], action => { undo = action; notices++; }));
+  assert.ok(context.saveError); assert.equal(notices, 0);
+  failWrite = () => false;
+  await act(async () => context.retrySave()); assert.equal(notices, 1);
+  failWrite = key => key === keys.foods;
+  await act(async () => assert.equal(undo(() => undoneNotices++), true));
+  assert.ok(context.saveError); assert.equal(undoneNotices, 0);
+  failWrite = () => false;
+  await act(async () => context.retrySave()); await act(async () => context.retrySave());
+  assert.equal(notices, 1); assert.equal(undoneNotices, 1);
+  assert.equal((await diskSnapshot())[keys.foods][0].quantity, 100);
+});
+
+test('quantity undo cannot overwrite later edits, cooking, status changes, deletion or restored data', async t => {
+  await reset(); const renderer = await mount(t);
+  for (const change of [
+    () => context.updateFood('food-1', { ...context.foods[0], memo: '後の編集' }),
+    () => context.recordConsumption({ operationId: 'new-cooking', recipeId: 'recipe-user', items: [{
+      foodId: 'food-1', amount: 10, unit: 'ml', expectedQuantity: 70, expectedExpiryDate: '2099-01-01', expectedRevision: 1,
+    }] }),
+    () => context.markFoodUsed('food-1'),
+    () => context.markFoodDisposed('food-1'),
+    () => context.deleteFood('food-1'),
+    () => context.replaceAppData(data()),
+  ]) {
+    await act(async () => context.replaceAppData({ ...data(), foods: [food({ expiryDate: '2099-01-01' })] }));
+    let undo;
+    await act(async () => context.updateFoodQuantity('food-1', 70, context.foods[0], action => { undo = action; }));
+    await act(async () => change());
+    const current = context.foods;
+    assert.equal(undo(), false); assert.strictEqual(context.foods, current);
+  }
+  await act(async () => context.replaceAppData(data()));
+  let undo;
+  await act(async () => context.updateFoodQuantity('food-1', 70, context.foods[0], action => { undo = action; }));
+  const oldUpdate = context.updateFoodQuantity, oldFood = context.foods[0];
+  await act(async () => context.restoreAppData(payload()));
+  assert.equal(undo(), false); assert.throws(() => oldUpdate(oldFood.id, 60, oldFood), /復元前/);
+  const currentFood = context.foods[0];
+  await act(async () => context.updateFoodQuantity(currentFood.id, 70, currentFood, action => { undo = action; }));
+  await act(async () => renderer.unmount());
+  assert.equal(undo(), false);
+});
+
+test('shopping check undo waits for commit, restores only that purchase and runs once', async (t) => {
+  await reset(); await mount(t);
+  const gate = deferred(); let holding = true;
+  beforeWrite = async key => { if (key === keys.shopping && holding) { holding = false; await gate.promise; } };
+  let undo, notices = 0;
+  await act(async () => {
+    assert.equal(context.toggleShoppingItem('shop-1', action => { undo = action; notices++; }, false), true);
+    assert.equal(context.toggleShoppingItem('shop-1', () => notices++, false), false, 'a repeated stale check is ignored');
+  });
+  assert.equal(context.shoppingItems[0].checked, true); assert.equal(notices, 0);
+  await act(async () => gate.resolve());
+  assert.equal(notices, 1);
+  beforeWrite = async () => {};
+  await act(async () => {
+    context.addShoppingItem('牛乳', '後から追加したメモ');
+    context.updateFood('food-1', { ...context.foods[0], memo: '後の編集は残す' });
+  });
+  let undoneNotices = 0;
+  await act(async () => {
+    assert.equal(undo(() => undoneNotices++), true);
+    assert.equal(undo(() => undoneNotices++), false);
+  });
+  assert.equal(undoneNotices, 1); assert.equal(context.shoppingItems[0].checked, false);
+  assert.ok(context.shoppingItems.some(item => item.memo === '後から追加したメモ'));
+  assert.equal(context.foods[0].memo, '後の編集は残す');
+  assert.equal((await diskSnapshot())[keys.shopping].find(item => item.id === 'shop-1').checked, false);
+});
+
+test('shopping check and undo success notices wait for storage retry', async (t) => {
+  await reset(); await mount(t);
+  failWrite = key => key === keys.shopping;
+  let undo, notices = 0, undoneNotices = 0;
+  await act(async () => context.toggleShoppingItem('shop-1', action => { undo = action; notices++; }));
+  assert.ok(context.saveError); assert.equal(notices, 0);
+  failWrite = () => false;
+  await act(async () => context.retrySave());
+  assert.equal(notices, 1);
+  failWrite = key => key === keys.shopping;
+  await act(async () => assert.equal(undo(() => undoneNotices++), true));
+  assert.ok(context.saveError); assert.equal(undoneNotices, 0);
+  failWrite = () => false;
+  await act(async () => context.retrySave()); await act(async () => context.retrySave());
+  assert.equal(notices, 1); assert.equal(undoneNotices, 1);
+  assert.equal((await diskSnapshot())[keys.shopping][0].checked, false);
+});
+
+test('shopping undo rejects later toggles, deletion, replacement and a purchase already registered as food', async (t) => {
+  await reset(); const renderer = await mount(t);
+  for (const change of [
+    () => context.toggleShoppingItem('shop-1'),
+    () => context.deleteShoppingItem('shop-1'),
+    () => context.replaceAppData(data()),
+    () => context.addFood(food({ id: 'new-food' }), 'shop-1'),
+  ]) {
+    await act(async () => context.replaceAppData(data()));
+    let undo;
+    await act(async () => context.toggleShoppingItem('shop-1', action => { undo = action; }));
+    await act(async () => change());
+    const current = context.shoppingItems;
+    await act(async () => assert.equal(undo(), false));
+    assert.strictEqual(context.shoppingItems, current);
+  }
+  await act(async () => context.replaceAppData(data()));
+  let undo;
+  await act(async () => context.toggleShoppingItem('shop-1', action => { undo = action; }));
+  await act(async () => context.restoreAppData(payload()));
+  assert.equal(undo(), false);
+  await act(async () => context.toggleShoppingItem('shop-1', action => { undo = action; }));
+  await act(async () => renderer.unmount());
+  assert.equal(undo(), false);
+});
+
+test('a failed check followed by a newer change never shows the old success or undo', async (t) => {
+  await reset(); await mount(t);
+  failWrite = key => key === keys.shopping;
+  let notices = 0;
+  await act(async () => context.toggleShoppingItem('shop-1', () => notices++));
+  await act(async () => context.toggleShoppingItem('shop-1'));
+  failWrite = () => false;
+  await act(async () => context.retrySave());
+  assert.equal(notices, 0); assert.equal(context.shoppingItems[0].checked, false);
 });
 
 test('used and disposed undo waits for commit, restores only its food, and runs once', async (t) => {

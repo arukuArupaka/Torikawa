@@ -12,6 +12,8 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { AnimatedDisclosure } from '../components/AnimatedDisclosure';
 import { colors, radius, spacing } from '../constants/theme';
 import { useAppData } from '../context/AppDataContext';
+import { BUILT_IN_RECIPE_COUNT, getNewCatalogRecipes } from '../data/recipeCatalog';
+import { isGeneratedRecipeImage } from '../data/generatedRecipeImages';
 import { useCurrentDay } from '../hooks/useCurrentDay';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { generateLocalRecipeIdeas, LocalRecipeIdea } from '../services/localRecipeSuggestionService';
@@ -73,7 +75,7 @@ function pickCookpadSearchFoods(foods: FoodItem[]) {
 
 export function RecipesScreen({ navigation, route }: Props) {
   const alert = useAppAlert();
-  const { addRecipe, addShoppingItem, foods, recipes, shoppingItems, toggleRecipeFavorite } = useAppData();
+  const { addRecipe, addNewCatalogRecipes, addShoppingItem, foods, recipes, shoppingItems, toggleRecipeFavorite } = useAppData();
   const [query, setQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<RecipeFilter>(route?.params?.initialFilter ?? 'all');
   const [selectedCategory, setSelectedCategory] = useState<RecipeCategory | 'all'>('all');
@@ -82,9 +84,13 @@ export function RecipesScreen({ navigation, route }: Props) {
   const [showFilters, setShowFilters] = useState(false);
   const [showExplore, setShowExplore] = useState(false);
   const [expandedRecipes, setExpandedRecipes] = useState<Record<string, boolean>>({});
+  const [visibleRecipeCount, setVisibleRecipeCount] = useState(20);
   const currentDay = useCurrentDay();
   const scrollRef = useRef<ScrollView>(null);
   const initialFilter = route?.params?.initialFilter;
+  const newCatalogCount = useMemo(() => getNewCatalogRecipes(recipes).length, [recipes]);
+
+  useEffect(() => { setVisibleRecipeCount(20); }, [query, selectedFilter, selectedCategory]);
 
   useEffect(() => {
     if (!initialFilter) return;
@@ -225,6 +231,17 @@ export function RecipesScreen({ navigation, route }: Props) {
         title="おすすめレシピ"
       />
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {newCatalogCount > 0 ? (
+          <View style={styles.catalogNotice}>
+            <Text style={styles.catalogTitle}>内蔵レシピが{BUILT_IN_RECIPE_COUNT}件になりました</Text>
+            <Text style={styles.catalogBody}>新しいレシピを追加できます。登録済みの内容とお気に入りは保持します。</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={`新しい内蔵レシピ${newCatalogCount}件を追加`}
+              onPress={addNewCatalogRecipes} style={styles.catalogButton}>
+              <Ionicons color={colors.primary} name="add-circle-outline" size={20} />
+              <Text style={styles.textLink}>新しい{newCatalogCount}件を追加</Text>
+            </Pressable>
+          </View>
+        ) : null}
         <AnimatedDisclosure expanded={showFilters} contentStyle={styles.disclosureContent} header={<View style={styles.searchRow}>
           <View style={styles.searchBox}>
             <Ionicons color={colors.textMuted} name="search" size={19} />
@@ -437,7 +454,7 @@ export function RecipesScreen({ navigation, route }: Props) {
           </View>
         ) : null}
 
-        {displayedSuggestions.map((recipe, index) => {
+        {displayedSuggestions.slice(0, visibleRecipeCount).map((recipe, index) => {
           const expanded = Boolean(expandedRecipes[recipe.id]);
           const addableCount = getRecipeShoppingItems(recipe, foods, shoppingItems).length;
           const needed = recipe.stock.filter((row) => row.status === 'missing' || row.status === 'shortage');
@@ -448,7 +465,11 @@ export function RecipesScreen({ navigation, route }: Props) {
           return (
             <View key={recipe.id} style={styles.card}>
               <View style={styles.imageWrap}>
-                <FoodImage source={{ uri: recipe.image }} style={styles.image} />
+                <FoodImage source={{ uri: recipe.image }} style={styles.image}
+                  accessibilityLabel={`${recipe.name}${isGeneratedRecipeImage(recipe) ? 'のAI生成イメージ' : 'の画像'}`} />
+                {isGeneratedRecipeImage(recipe) ? <View style={styles.generatedImageBadge}>
+                  <Text style={styles.generatedImageLabel}>AI生成のイメージ</Text>
+                </View> : null}
                 <View style={styles.rankBadge}>
                   <Text style={styles.rankText}>おすすめ {index + 1}</Text>
                 </View>
@@ -608,6 +629,16 @@ export function RecipesScreen({ navigation, route }: Props) {
             </View>
           );
         })}
+        {displayedSuggestions.length > 0 ? <Text style={styles.catalogBody}>
+          {Math.min(visibleRecipeCount, displayedSuggestions.length)} / {displayedSuggestions.length}件を表示
+        </Text> : null}
+        {visibleRecipeCount < displayedSuggestions.length ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="さらにレシピを表示"
+            onPress={() => setVisibleRecipeCount(current => current + 20)} style={styles.catalogButton}>
+            <Text style={styles.textLink}>さらに{Math.min(20, displayedSuggestions.length - visibleRecipeCount)}件表示</Text>
+            <Ionicons color={colors.primary} name="chevron-down" size={18} />
+          </Pressable>
+        ) : null}
       </ScrollView>
     </Screen>
   );
@@ -655,6 +686,14 @@ function Metric({
 }
 
 const styles = StyleSheet.create({
+  generatedImageBadge: { position: 'absolute', bottom: 8, left: 10, backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 4 },
+  generatedImageLabel: { color: colors.textMuted, fontSize: 11 },
+  catalogNotice: { backgroundColor: colors.primarySoft, borderRadius: radius.md, padding: spacing.md, gap: spacing.sm },
+  catalogTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  catalogBody: { color: colors.textMuted, fontSize: 12, lineHeight: 18 },
+  catalogButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
+    borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.sm, backgroundColor: colors.surface },
   content: { gap: spacing.md, padding: spacing.md, paddingBottom: spacing.xl },
   disclosureContent: { paddingTop: spacing.md },
   searchRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },

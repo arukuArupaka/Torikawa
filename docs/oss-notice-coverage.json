@@ -1,7 +1,7 @@
 {
   "scope": "Installed dependency graph from package.json dependencies (including installed peers/optional dependencies); includes build tools. Native/OS/font dependencies require final-build review.",
-  "packages": 534,
-  "withText": 473,
+  "packages": 531,
+  "withText": 474,
   "missing": [
     {
       "package": "tr46@0.0.3",
@@ -224,27 +224,11 @@
       "reason": "license text not found at package root"
     },
     {
-      "package": "bplist-parser@0.3.2",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "@expo/xcpretty@4.4.5",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "@expo/ws-tunnel@2.0.0",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "@expo/devcert@1.2.1",
-      "reason": "license text not found at package root"
-    },
-    {
       "package": "badgin@1.2.3",
       "reason": "license text not found at package root"
     },
     {
-      "package": "standard-navigation@0.0.8",
+      "package": "standard-navigation@0.0.7",
       "reason": "license text not found at package root"
     }
   ]

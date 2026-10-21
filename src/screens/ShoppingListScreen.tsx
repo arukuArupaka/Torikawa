@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { MotionIconButton } from '../components/MotionIconButton';
@@ -9,6 +9,7 @@ import { AnimatedDisclosure } from '../components/AnimatedDisclosure';
 import { colors, radius, spacing } from '../constants/theme';
 import { useAppData } from '../context/AppDataContext';
 import { useAppToast } from '../context/AppToastContext';
+import { useReducedMotion } from '../context/MotionPreferenceContext';
 import { RootStackParamList } from '../navigation/types';
 import { ShoppingItem } from '../types';
 import { getFrequentShoppingSuggestions } from '../utils/shoppingList';
@@ -17,12 +18,44 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ShoppingList'>;
 
 export function ShoppingListScreen({ navigation }: Props) {
   const toast = useAppToast();
+  const reduceMotion = useReducedMotion();
   const { foods, shoppingItems, addShoppingItem, toggleShoppingItem, deleteShoppingItem } = useAppData();
   const [name, setName] = useState('');
   const [notice, setNotice] = useState('');
   const [showChecked, setShowChecked] = useState(false);
   const [showFrequent, setShowFrequent] = useState(false);
   const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
+  const [leavingItems, setLeavingItems] = useState(new Map<string, boolean>());
+  const leavingTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const screenMounted = useRef(true);
+  const [destinationPulse, setDestinationPulse] = useState({ checked: false, sequence: 0 });
+  useEffect(() => {
+    screenMounted.current = true;
+    return () => {
+      screenMounted.current = false;
+      leavingTimers.current.forEach(clearTimeout);
+      leavingTimers.current.clear();
+    };
+  }, []);
+  useEffect(() => {
+    if (!reduceMotion) return;
+    leavingTimers.current.forEach(clearTimeout);
+    leavingTimers.current.clear();
+    setLeavingItems((current) => current.size ? new Map() : current);
+  }, [reduceMotion]);
+  const clearLeaving = (id?: string) => {
+    if (id === undefined) {
+      leavingTimers.current.forEach(clearTimeout);
+      leavingTimers.current.clear();
+      setLeavingItems(new Map());
+    } else {
+      clearTimeout(leavingTimers.current.get(id));
+      leavingTimers.current.delete(id);
+      setLeavingItems((current) => { const next = new Map(current); next.delete(id); return next; });
+    }
+  };
+  const changeView = (checked: boolean) => { clearLeaving(); setShowChecked(checked); };
+  const pulseDestination = (checked: boolean) => setDestinationPulse((current) => ({ checked, sequence: current.sequence + 1 }));
   const registeredFoods = useMemo(() => new Map(foods.filter((food) => food.sourceShoppingItemId).map((food) => [food.sourceShoppingItemId!, food])), [foods]);
   const pendingItems = shoppingItems.filter((item) => !item.checked);
   const checkedItems = shoppingItems.filter((item) => item.checked);
@@ -53,25 +86,42 @@ export function ShoppingListScreen({ navigation }: Props) {
       setNotice('この購入分は登録済みです。次の購入は「買うもの」に新しく追加してください。');
       return;
     }
-    toggleShoppingItem(item.id);
+    if (leavingTimers.current.has(item.id)) return;
+    const changed = toggleShoppingItem(item.id, (undo) => {
+      toast(`「${item.name}」を${item.checked ? '買うものに戻しました' : '購入済みにしました'}。`, {
+        label: '元に戻す', hint: 'この商品の購入状態だけを戻します。',
+        onPress: () => {
+          if (undo(() => toast(`「${item.name}」の購入状態を元に戻しました。`))) {
+            if (screenMounted.current) { clearLeaving(item.id); setShowChecked(item.checked); pulseDestination(item.checked); }
+          } else toast('購入状態が変わっています。現在のリストを確認してください。');
+        },
+      });
+    }, item.checked);
+    if (!changed) return;
+    if (!reduceMotion) {
+      setLeavingItems((current) => new Map(current).set(item.id, item.checked));
+      leavingTimers.current.set(item.id, setTimeout(() => clearLeaving(item.id), 500));
+    }
+    pulseDestination(!item.checked);
     setDeleteItemId(null);
-    setNotice(`「${item.name}」を${item.checked ? '買うものに戻しました' : '購入済みにしました'}。`);
+    setNotice('');
   };
 
   const renderItem = ({ item }: { item: ShoppingItem }) => {
     const registered = registeredFoods.get(item.id);
-    return <View style={[styles.listCard, styles.itemGroup]}>
+    const leaving = !reduceMotion && leavingItems.get(item.id) === showChecked && item.checked !== showChecked;
+    return <ShoppingCheckCard leaving={leaving} checked={item.checked}>
           <View style={styles.itemRow}>
             <Pressable
               accessibilityRole="checkbox"
               accessibilityLabel={registered ? `${item.name}は食材に登録済み` : `${item.name}を${item.checked ? '未購入に戻す' : '購入済みにする'}`}
               accessibilityHint={item.memo}
-              accessibilityState={{ checked: item.checked, disabled: Boolean(registered) }} aria-checked={item.checked}
-              disabled={Boolean(registered)}
+              accessibilityState={{ checked: item.checked, disabled: Boolean(registered) || leaving }} aria-checked={item.checked}
+              disabled={Boolean(registered) || leaving}
               onPress={() => handleToggleItem(item)}
               style={styles.checkArea}
             >
-              <Ionicons color={item.checked ? colors.primary : colors.textMuted} name={item.checked ? 'checkbox' : 'square-outline'} size={25} />
+              <ShoppingCheckIcon checked={item.checked} leaving={leaving} />
               <View style={styles.itemNameArea}>
                 <Text style={[styles.itemName, item.checked && styles.checked]}>{item.name}</Text>
                 {item.memo ? <Text style={styles.itemMemo}>{item.memo
@@ -79,11 +129,12 @@ export function ShoppingListScreen({ navigation }: Props) {
                   .replace(/^(「.*」用) \/ /, '$1\n')}</Text> : null}
               </View>
             </Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel={`${item.name}を買い物リストから削除`} onPress={() => setDeleteItemId(item.id)} style={styles.iconButton}>
+            <Pressable accessibilityRole="button" accessibilityLabel={`${item.name}を買い物リストから削除`} disabled={leaving}
+              accessibilityState={{ disabled: leaving }} onPress={() => setDeleteItemId(item.id)} style={styles.iconButton}>
               <Ionicons color={colors.textMuted} name="trash-outline" size={20} />
             </Pressable>
           </View>
-          {item.checked ? (
+          {item.checked && !leaving ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={registered ? `${item.name}の登録済み食材を確認` : `${item.name}を食材として登録`}
@@ -111,7 +162,7 @@ export function ShoppingListScreen({ navigation }: Props) {
               </View>
             </View>
           ) : null}
-        </View>;
+        </ShoppingCheckCard>;
   };
 
   return (
@@ -119,15 +170,14 @@ export function ShoppingListScreen({ navigation }: Props) {
       <ScreenHeader onBack={navigation.goBack} subtitle={`未購入${pendingItems.length}件・購入済み${checkedItems.length}件`} title="買い物リスト" />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <View style={styles.purchaseTabs}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`買うもの${pendingItems.length}件`} accessibilityState={{ selected: !showChecked }} aria-pressed={!showChecked} onPress={() => setShowChecked(false)} style={[styles.purchaseTab, !showChecked && styles.selectedTab]}>
-            <Text style={styles.registerText}>買うもの {pendingItems.length}件</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel={`購入済み${checkedItems.length}件`} accessibilityState={{ selected: showChecked }} aria-pressed={showChecked} onPress={() => setShowChecked(true)} style={[styles.purchaseTab, showChecked && styles.selectedTab]}>
-            <Text style={styles.registerText}>購入済み {checkedItems.length}件</Text>
-          </Pressable>
+          <PurchaseTab label="買うもの" count={pendingItems.length} selected={!showChecked} onPress={() => changeView(false)}
+            pulse={destinationPulse.checked ? 0 : destinationPulse.sequence} />
+          <PurchaseTab label="購入済み" count={checkedItems.length} selected={showChecked} onPress={() => changeView(true)}
+            pulse={destinationPulse.checked ? destinationPulse.sequence : 0} />
         </View>
         <SectionList key={showChecked ? 'checked' : 'pending'} style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"
-          sections={[{ key: showChecked ? 'checked' : 'pending', data: showChecked ? checkedItems : pendingItems }]}
+          sections={[{ key: showChecked ? 'checked' : 'pending', data: shoppingItems.filter((item) => item.checked === showChecked
+            || (!reduceMotion && leavingItems.get(item.id) === showChecked)) }]}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           initialNumToRender={12} maxToRenderPerBatch={12} windowSize={7}
@@ -190,10 +240,70 @@ export function ShoppingListScreen({ navigation }: Props) {
   );
 }
 
+function ShoppingCheckCard({ leaving, checked, children }: { leaving: boolean; checked: boolean; children: ReactNode }) {
+  const reduceMotion = useReducedMotion();
+  const progress = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    progress.stopAnimation(); progress.setValue(0);
+    if (!leaving || reduceMotion) return;
+    Animated.timing(progress, { toValue: 1, duration: 480, easing: Easing.linear,
+      useNativeDriver: Platform.OS !== 'web', isInteraction: false }).start();
+    return () => progress.stopAnimation();
+  }, [leaving, reduceMotion, progress]);
+  const cardStyle = [styles.listCard, styles.itemGroup, leaving && styles.checkFeedback];
+  if (reduceMotion) return <View style={cardStyle}>{children}</View>;
+  return <Animated.View style={[cardStyle, {
+    opacity: progress.interpolate({ inputRange: [0, 0.7, 1], outputRange: [1, 1, 0] }),
+    transform: [{ translateX: progress.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0, 0, checked ? 18 : -18] }) }],
+  }]}>{children}</Animated.View>;
+}
+
+function ShoppingCheckIcon({ checked, leaving }: { checked: boolean; leaving: boolean }) {
+  const reduceMotion = useReducedMotion();
+  const progress = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    progress.stopAnimation(); progress.setValue(0);
+    if (!leaving || reduceMotion) return;
+    Animated.timing(progress, { toValue: 1, duration: 220, easing: Easing.linear,
+      useNativeDriver: Platform.OS !== 'web', isInteraction: false }).start();
+    return () => progress.stopAnimation();
+  }, [leaving, reduceMotion, progress]);
+  const icon = <Ionicons color={checked ? colors.primary : colors.textMuted} name={checked ? 'checkbox' : 'square-outline'} size={25} />;
+  if (reduceMotion || !leaving) return icon;
+  return <Animated.View style={{ transform: [{ scale: progress.interpolate({ inputRange: [0, 0.45, 1], outputRange: [0.8, 1.18, 1] }) }] }}>{icon}</Animated.View>;
+}
+
+function PurchaseTab({ label, count, selected, onPress, pulse }: {
+  label: string; count: number; selected: boolean; onPress: () => void; pulse: number;
+}) {
+  const reduceMotion = useReducedMotion();
+  const progress = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    progress.stopAnimation();
+    if (!pulse || reduceMotion) { progress.setValue(1); return; }
+    progress.setValue(0);
+    Animated.timing(progress, { toValue: 1, duration: 420, easing: Easing.linear,
+      useNativeDriver: Platform.OS !== 'web', isInteraction: false }).start();
+    return () => progress.stopAnimation();
+  }, [pulse, reduceMotion, progress]);
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${label}${count}件`}
+    accessibilityState={{ selected }} aria-pressed={selected} onPress={onPress}
+    style={({ pressed }) => [styles.purchaseTab, selected && styles.selectedTab, pressed && styles.pressed]}>
+    {!reduceMotion ? <Animated.View accessible={false} pointerEvents="none" style={[styles.purchasePulse,
+      { opacity: progress.interpolate({ inputRange: [0, 0.25, 1], outputRange: [0, 1, 0] }) }]} /> : null}
+    <Text style={styles.registerText}>{label}</Text>
+    {reduceMotion ? <Text style={styles.purchaseCount}>{count}件</Text>
+      : <Animated.Text style={[styles.purchaseCount,
+        { transform: [{ scale: progress.interpolate({ inputRange: [0, 0.25, 1], outputRange: [1, 1.18, 1] }) }] }]}>{count}件</Animated.Text>}
+  </Pressable>;
+}
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   purchaseTabs: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.sm },
-  purchaseTab: { alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: 48, padding: spacing.sm, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  purchaseTab: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: 48, padding: spacing.sm, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  purchasePulse: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, borderRadius: radius.sm, backgroundColor: colors.primarySoft, borderColor: colors.primary, borderWidth: 2 },
+  purchaseCount: { color: colors.primaryDark, fontSize: 13, fontWeight: '800', backgroundColor: colors.primarySoft, paddingVertical: 3, paddingHorizontal: 8, borderRadius: radius.sm, overflow: 'hidden' },
   selectedTab: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   content: { gap: spacing.md, padding: spacing.md },
   addRow: { flexDirection: 'row', gap: spacing.sm },
@@ -211,6 +321,7 @@ const styles = StyleSheet.create({
   frequentButtonText: { color: colors.primaryDark, flexShrink: 1, fontSize: 13, fontWeight: '700' },
   pressed: { opacity: 0.72 },
   listCard: { backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: 12 },
+  checkFeedback: { backgroundColor: colors.primarySoft },
   itemGroup: { borderBottomColor: colors.border, borderBottomWidth: 1, paddingVertical: 4 },
   itemRow: { alignItems: 'center', flexDirection: 'row', minHeight: 61 },
   checkArea: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: 10, minHeight: 52, paddingVertical: 12 },

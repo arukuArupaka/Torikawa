@@ -63,6 +63,71 @@ const textButton = (root, label) => root.findAllByType('Pressable').find((node) 
 const recipeTitles = (root) => root.findAllByType('Pressable')
   .map((node) => node.props.accessibilityLabel).filter((label) => label?.endsWith('の材料と作り方を見る'));
 
+test('the recipe catalog renders 20 at a time and searches all 100, including dishes beyond the visible page', async (t) => {
+  const { additionalRecipes } = require('../src/data/recipeCatalog.ts');
+  const hundredRecipes = Array.from({ length: 100 }, (_, index) => recipe(`料理${String(index).padStart(3, '0')}`, '卵'));
+  data = { foods: [], shoppingItems: [], recipes: hundredRecipes, addNewCatalogRecipes() {} };
+  const renderer = await mount(t, React.createElement(RecipesScreen, { navigation: {} }));
+  assert.equal(recipeTitles(renderer.root).length, 20);
+  await act(async () => labeledButton(renderer.root, 'さらにレシピを表示').props.onPress());
+  assert.equal(recipeTitles(renderer.root).length, 40);
+  await act(async () => renderer.root.findByType('TextInput').props.onChangeText('料理099'));
+  assert.deepEqual(recipeTitles(renderer.root), ['料理099の材料と作り方を見る']);
+  await act(async () => renderer.root.findByType('TextInput').props.onChangeText(''));
+  assert.equal(recipeTitles(renderer.root).length, 20);
+  for (let page = 0; page < 4; page++) await act(async () => labeledButton(renderer.root, 'さらにレシピを表示').props.onPress());
+  assert.equal(recipeTitles(renderer.root).length, 100);
+  assert.equal(renderer.root.findAllByProps({ accessibilityLabel: 'さらにレシピを表示' }).length, 0);
+  data = { ...data, recipes: additionalRecipes };
+  await act(async () => renderer.update(React.createElement(RecipesScreen, { navigation: {} })));
+  assert.equal(renderer.root.findAllByProps({ accessibilityLabel: `新しい内蔵レシピ${additionalRecipes.length}件を追加` }).length, 0);
+});
+
+test('a saved 100-recipe collection offers only missing recipes and finds a newly added vegetable dish', async (t) => {
+  const { sampleRecipes } = require('../src/data/sampleData.ts');
+  let imports = 0;
+  data = { foods: [], shoppingItems: [], recipes: sampleRecipes.slice(0, 100), addNewCatalogRecipes() { imports++; } };
+  const renderer = await mount(t, React.createElement(RecipesScreen, { navigation: {} }));
+  assert.ok(renderer.root.findAllByType('Text').some(node => [node.props.children].flat().join('') === '内蔵レシピが136件になりました'));
+  await act(async () => labeledButton(renderer.root, '新しい内蔵レシピ36件を追加').props.onPress());
+  assert.equal(imports, 1);
+  data = { ...data, recipes: sampleRecipes };
+  await act(async () => renderer.update(React.createElement(RecipesScreen, { navigation: {} })));
+  assert.equal(renderer.root.findAllByProps({ accessibilityLabel: '新しい内蔵レシピ36件を追加' }).length, 0);
+  await act(async () => renderer.root.findByType('TextInput').props.onChangeText('しいたけ'));
+  assert.deepEqual(recipeTitles(renderer.root), ['しいたけの醤油焼きの材料と作り方を見る']);
+});
+
+test('a saved 120-recipe collection offers missing classics and curry rice is searchable', async (t) => {
+  const { sampleRecipes } = require('../src/data/sampleData.ts');
+  let imports = 0;
+  data = { foods: [], shoppingItems: [], recipes: sampleRecipes.slice(0, 120), addNewCatalogRecipes() { imports++; } };
+  const renderer = await mount(t, React.createElement(RecipesScreen, { navigation: {} }));
+  await act(async () => labeledButton(renderer.root, '新しい内蔵レシピ16件を追加').props.onPress());
+  assert.equal(imports, 1);
+  data = { ...data, recipes: sampleRecipes };
+  await act(async () => renderer.update(React.createElement(RecipesScreen, { navigation: {} })));
+  assert.equal(renderer.root.findAllByProps({ accessibilityLabel: '新しい内蔵レシピ16件を追加' }).length, 0);
+  await act(async () => renderer.root.findByType('TextInput').props.onChangeText('カレーライス'));
+  assert.deepEqual(recipeTitles(renderer.root), ['カレーライスの材料と作り方を見る']);
+});
+
+test('a saved 127-recipe collection offers only nine new classics and finds gyudon and grilled salmon', async (t) => {
+  const { sampleRecipes } = require('../src/data/sampleData.ts');
+  let imports = 0;
+  data = { foods: [], shoppingItems: [], recipes: sampleRecipes.slice(0, 127), addNewCatalogRecipes() { imports++; } };
+  const renderer = await mount(t, React.createElement(RecipesScreen, { navigation: {} }));
+  await act(async () => labeledButton(renderer.root, '新しい内蔵レシピ9件を追加').props.onPress());
+  assert.equal(imports, 1);
+  data = { ...data, recipes: sampleRecipes };
+  await act(async () => renderer.update(React.createElement(RecipesScreen, { navigation: {} })));
+  assert.equal(renderer.root.findAllByProps({ accessibilityLabel: '新しい内蔵レシピ9件を追加' }).length, 0);
+  for (const name of ['牛丼', '鮭の塩焼き']) {
+    await act(async () => renderer.root.findByType('TextInput').props.onChangeText(name));
+    assert.deepEqual(recipeTitles(renderer.root), [`${name}の材料と作り方を見る`]);
+  }
+});
+
 test('Home counts today and days 1–3 once, excludes expired/used/disposed, and stays independent of search', async (t) => {
   data = { foods: [food('卵', 0), food('豆腐', 1), food('にんじん', 3), food('玉ねぎ', 4),
     food('牛乳', -1), food('卵', 0, 'used'), food('豆腐', 1, 'disposed')] };
@@ -89,6 +154,93 @@ test('Home opens all recipes when no food is due soon; empty inventory has no su
   await act(async () => renderer.update(React.createElement(HomeScreen, { navigation })));
   assert.equal(renderer.root.findAllByProps({ accessibilityLabel: '今日まで 0件' }).length, 0);
   assert.equal(renderer.root.findAllByType('Text').filter((node) => node.props.children === '食材を登録してみましょう').length, 1);
+});
+
+test('Home empty stock offers text registration buttons that open the existing screens and preserve history', async t => {
+  data = { foods: [] };
+  const destinations = [];
+  const navigation = { navigate: (...args) => destinations.push(args) };
+  const renderer = await mount(t, React.createElement(HomeScreen, { navigation }));
+  const buttons = () => renderer.root.findAllByType('PrimaryButton');
+  assert.deepEqual(buttons().map(node => node.props.label), ['食材を登録', 'バーコードで登録']);
+  await act(async () => buttons()[0].props.onPress());
+  await act(async () => buttons()[1].props.onPress());
+  assert.deepEqual(destinations, [['AddFood'], ['Barcode']]);
+  assert.deepEqual(data.foods, []);
+  const history = [food('牛乳', 0, 'used'), food('豆腐', 1, 'disposed')];
+  data = { foods: history };
+  await act(async () => renderer.update(React.createElement(HomeScreen, { navigation })));
+  assert.deepEqual(buttons().map(node => node.props.label), ['食材を登録', 'バーコードで登録']);
+  assert.equal(renderer.root.findAllByType('SwipeableFoodCard').length, 0);
+  assert.deepEqual(data.foods, history, 'completed records are retained');
+});
+
+test('Home registration prompts stay hidden when stock exists, even if search or expiry filters have no matches', async t => {
+  const original = food('牛乳', 7);
+  data = { foods: [original] };
+  const navigation = {};
+  const renderer = await mount(t, React.createElement(HomeScreen, { navigation }));
+  const buttons = () => renderer.root.findAllByType('PrimaryButton');
+  assert.equal(buttons().length, 0);
+  await act(async () => renderer.root.findByType('TextInput').props.onChangeText('該当なし'));
+  assert.equal(renderer.root.findAllByType('SwipeableFoodCard').length, 0);
+  assert.equal(buttons().length, 0);
+  await act(async () => labeledButton(renderer.root, '今日まで 0件').props.onPress());
+  assert.equal(renderer.root.findAllByType('SwipeableFoodCard').length, 0);
+  assert.equal(buttons().length, 0);
+  assert.deepEqual(data.foods, [original]);
+  data = { foods: [{ ...original, status: 'used' }] };
+  await act(async () => renderer.update(React.createElement(HomeScreen, { navigation })));
+  assert.deepEqual(buttons().map(node => node.props.label), ['食材を登録', 'バーコードで登録']);
+  data = { foods: [original] };
+  await act(async () => renderer.update(React.createElement(HomeScreen, { navigation })));
+  assert.equal(buttons().length, 0, 'returning food to active stock hides the empty-state prompts');
+});
+
+test('Home summary buttons clear search, isolate exact day ranges and allow grouping, search and reset', async (t) => {
+  const items = [food('昨日の牛乳', -1), food('今日の卵', 0), food('明日の豆腐', 1), food('3日後のにんじん', 3),
+    food('4日後の玉ねぎ', 4), food('使用済み', 0, 'used'), food('廃棄済み', 1, 'disposed')];
+  data = { foods: items };
+  const renderer = await mount(t, React.createElement(HomeScreen, { navigation: {} }));
+  const root = renderer.root;
+  const names = () => root.findAllByType('SwipeableFoodCard').map(node => node.props.food.name);
+  await act(async () => textButton(root, 'カテゴリ別').props.onPress());
+  await act(async () => root.findByType('TextInput').props.onChangeText('該当なし'));
+  await act(async () => labeledButton(root, '今日まで 1件').props.onPress());
+  assert.equal(root.findByType('TextInput').props.value, '');
+  assert.equal(textButton(root, '期限順').props.accessibilityState.selected, true);
+  assert.equal(labeledButton(root, '今日まで 1件').props.accessibilityState.selected, true);
+  assert.deepEqual(names(), ['今日の卵']);
+  await act(async () => labeledButton(root, '明日から3日以内 2件').props.onPress());
+  assert.deepEqual(names(), ['明日の豆腐', '3日後のにんじん']);
+  assert.equal(labeledButton(root, '今日まで 1件').props.accessibilityState.selected, false);
+  await act(async () => textButton(root, '保存場所別').props.onPress());
+  assert.deepEqual(names(), ['明日の豆腐', '3日後のにんじん']);
+  await act(async () => root.findByType('TextInput').props.onChangeText('にんじん'));
+  assert.deepEqual(names(), ['3日後のにんじん']);
+  assert.ok(labeledButton(root, '今日まで 1件'), 'counts continue to represent all stock');
+  await act(async () => labeledButton(root, '絞り込みを解除してすべての食材を表示').props.onPress());
+  assert.equal(root.findByType('TextInput').props.value, '');
+  assert.equal(names().length, 5);
+  await act(async () => labeledButton(root, '期限切れ1件を確認').props.onPress());
+  assert.deepEqual(names(), ['昨日の牛乳']);
+  await act(async () => labeledButton(root, '明日から3日以内 2件').props.onPress());
+  assert.deepEqual(names(), ['明日の豆腐', '3日後のにんじん']);
+  assert.deepEqual(data.foods, items, 'filtering does not mutate food records');
+});
+
+test('Home zero-count filters have a clear empty state and selected ranges follow local midnight', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: new Date(2026, 9, 15, 23, 59, 59) });
+  data = { foods: [food('明日の豆腐', 1), food('4日後の牛乳', 4)] };
+  const renderer = await mount(t, React.createElement(HomeScreen, { navigation: {} }));
+  const root = renderer.root;
+  await act(async () => labeledButton(root, '今日まで 0件').props.onPress());
+  assert.equal(root.findAllByType('SwipeableFoodCard').length, 0);
+  assert.ok(root.findAllByType('Text').some(node => node.props.children === '「今日まで」の食材はありません。'));
+  await act(async () => t.mock.timers.tick(1000));
+  assert.deepEqual(root.findAllByType('SwipeableFoodCard').map(node => node.props.food.name), ['明日の豆腐']);
+  await act(async () => labeledButton(root, '明日から3日以内 1件').props.onPress());
+  assert.deepEqual(root.findAllByType('SwipeableFoodCard').map(node => node.props.food.name), ['4日後の牛乳']);
 });
 
 test('Home grouping changes apply the latest selection immediately and retain search and stock', async (t) => {

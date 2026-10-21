@@ -18,6 +18,7 @@ import { RecipesScreen } from '../screens/RecipesScreen';
 import { RecipeDetailScreen } from '../screens/RecipeDetailScreen';
 import { AddRecipeScreen } from '../screens/AddRecipeScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { UsageGuideScreen } from '../screens/UsageGuideScreen';
 import { AppInformationScreen } from '../screens/AppInformationScreen';
 import { OssLicensesScreen } from '../screens/OssLicensesScreen';
 import { ShoppingListScreen } from '../screens/ShoppingListScreen';
@@ -116,6 +117,7 @@ export function RootNavigator() {
         <Stack.Screen component={AddRecipeScreen} name="AddRecipe" options={{ presentation: 'modal' }} />
         <Stack.Screen component={ShoppingListScreen} name="ShoppingList" />
         <Stack.Screen component={StatisticsScreen} name="Statistics" />
+        <Stack.Screen component={UsageGuideScreen} name="UsageGuide" />
         <Stack.Screen component={AppInformationScreen} name="AppInformation" />
         <Stack.Screen component={OssLicensesScreen} name="OssLicenses" />
       </Stack.Navigator>

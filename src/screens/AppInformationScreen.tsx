@@ -68,8 +68,7 @@ export function AppInformationScreen({ navigation, route }: Props) {
           </View>
           <View style={styles.card}>
             <Text accessibilityRole="header" style={styles.title}>イメージ写真</Text>
-            <Text style={styles.body}>食材の初期表示にはアイコンを使用します。レシピや開発用サンプルのイメージ写真の一部はUnsplashの画像を使用しています。実際の商品・料理とは異なる場合があります。</Text>
-            {link('Unsplashのライセンス', 'https://unsplash.com/license')}
+            <Text style={styles.body}>食材の初期表示と写真未設定のレシピにはアイコンを使用します。内蔵レシピの画像はAI生成のイメージで、実際に調理して撮影した写真ではありません。利用者が選んだ写真や、以前保存した外部画像はそのまま保持します。</Text>
           </View>
           <View style={styles.card}>
             <Text accessibilityRole="header" style={styles.title}>オープンソースソフトウェア</Text>

@@ -1,7 +1,7 @@
 require('./register-typescript.cjs');
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { lookupYahooProductByBarcode } = require('../src/services/yahooProductLookupService.ts');
+const { lookupYahooProductByBarcode, isYahooProductLookupConfigured } = require('../src/services/yahooProductLookupService.ts');
 const { getFoodFallbackImage } = require('../src/utils/foodImages.ts');
 const { withoutYahooImage } = require('../src/utils/yahooImagePolicy.ts');
 const code = '4901234567894';
@@ -28,6 +28,37 @@ test('Yahoo lookup sends a barcode to the proxy and ignores every returned image
   assert.equal(await lookupYahooProductByBarcode(code), null);
   assert.equal(await lookupYahooProductByBarcode('123'), null);
   assert.equal(requests, 1);
+});
+
+test('native Yahoo lookup uses the configured absolute HTTPS endpoint and skips requests when unset', async t => {
+  const oldFetch = global.fetch, oldUrl = process.env.EXPO_PUBLIC_YAHOO_LOOKUP_URL;
+  t.after(() => {
+    global.fetch = oldFetch;
+    if (oldUrl === undefined) delete process.env.EXPO_PUBLIC_YAHOO_LOOKUP_URL;
+    else process.env.EXPO_PUBLIC_YAHOO_LOOKUP_URL = oldUrl;
+  });
+  let calls = 0;
+  global.fetch = async (url, options) => {
+    calls++;
+    assert.equal(url, `https://lookup.example/api/yahoo-product?barcode=${code}`);
+    assert.equal(options.credentials, 'omit');
+    assert.equal(options.redirect, 'error');
+    assert.equal(options.headers.Authorization, undefined);
+    return { ok: true, status: 200, json: async () => ({ barcode: code, name: 'テストレモン',
+      productUrl: 'https://store.shopping.yahoo.co.jp/test/lemon.html' }) };
+  };
+  delete process.env.EXPO_PUBLIC_YAHOO_LOOKUP_URL;
+  assert.equal(isYahooProductLookupConfigured(), false);
+  assert.equal(await lookupYahooProductByBarcode(code), null);
+  assert.equal(calls, 0);
+  process.env.EXPO_PUBLIC_YAHOO_LOOKUP_URL = 'https://lookup.example/api/yahoo-product';
+  assert.equal(isYahooProductLookupConfigured(), true);
+  const product = await lookupYahooProductByBarcode(code);
+  assert.equal(calls, 1);
+  assert.equal(product.name, 'テストレモン');
+  assert.equal(product.productSource.provider, 'yahoo-shopping');
+  assert.ok(product.image.startsWith('food-icon:'));
+  assert.equal(product.productSource.image, undefined);
 });
 
 test('Yahoo legacy remote images become local icons; selected photos and OFF images survive', () => {

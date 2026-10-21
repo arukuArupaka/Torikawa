@@ -8,6 +8,8 @@ import { loadStoredValue, saveStoredValue, storageKeys, isDataErasing } from './
 
 const CHANNEL_ID = 'expiry-reminders';
 const KIND = 'tabedoki-expiry-v2';
+// テスト通知などのために、端末の通知予約枠に余裕を残す。
+export const MAX_SCHEDULED_NOTIFICATIONS = 60;
 type IdMap = Record<string, string[]>;
 export type NotificationStatusSummary = {
   permission: 'granted' | 'denied' | 'undetermined' | 'unsupported';
@@ -39,9 +41,12 @@ export async function ensureNotificationPermission(): Promise<boolean> {
 }
 
 export function buildNotificationPlan(foods: FoodItem[], settings: NotificationSettings) {
-  if (!settings.enabled) return [];
+  return buildNotificationPlanSummary(foods, settings).plan;
+}
+export function buildNotificationPlanSummary(foods: FoodItem[], settings: NotificationSettings) {
+  if (!settings.enabled) return { plan: [], truncatedCount: 0 };
   const [hour, minute] = settings.time.split(':').map(Number);
-  return foods.filter((food) => food.status === 'active').flatMap((food) => {
+  const all = foods.filter((food) => food.status === 'active').flatMap((food) => {
     const expiry = parseDate(food.expiryDate);
     return [...new Set(settings.daysBeforeList)].flatMap((daysBefore) => {
       const date = new Date(expiry.getFullYear(), expiry.getMonth(), expiry.getDate() - daysBefore, hour, minute);
@@ -52,6 +57,10 @@ export function buildNotificationPlan(foods: FoodItem[], settings: NotificationS
       return [{ foodId: food.id, daysBefore, date, title, body, key }];
     });
   }).sort((a, b) => a.date.getTime() - b.date.getTime());
+  // 上限外の予定も、アプリが前面へ戻る際の既存の再同期で再計算する。
+  // 過去になった予定を除き、空いた枠にその時点で直近の予定を補充する。
+  return { plan: all.slice(0, MAX_SCHEDULED_NOTIFICATIONS),
+    truncatedCount: Math.max(0, all.length - MAX_SCHEDULED_NOTIFICATIONS) };
 }
 function getCurrentScope(): string | null {
   if (!Constants.expoVersion) return null;

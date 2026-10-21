@@ -51,6 +51,11 @@ test('public web-test server serves only exported files and rejects writes, hidd
       assert.equal((await request(url)).status, 404, url);
     }
     assert.equal((await request('/%')).status, 400);
+    // Malformed request targets must not terminate a server exposed through a tunnel.
+    for (const url of ['//[', 'http://[', '/%E0%A4%A']) {
+      assert.equal((await request(url)).status, 400, url);
+      assert.equal((await request('/')).status, 200, 'the server still responds after rejecting a URL');
+    }
     fs.writeFileSync(path.join(fixture, 'added-after-start.json'), 'not-in-export');
     assert.equal((await request('/added-after-start.json')).status, 404);
   } finally {

@@ -1,4 +1,5 @@
 import legacySampleRecipes from '../data/legacySampleRecipes.v1.json';
+import previousSampleRecipes from '../data/legacySampleRecipes.v2.json';
 import { Recipe } from '../types';
 
 type StoredRecipeContent = Pick<Recipe, 'id' | 'name' | 'ingredients' | 'ingredientAmounts' | 'steps' | 'minutes'> & {
@@ -23,12 +24,21 @@ function sameContent(recipe: StoredRecipeContent, original: Omit<StoredRecipeCon
     && Object.entries(original.ingredientAmounts).every(([ingredient, amount]) => recipe.ingredientAmounts[ingredient] === amount);
 }
 
+/** Personal images and favorites are not recipe-content edits. */
+export function hasOriginalRecipeContent(recipe: StoredRecipeContent, original: Recipe): boolean {
+  return sameContent(recipe, original) && (recipe.servings === undefined || recipe.servings === original.servings);
+}
+
 /** Update only an unchanged built-in recipe; keep user content and personal metadata. */
 export function migrateSampleRecipe<T extends StoredRecipeContent>(recipe: T, currentSamples: Recipe[]): T {
   const legacy = legacySampleRecipes.find((sample) => sample.id === recipe.id);
+  const previous = previousSampleRecipes.find((sample) => sample.id === recipe.id);
   const current = currentSamples.find((sample) => sample.id === recipe.id);
-  if (!legacy || !current) return recipe;
-  const migrated = sameContent(recipe, legacy) && !sameContent(recipe, current) ? {
+  if (!current) return recipe;
+  // Keep both historical versions for old backups. Explicit serving edits also prevent replacement.
+  const unchanged = [legacy, previous].some(original => original && sameContent(recipe, original))
+    && (recipe.servings === undefined || recipe.servings === current.servings);
+  const migrated = unchanged && !sameContent(recipe, current) ? {
     ...recipe,
     ingredients: [...current.ingredients],
     ingredientAmounts: { ...current.ingredientAmounts },

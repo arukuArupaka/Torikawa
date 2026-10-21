@@ -94,8 +94,9 @@ export function CalendarScreen({ navigation }: Props) {
         {
           text: '変更する',
           onPress: () => {
-            const { id, createdAt, ...input } = movingFood;
-            updateFood(id, { ...input, expiryDate: dateString });
+            // Apply only this field to the latest record; a confirmation can outlive
+            // a quantity or memo change made elsewhere.
+            updateFood(movingFood.id, { expiryDate: dateString });
             setMovingFoodId(null);
             setSelectedDate(dateString);
           },

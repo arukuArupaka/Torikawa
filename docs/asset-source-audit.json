@@ -68,97 +68,130 @@
     {
       "path": "assets/recipes/cabbage-egg-stir-fry.jpg",
       "sha256": "699a1a3ab71dda6b80fbd8f011a761458eee9ab9ef5ac8542983553f6fa20634",
-      "status": "unverified",
+      "status": "replaced-not-shipped",
       "sourceUrl": null,
       "copyright": null,
       "license": null,
-      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata."
+      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata. Original JPEG removed from current distribution assets; generated replacement has a prompt and hash in the linked manifest. Old provenance is not asserted.",
+      "originStatus": "unverified",
+      "replacedDate": "2026-10-20",
+      "replacement": "assets/recipes/generated/recipe-004.jpg"
     },
     {
       "path": "assets/recipes/egg-sandwich.jpg",
       "sha256": "c35037377f2fd16ece2f0f6283a94f4303531e846d6d01ddac0f829d297481d8",
-      "status": "unverified",
+      "status": "replaced-not-shipped",
       "sourceUrl": null,
       "copyright": null,
       "license": null,
-      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata."
+      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata. Original JPEG removed from current distribution assets; generated replacement has a prompt and hash in the linked manifest. Old provenance is not asserted.",
+      "originStatus": "unverified",
+      "replacedDate": "2026-10-20",
+      "replacement": "assets/recipes/generated/recipe-008.jpg"
     },
     {
       "path": "assets/recipes/fluffy-omelette.jpg",
       "sha256": "e3f41095c1e05586fa896215b47e81106e20cb4a5044fc0f14d2e79b8f68acf4",
-      "status": "unverified",
+      "status": "replaced-not-shipped",
       "sourceUrl": null,
       "copyright": null,
       "license": null,
-      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata."
+      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata. Original JPEG removed from current distribution assets; generated replacement has a prompt and hash in the linked manifest. Old provenance is not asserted.",
+      "originStatus": "unverified",
+      "replacedDate": "2026-10-20",
+      "replacement": "assets/recipes/generated/recipe-002.jpg"
     },
     {
       "path": "assets/recipes/milk-potage.jpg",
       "sha256": "1d34d3918042947bf0c5303abd55d962d9f6c64f0a9736f4322f189b3c47fdfc",
-      "status": "unverified",
+      "status": "replaced-not-shipped",
       "sourceUrl": null,
       "copyright": null,
       "license": null,
-      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata."
+      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata. Original JPEG removed from current distribution assets; generated replacement has a prompt and hash in the linked manifest. Old provenance is not asserted.",
+      "originStatus": "unverified",
+      "replacedDate": "2026-10-20",
+      "replacement": "assets/recipes/generated/recipe-005.jpg"
     },
     {
       "path": "assets/recipes/pork-cabbage-miso-stir-fry.jpg",
       "sha256": "213569e9c75b1578bf3753ce2680be297c416b7630a845e1b5ba5936107ae8bd",
-      "status": "unverified",
+      "status": "replaced-not-shipped",
       "sourceUrl": null,
       "copyright": null,
       "license": null,
-      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata."
+      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata. Original JPEG removed from current distribution assets; generated replacement has a prompt and hash in the linked manifest. Old provenance is not asserted.",
+      "originStatus": "unverified",
+      "replacedDate": "2026-10-20",
+      "replacement": "assets/recipes/generated/recipe-001.jpg"
     },
     {
       "path": "assets/recipes/tofu-steak.jpg",
       "sha256": "c5a3a2c474a0f92e168ab829c1f733eca26705018eebec175cf11d5dce26f707",
-      "status": "unverified",
+      "status": "replaced-not-shipped",
       "sourceUrl": null,
       "copyright": null,
       "license": null,
-      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata."
+      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata. Original JPEG removed from current distribution assets; generated replacement has a prompt and hash in the linked manifest. Old provenance is not asserted.",
+      "originStatus": "unverified",
+      "replacedDate": "2026-10-20",
+      "replacement": "assets/recipes/generated/recipe-006.jpg"
     },
     {
       "path": "assets/recipes/tofu-wakame-miso-soup.jpg",
       "sha256": "32a0dfaaef5055ae909779163435344e9255f30aa56fd520f811de4d053893c8",
-      "status": "unverified",
+      "status": "replaced-not-shipped",
       "sourceUrl": null,
       "copyright": null,
       "license": null,
-      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata."
+      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata. Original JPEG removed from current distribution assets; generated replacement has a prompt and hash in the linked manifest. Old provenance is not asserted.",
+      "originStatus": "unverified",
+      "replacedDate": "2026-10-20",
+      "replacement": "assets/recipes/generated/recipe-003.jpg"
     },
     {
       "path": "assets/recipes/vegetable-soup.jpg",
       "sha256": "72da9f9f58050eff8bf41be1ce4757e6afa313c8558c895d992c33705073d882",
-      "status": "unverified",
+      "status": "replaced-not-shipped",
       "sourceUrl": null,
       "copyright": null,
       "license": null,
-      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata."
+      "evidence": "No origin or permission record found in inspected Git history, project records or image metadata. Original JPEG removed from current distribution assets; generated replacement has a prompt and hash in the linked manifest. Old provenance is not asserted.",
+      "originStatus": "unverified",
+      "replacedDate": "2026-10-20",
+      "replacement": "assets/recipes/generated/recipe-007.jpg"
     }
   ],
   "textSources": [
     {
       "path": "src/data/sampleData.ts",
-      "sha256": "5af645eed76f845e016879e49c3784384bce69a8061c9bc187461162721c16bb",
-      "status": "unverified",
+      "sha256": "0ac612ac610430e4df089069490b544b7d74afd71936563f5b46927f71770c6e",
+      "status": "instructions-independently-authored",
       "sourceUrl": null,
-      "evidence": "Recipe text is in the repository, but original authorship or third-party permission has not been established. This is not a finding of infringement."
+      "evidence": "Eight built-in instruction sets and thirteen local suggestion instruction sets were authored for this app without importing recipe-site text. Names, quantities and estimated times retained. Not a cooking test or a claim about the origin of historical text.",
+      "authoredDate": "2026-10-20"
     },
     {
       "path": "src/data/legacySampleRecipes.v1.json",
       "sha256": "9a6bbb543ebbb0832a0e0a9154c7609cf080d071fd7bfe71e5ec2a58914f669d",
-      "status": "unverified",
+      "status": "historical-comparison-only",
       "sourceUrl": null,
-      "evidence": "Recipe text is in the repository, but original authorship or third-party permission has not been established. This is not a finding of infringement."
+      "evidence": "Recipe text is in the repository, but original authorship or third-party permission has not been established. This is not a finding of infringement. Used only to identify untouched historical recipe content for migration, not as new default recipe instructions."
     },
     {
       "path": "src/services/localRecipeSuggestionService.ts",
-      "sha256": "3f5c826de1b80881aed995c866bbf014db532cd8b1e04e56b09becbd88d9aa43",
-      "status": "unverified",
+      "sha256": "7ae609e6f813b87f2c72d3027c99ccc6b1533c45ad413b4313273e01fb6328f3",
+      "status": "instructions-independently-authored",
       "sourceUrl": null,
-      "evidence": "Recipe text is in the repository, but original authorship or third-party permission has not been established. This is not a finding of infringement."
+      "evidence": "Eight built-in instruction sets and thirteen local suggestion instruction sets were authored for this app without importing recipe-site text. Names, quantities and estimated times retained. Not a cooking test or a claim about the origin of historical text.",
+      "authoredDate": "2026-10-20"
+    },
+    {
+      "path": "src/data/legacySampleRecipes.v2.json",
+      "sha256": "379f2602473a9ac5fbeaba0949917539eafc3179d1dbfee96d138cde00ecdc11",
+      "status": "historical-comparison-only",
+      "sourceUrl": null,
+      "evidence": "Snapshot of the previously shipped eight recipes, used only to identify untouched saved content. Historical provenance remains unverified."
     }
   ],
   "externalImageReferences": [
@@ -168,24 +201,27 @@
         "src/data/sampleData.ts",
         "src/utils/recipeImages.ts"
       ],
-      "status": "unverified",
-      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+      "status": "retired-default-reference",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license.",
+      "currentUse": "Historical built-in image migration lookup only; not a new default image."
     },
     {
       "url": "https://images.unsplash.com/photo-1510693206972-df098062cb71?w=800",
       "usedIn": [
         "src/data/sampleData.ts"
       ],
-      "status": "unverified",
-      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+      "status": "retired-default-reference",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license.",
+      "currentUse": "Historical built-in image migration lookup only; not a new default image."
     },
     {
       "url": "https://images.unsplash.com/photo-1607301405390-d831c242f59b?w=800",
       "usedIn": [
         "src/data/sampleData.ts"
       ],
-      "status": "unverified",
-      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+      "status": "retired-default-reference",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license.",
+      "currentUse": "Historical built-in image migration lookup only; not a new default image."
     },
     {
       "url": "https://images.unsplash.com/photo-1512058564366-18510be2db19?w=800",
@@ -193,8 +229,9 @@
         "src/data/sampleData.ts",
         "src/utils/recipeImages.ts"
       ],
-      "status": "unverified",
-      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+      "status": "retired-default-reference",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license.",
+      "currentUse": "Historical built-in image migration lookup only; not a new default image."
     },
     {
       "url": "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=800",
@@ -202,8 +239,9 @@
         "src/data/sampleData.ts",
         "src/utils/recipeImages.ts"
       ],
-      "status": "unverified",
-      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+      "status": "retired-default-reference",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license.",
+      "currentUse": "Historical built-in image migration lookup only; not a new default image."
     },
     {
       "url": "https://images.unsplash.com/photo-1617692855027-33b14f061079?w=800",
@@ -211,8 +249,9 @@
         "src/data/sampleData.ts",
         "src/utils/recipeImages.ts"
       ],
-      "status": "unverified",
-      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+      "status": "retired-default-reference",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license.",
+      "currentUse": "Historical built-in image migration lookup only; not a new default image."
     },
     {
       "url": "https://images.unsplash.com/photo-1547592180-85f173990554?w=800",
@@ -220,16 +259,18 @@
         "src/data/sampleData.ts",
         "src/utils/recipeImages.ts"
       ],
-      "status": "unverified",
-      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+      "status": "retired-default-reference",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license.",
+      "currentUse": "Historical built-in image migration lookup only; not a new default image."
     },
     {
       "url": "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=800",
       "usedIn": [
         "src/data/sampleData.ts"
       ],
-      "status": "unverified",
-      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+      "status": "retired-default-reference",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license.",
+      "currentUse": "Historical built-in image migration lookup only; not a new default image."
     },
     {
       "url": "https://images.unsplash.com/photo-1563636619-e9143da7973b?w=300",
@@ -237,64 +278,75 @@
         "src/data/sampleData.ts",
         "src/data/productCatalog.ts"
       ],
-      "status": "unverified",
-      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+      "status": "retired-default-reference",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license.",
+      "currentUse": "No new default image use. Previously saved user data remains unchanged."
     },
     {
       "url": "https://images.unsplash.com/photo-1604329760661-e71dc83f8f26?w=300",
       "usedIn": [
         "src/data/sampleData.ts"
       ],
-      "status": "unverified",
-      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+      "status": "retired-default-reference",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license.",
+      "currentUse": "No new default image use. Previously saved user data remains unchanged."
     },
     {
       "url": "https://images.unsplash.com/photo-1506976785307-8732e854ad03?w=300",
       "usedIn": [
         "src/data/sampleData.ts"
       ],
-      "status": "unverified",
-      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+      "status": "retired-default-reference",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license.",
+      "currentUse": "No new default image use. Previously saved user data remains unchanged."
     },
     {
       "url": "https://images.unsplash.com/photo-1594282486552-05b4d80fbb9f?w=300",
       "usedIn": [
         "src/data/sampleData.ts"
       ],
-      "status": "unverified",
-      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+      "status": "retired-default-reference",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license.",
+      "currentUse": "No new default image use. Previously saved user data remains unchanged."
     },
     {
       "url": "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=800",
       "usedIn": [
         "src/utils/recipeImages.ts"
       ],
-      "status": "unverified",
-      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+      "status": "retired-default-reference",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license.",
+      "currentUse": "No new default image use. Previously saved user data remains unchanged."
     },
     {
       "url": "https://images.unsplash.com/photo-1543352634-a1c51d9f1fa7?w=800",
       "usedIn": [
         "src/utils/recipeImages.ts"
       ],
-      "status": "unverified",
-      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+      "status": "retired-default-reference",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license.",
+      "currentUse": "No new default image use. Previously saved user data remains unchanged."
     },
     {
       "url": "https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=800",
       "usedIn": [
         "src/utils/recipeImages.ts"
       ],
-      "status": "unverified",
-      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+      "status": "retired-default-reference",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license.",
+      "currentUse": "No new default image use. Previously saved user data remains unchanged."
     },
     {
       "url": "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800",
       "usedIn": [
         "src/utils/recipeImages.ts"
       ],
-      "status": "unverified",
-      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license."
+      "status": "retired-default-reference",
+      "evidence": "A CDN URL identifies a host, not the photographer, original photo page, acquisition method or applicable license.",
+      "currentUse": "No new default image use. Previously saved user data remains unchanged."
     }
-  ]
+  ],
+  "updatedDate": "2026-10-20",
+  "recipeImageManifest": "assets/recipes/generated/manifest.json",
+  "generatedRecipeImageCount": 136
 }

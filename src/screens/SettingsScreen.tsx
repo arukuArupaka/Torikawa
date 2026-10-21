@@ -3,13 +3,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { CompositeScreenProps, useFocusEffect } from '@react-navigation/native';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { AnimatedDisclosure } from '../components/AnimatedDisclosure';
 import { EraseDataControl } from '../components/EraseDataControl';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { colors, radius, spacing } from '../constants/theme';
+import { version } from '../../package.json';
 import { useAppData } from '../context/AppDataContext';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import {
@@ -19,7 +21,9 @@ import {
 } from '../services/backupService';
 import {
   ensureNotificationPermission,
+  buildNotificationPlanSummary,
   getNotificationStatusSummary,
+  MAX_SCHEDULED_NOTIFICATIONS,
   NotificationStatusSummary,
   scheduleTestNotification,
 } from '../services/notificationService';
@@ -47,11 +51,20 @@ export function SettingsScreen({ navigation }: Props) {
   const [notificationStatus, setNotificationStatus] = useState<NotificationStatusSummary | null>(null);
   const [statusError, setStatusError] = useState('');
   const [savingNotifications, setSavingNotifications] = useState(false);
+  const [notificationExpanded, setNotificationExpanded] = useState(false);
   const notificationLock = useRef(false);
   const web = Platform.OS === 'web';
+  const notificationPlan = useMemo(() => web ? { plan: [], truncatedCount: 0 }
+    : buildNotificationPlanSummary(foods, notificationSettings), [foods, notificationSettings, notificationStatus, web]);
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const firstActiveFood = foods.find((food) => food.status === 'active');
+  const hasNotificationChanges = enabled !== notificationSettings.enabled || time !== notificationSettings.time
+    || daysBeforeList.join(',') !== notificationSettings.daysBeforeList.join(',');
+  const savedDays = notificationSettings.daysBeforeList.slice(0, 2).map(day => day === 0 ? '当日' : `${day}日前`).join('・');
+  const notificationSummary = notificationSettings.enabled
+    ? `${savedDays || '通知日なし'}${notificationSettings.daysBeforeList.length > 2 ? ` ほか${notificationSettings.daysBeforeList.length - 2}件` : ''} / ${notificationSettings.time}`
+    : '現在OFFです';
 
   const refreshNotificationStatus = useCallback(async () => {
     try {
@@ -230,18 +243,35 @@ export function SettingsScreen({ navigation }: Props) {
     <Screen>
       <ScreenHeader title="設定" />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.sectionLabel}>通知設定</Text>
-        {web ? <Text style={styles.settingDescription}>Web版では期限通知を利用できません。通知の設定・テストはスマートフォンで行ってください。</Text> : null}
-        <View style={styles.card}>
+        <Text accessibilityRole="header" style={styles.sectionLabel}>通知</Text>
+        {web ? <View style={styles.menuRow}>
+          <View style={styles.iconBox}><Ionicons color={colors.primary} name="notifications-outline" size={22} /></View>
+          <View style={styles.settingText}>
+            <Text style={styles.settingTitle}>期限通知</Text>
+            <Text style={styles.settingDescription}>Web版では期限通知を利用できません。通知の設定・テストはスマートフォンで行ってください。</Text>
+          </View>
+        </View> : <View style={styles.menuGroup}>
+        <AnimatedDisclosure expanded={notificationExpanded} header={<Pressable
+          accessibilityRole="button" accessibilityLabel="期限通知の設定"
+          accessibilityHint="通知する日数や時刻、通知の状態を確認・変更できます。"
+          accessibilityState={{ expanded: notificationExpanded }} aria-expanded={notificationExpanded}
+          disabled={savingNotifications} onPress={() => setNotificationExpanded(current => !current)} style={styles.menuRow}>
+          <View style={styles.iconBox}><Ionicons color={colors.primary} name="notifications-outline" size={22} /></View>
+          <View style={styles.settingText}>
+            <Text style={styles.settingTitle}>期限通知</Text>
+            <Text style={styles.settingDescription}>{isNotificationSyncing ? '端末の通知予約を同期中...' : notificationSummary}</Text>
+          </View>
+          <Ionicons color={colors.textMuted} name={notificationExpanded ? 'chevron-up' : 'chevron-down'} size={21} />
+        </Pressable>}>
+        <View style={styles.notificationEditor}>
+        <View>
           <View style={styles.settingRow}>
-            <View style={styles.iconBox}>
-              <Ionicons color={colors.primary} name="notifications-outline" size={22} />
-            </View>
             <View style={styles.settingText}>
-              <Text style={styles.settingTitle}>期限が近いときに通知</Text>
-              <Text style={styles.settingDescription}>食材ごとに端末へローカル通知を予約</Text>
+              <Text style={styles.settingTitle}>通知を利用する</Text>
+              <Text style={styles.settingDescription}>期限が近い食材をお知らせします</Text>
             </View>
             <Switch
+              accessibilityLabel="期限通知を利用する"
               disabled={web || savingNotifications}
               onValueChange={setEnabled}
               thumbColor={colors.surface}
@@ -258,6 +288,7 @@ export function SettingsScreen({ navigation }: Props) {
               {daysBeforeList.length > 0 ? (
                 daysBeforeList.map((day) => (
                   <Pressable
+                    accessibilityRole="button"
                     accessibilityLabel={`${day}日前の通知を削除`}
                     disabled={web || savingNotifications}
                     key={day}
@@ -288,6 +319,7 @@ export function SettingsScreen({ navigation }: Props) {
               />
               <Text style={styles.daySuffix}>日前</Text>
               <Pressable
+                accessibilityRole="button" accessibilityLabel="通知日を追加"
                 disabled={web || savingNotifications || !dayInput}
                 onPress={addNotificationDay}
                 style={[styles.addDayButton, !dayInput && styles.disabledButton]}
@@ -335,7 +367,8 @@ export function SettingsScreen({ navigation }: Props) {
             {!web && isNotificationSyncing ? <Text accessibilityLiveRegion="polite" style={styles.settingDescription}>端末の通知予約を同期中...</Text> : null}
             {!web && notificationSyncError ? <Text accessibilityRole="alert" style={styles.settingDescription}>{notificationSyncError}</Text> : null}
           </View>
-          <Pressable accessibilityLabel="通知状態を更新" hitSlop={8} onPress={() => void refreshNotificationStatus()}>
+          <Pressable accessibilityRole="button" accessibilityLabel="通知状態を更新" hitSlop={8}
+            onPress={() => void refreshNotificationStatus()} style={styles.refreshButton}>
             <Ionicons color={colors.textMuted} name="refresh" size={21} />
           </Pressable>
         </View>
@@ -351,9 +384,59 @@ export function SettingsScreen({ navigation }: Props) {
           onPress={() => void sendTestNotification()}
           variant="outline"
         />
+        </View>
+        </AnimatedDisclosure>
+        {!notificationExpanded && (notificationSyncError || statusError) ? (
+          <Text accessibilityRole="alert" style={styles.notificationMessage}>{notificationSyncError || statusError}</Text>
+        ) : null}
+        {hasNotificationChanges ? <Text accessibilityLiveRegion="polite" style={styles.notificationMessage}>
+          未保存の変更があります。{notificationExpanded ? '「通知設定を保存」を押してください。' : '開いて「通知設定を保存」を押してください。'}
+        </Text> : null}
+        {!statusError && !isNotificationSyncing && !notificationSyncError
+          && notificationStatus?.permission === 'granted' && notificationPlan.truncatedCount > 0
+          && notificationStatus.scheduledCount === notificationPlan.plan.length ? (
+          <Text style={styles.notificationMessage}>直近{MAX_SCHEDULED_NOTIFICATIONS}件のみ予約しています。残りはアプリに戻ったときに順次予約します。</Text>
+        ) : null}
+        </View>}
 
-        <Text style={styles.sectionLabel}>その他</Text>
-        <Pressable onPress={() => navigation.navigate('Statistics')} style={styles.menuRow}>
+        <Text accessibilityRole="header" style={styles.sectionLabel}>データ管理</Text>
+        <View style={styles.menuGroup}>
+        <Pressable
+          accessibilityRole="button" accessibilityLabel="バックアップを書き出す"
+          disabled={isBackingUp || isRestoring}
+          onPress={() => void exportBackup()}
+          style={[styles.menuRow, (isBackingUp || isRestoring) && styles.busyRow]}
+        >
+          <View style={styles.iconBox}><Ionicons color={colors.primary} name="cloud-upload-outline" size={22} /></View>
+          <View style={styles.settingText}>
+            <Text style={styles.settingTitle}>{isBackingUp ? '作成中...' : 'バックアップを書き出す'}</Text>
+            <Text style={styles.settingDescription}>食材・レシピ・写真などをファイルに保存</Text>
+          </View>
+          <Ionicons color={colors.textMuted} name="chevron-forward" size={21} />
+        </Pressable>
+        <View style={styles.divider} />
+        <Pressable
+          accessibilityRole="button" accessibilityLabel="バックアップから復元"
+          disabled={isBackingUp || isRestoring}
+          onPress={() => void selectBackupToRestore()}
+          style={[styles.menuRow, (isBackingUp || isRestoring) && styles.busyRow]}
+        >
+          <View style={[styles.iconBox, styles.restoreIconBox]}><Ionicons color={colors.warning} name="cloud-download-outline" size={22} /></View>
+          <View style={styles.settingText}>
+            <Text style={styles.settingTitle}>{isRestoring ? '確認中...' : 'バックアップから復元'}</Text>
+            <Text style={styles.settingDescription}>現在のデータをファイル内容へ置き換え</Text>
+          </View>
+          <Ionicons color={colors.textMuted} name="chevron-forward" size={21} />
+        </Pressable>
+        </View>
+        <View style={styles.backupNote}>
+          <Ionicons color={colors.warning} name="information-circle-outline" size={18} />
+          <Text style={styles.backupNoteText}>復元すると現在のデータは置き換わります。先にバックアップしてください。復元前の保存データは端末内にも退避します。</Text>
+        </View>
+
+        <Text accessibilityRole="header" style={styles.sectionLabel}>記録と買い物</Text>
+        <View style={styles.menuGroup}>
+        <Pressable accessibilityRole="button" accessibilityLabel="食材ロス統計" onPress={() => navigation.navigate('Statistics')} style={styles.menuRow}>
           <View style={styles.iconBox}>
             <Ionicons color={colors.primary} name="stats-chart-outline" size={22} />
           </View>
@@ -363,7 +446,8 @@ export function SettingsScreen({ navigation }: Props) {
           </View>
           <Ionicons color={colors.textMuted} name="chevron-forward" size={21} />
         </Pressable>
-        <Pressable onPress={() => navigation.navigate('ShoppingList')} style={styles.menuRow}>
+        <View style={styles.divider} />
+        <Pressable accessibilityRole="button" accessibilityLabel="買い物リスト" onPress={() => navigation.navigate('ShoppingList')} style={styles.menuRow}>
           <View style={styles.iconBox}>
             <Ionicons color={colors.primary} name="basket-outline" size={22} />
           </View>
@@ -373,52 +457,39 @@ export function SettingsScreen({ navigation }: Props) {
           </View>
           <Ionicons color={colors.textMuted} name="chevron-forward" size={21} />
         </Pressable>
-
-        <Text style={styles.sectionLabel}>データ管理</Text>
-        <Pressable
-          disabled={isBackingUp || isRestoring}
-          onPress={() => void exportBackup()}
-          style={[styles.menuRow, (isBackingUp || isRestoring) && styles.busyRow]}
-        >
-          <View style={styles.iconBox}>
-            <Ionicons color={colors.primary} name="cloud-upload-outline" size={22} />
-          </View>
-          <View style={styles.settingText}>
-            <Text style={styles.settingTitle}>{isBackingUp ? '作成中...' : 'バックアップを書き出す'}</Text>
-            <Text style={styles.settingDescription}>保存前に容量を確認。写真1枚5MB・合計10MBまで。外部画像はURL参照です。</Text>
-          </View>
-          <Ionicons color={colors.textMuted} name="chevron-forward" size={21} />
-        </Pressable>
-        <Pressable
-          disabled={isBackingUp || isRestoring}
-          onPress={() => void selectBackupToRestore()}
-          style={[styles.menuRow, (isBackingUp || isRestoring) && styles.busyRow]}
-        >
-          <View style={[styles.iconBox, styles.restoreIconBox]}>
-            <Ionicons color={colors.warning} name="cloud-download-outline" size={22} />
-          </View>
-          <View style={styles.settingText}>
-            <Text style={styles.settingTitle}>{isRestoring ? '確認中...' : 'バックアップから復元'}</Text>
-            <Text style={styles.settingDescription}>現在のデータを選択したファイルで置き換え</Text>
-          </View>
-          <Ionicons color={colors.textMuted} name="chevron-forward" size={21} />
-        </Pressable>
-        <View style={styles.backupNote}>
-          <Ionicons color={colors.warning} name="information-circle-outline" size={18} />
-          <Text style={styles.backupNoteText}>
-            復元すると現在のデータは置き換わります。先にバックアップを書き出してください。復元前の保存データは端末内にも退避します。
-          </Text>
         </View>
 
+        <Text accessibilityRole="header" style={styles.sectionLabel}>このアプリについて</Text>
+        <View style={styles.menuGroup}>
+          <Pressable accessibilityRole="button" accessibilityLabel="使い方"
+            onPress={() => navigation.navigate('UsageGuide')} style={styles.menuRow}>
+            <View style={styles.iconBox}><Ionicons color={colors.primary} name="book-outline" size={22} /></View>
+            <View style={styles.settingText}>
+              <Text style={styles.settingTitle}>使い方</Text>
+              <Text style={styles.settingDescription}>登録からバックアップまでの基本操作</Text>
+            </View>
+            <Ionicons color={colors.textMuted} name="chevron-forward" size={21} />
+          </Pressable>
+          <View style={styles.divider} />
+          <Pressable accessibilityRole="button" accessibilityLabel="データの取り扱い・お問い合わせ"
+            onPress={() => navigation.navigate('AppInformation', { section: 'privacy' })} style={styles.menuRow}>
+            <View style={styles.iconBox}><Ionicons color={colors.primary} name="shield-checkmark-outline" size={22} /></View>
+            <Text style={[styles.settingTitle, styles.settingText]}>データの取り扱い・お問い合わせ</Text>
+            <Ionicons color={colors.textMuted} name="chevron-forward" size={21} />
+          </Pressable>
+          <View style={styles.divider} />
+          <Pressable accessibilityRole="button" accessibilityLabel="外部サービス・ライセンス"
+            onPress={() => navigation.navigate('AppInformation', { section: 'services' })} style={styles.menuRow}>
+            <View style={styles.iconBox}><Ionicons color={colors.primary} name="information-circle-outline" size={22} /></View>
+            <Text style={[styles.settingTitle, styles.settingText]}>外部サービス・ライセンス</Text>
+            <Ionicons color={colors.textMuted} name="chevron-forward" size={21} />
+          </Pressable>
+        </View>
+        <Text accessibilityRole="header" style={[styles.sectionLabel, styles.dangerLabel]}>データの削除</Text>
         <EraseDataControl disabled={isBackingUp || isRestoring || savingNotifications || isNotificationSyncing} />
-        <Text style={styles.sectionLabel}>このアプリについて</Text>
-        <PrimaryButton icon="shield-checkmark-outline" label="データの取り扱い・お問い合わせ" variant="outline"
-          onPress={() => navigation.navigate('AppInformation', { section: 'privacy' })} />
-        <PrimaryButton icon="information-circle-outline" label="外部サービス・ライセンス" variant="outline"
-          onPress={() => navigation.navigate('AppInformation', { section: 'services' })} />
         <View style={styles.about}>
           <Text style={styles.appName}>たべどき！！</Text>
-          <Text style={styles.version}>バックアップ・復元 v1.20.0</Text>
+          <Text style={styles.version}>バージョン {version}</Text>
         </View>
       </ScrollView>
     </Screen>
@@ -428,13 +499,16 @@ export function SettingsScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   content: { gap: spacing.md, padding: spacing.md, paddingBottom: spacing.xl },
   sectionLabel: { color: colors.textMuted, fontSize: 13, fontWeight: '700', marginTop: spacing.sm },
-  card: { backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing.md },
+  menuGroup: { backgroundColor: colors.surface, borderRadius: radius.md, overflow: 'hidden' },
+  notificationEditor: { gap: spacing.sm, padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
+  notificationMessage: { color: colors.warning, fontSize: 13, lineHeight: 20, paddingHorizontal: spacing.md, paddingBottom: spacing.md },
+  refreshButton: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center' },
   statusCard: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.md, flexDirection: 'row', padding: spacing.md },
   settingRow: { alignItems: 'center', flexDirection: 'row', minHeight: 76, paddingVertical: 12 },
   iconBox: { alignItems: 'center', backgroundColor: colors.primarySoft, borderRadius: radius.sm, height: 42, justifyContent: 'center', marginRight: 12, width: 42 },
   settingText: { flex: 1 },
   settingTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
-  settingDescription: { color: colors.textMuted, fontSize: 11, marginTop: 4 },
+  settingDescription: { color: colors.textMuted, fontSize: 12, lineHeight: 18, marginTop: 4 },
   divider: { backgroundColor: colors.border, height: 1, marginLeft: 54 },
   daysSection: { paddingBottom: spacing.md, paddingTop: spacing.md },
   dayChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: 12, minHeight: 32 },
@@ -452,7 +526,8 @@ const styles = StyleSheet.create({
   menuRow: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.md, flexDirection: 'row', padding: spacing.md },
   restoreIconBox: { backgroundColor: colors.warningSoft },
   backupNote: { alignItems: 'flex-start', backgroundColor: colors.warningSoft, borderRadius: radius.sm, flexDirection: 'row', gap: spacing.sm, padding: 11 },
-  backupNoteText: { color: colors.textMuted, flex: 1, fontSize: 10, lineHeight: 15 },
+  backupNoteText: { color: colors.textMuted, flex: 1, fontSize: 12, lineHeight: 18 },
+  dangerLabel: { color: colors.danger },
   about: { alignItems: 'center', paddingVertical: spacing.xl },
   appName: { color: colors.text, fontSize: 16, fontWeight: '800' },
   version: { color: colors.textMuted, fontSize: 12, marginTop: 5 },

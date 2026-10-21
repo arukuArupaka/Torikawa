@@ -7,7 +7,7 @@ const os = new Map();
 let ids = {}, count = 0, failSchedule = 0, failCancel = false, failSave = false, acceptedThenFailed = false;
 let permission = { granted: true, status: 'granted' };
 const constants = { expoVersion: null, manifest2: null };
-let staleLists = [], rejectedWithoutError = false;
+let staleLists = [], rejectedWithoutError = false, osLimit = Infinity;
 let presented = [], lastResponse = null;
 const platform = { OS: 'ios' };
 const calls = [];
@@ -33,7 +33,7 @@ const api = {
     count++; if (count === failSchedule) throw Error('schedule failed');
     const id = `id-${count}`;
     if (constants.expoVersion) request.content.data.scopeKey = constants.manifest2.extra.scopeKey;
-    if (!rejectedWithoutError) os.set(id, { ...structuredClone(request), identifier: id });
+    if (!rejectedWithoutError && os.size < osLimit) os.set(id, { ...structuredClone(request), identifier: id });
     if (acceptedThenFailed) { acceptedThenFailed = false; throw Error('response lost'); }
     return id;
   },
@@ -49,13 +49,102 @@ Module._load = function(request, ...args) {
 const service = require('../src/services/notificationService.ts');
 const food = (id = 'milk', extra = {}) => ({ id, name: '牛乳', productName: null, expiryDate: '2099-01-10', status: 'active', ...extra });
 const settings = { enabled: true, daysBeforeList: [0, 3], time: '18:00' };
+const { toDateString } = require('../src/utils/date.ts');
+const manyFoods = (amount = 100) => Array.from({ length: amount }, (_, index) =>
+  food(`food-${amount - index}`, { expiryDate: toDateString(new Date(2099, 0, amount - index)) }));
 async function reset() {
   await service.getNotificationStatusSummary();
   os.clear(); ids = {}; count = 0; failSchedule = 0; failCancel = false; failSave = false; acceptedThenFailed = false;
   platform.OS = 'ios'; permission = { granted: true, status: 'granted' }; calls.length = 0;
-  constants.expoVersion = null; constants.manifest2 = null; staleLists = []; rejectedWithoutError = false;
+  constants.expoVersion = null; constants.manifest2 = null; staleLists = []; rejectedWithoutError = false; osLimit = Infinity;
   presented = []; lastResponse = null;
 }
+
+test('100 reminder dates retain only the earliest 60 in chronological order without changing keys or inputs', async () => {
+  const foods = manyFoods();
+  const singleDay = { ...settings, daysBeforeList: [0] };
+  const originalFoods = structuredClone(foods);
+  const { plan, truncatedCount } = service.buildNotificationPlanSummary(foods, singleDay);
+  assert.equal(service.MAX_SCHEDULED_NOTIFICATIONS, 60);
+  assert.equal(plan.length, 60); assert.equal(truncatedCount, 40);
+  assert.deepEqual(plan.map(item => item.foodId), Array.from({ length: 60 }, (_, index) => `food-${index + 1}`));
+  assert.deepEqual(plan.map(item => item.date.getTime()), [...plan].map(item => item.date.getTime()).sort((a, b) => a - b));
+  for (const item of plan) assert.equal(item.key, JSON.stringify([item.foodId, item.daysBefore, item.date.getTime(), item.title, item.body]));
+  assert.deepEqual(service.buildNotificationPlan(foods, singleDay), plan);
+  assert.deepEqual(foods, originalFoods);
+  const multipleDays = service.buildNotificationPlanSummary(manyFoods(50), settings);
+  assert.equal(multipleDays.plan.length, 60); assert.equal(multipleDays.truncatedCount, 40, 'the limit counts reminders, not foods');
+});
+
+test('capped reconciliation matches the scheduled plan on iOS and Android even when the OS silently drops excess reservations', async () => {
+  for (const system of ['ios', 'android']) {
+    await reset(); platform.OS = system; osLimit = 64;
+    os.set('external', { identifier: 'external', content: { data: { kind: 'other' } } });
+    await service.scheduleTestNotification();
+    const foods = manyFoods(), singleDay = { ...settings, daysBeforeList: [0] };
+    await assert.doesNotReject(service.queueNotificationSync(foods, singleDay));
+    const plan = service.buildNotificationPlan(foods, singleDay);
+    const expiry = [...os.values()].filter(item => item.content.data.kind === 'tabedoki-expiry-v2');
+    assert.equal(expiry.length, 60); assert.equal(os.size, 62);
+    assert.deepEqual(expiry.map(item => item.content.data.planKey), plan.map(item => item.key));
+    assert.equal((await service.getNotificationStatusSummary()).scheduledCount, 60);
+    const previousIds = [...os.keys()], previousCalls = count;
+    await assert.doesNotReject(service.queueNotificationSync(foods, singleDay));
+    assert.deepEqual([...os.keys()], previousIds); assert.equal(count, previousCalls);
+    assert.equal(os.has('external'), true);
+  }
+});
+
+test('plans below the limit preserve their previous dates, content and IDs, while disabled or exactly 60 are not truncated', async () => {
+  await reset();
+  const milk = food(), settingsWithDuplicateDay = { ...settings, daysBeforeList: [0, 3, 3] };
+  const expected = [3, 0].map(daysBefore => {
+    const date = new Date(2099, 0, 10 - daysBefore, 18, 0);
+    const title = '「牛乳」の期限が近づいています';
+    const body = daysBefore === 0 ? '今日が期限です。忘れずに使い切りましょう。' : '3日後が期限です。使い道を確認しましょう。';
+    return { foodId: 'milk', daysBefore, date, title, body, key: JSON.stringify(['milk', daysBefore, date.getTime(), title, body]) };
+  });
+  assert.deepEqual(service.buildNotificationPlanSummary([milk, food('used', { status: 'used' }),
+    food('disposed', { status: 'disposed' }), food('past', { expiryDate: '2000-01-01' })], settingsWithDuplicateDay),
+  { plan: expected, truncatedCount: 0 });
+  assert.deepEqual(service.buildNotificationPlan([milk], settingsWithDuplicateDay), expected);
+  await service.queueNotificationSync([milk], settingsWithDuplicateDay);
+  const previous = structuredClone(ids);
+  await service.queueNotificationSync([milk], settingsWithDuplicateDay);
+  assert.deepEqual(ids, previous);
+  assert.equal(service.buildNotificationPlanSummary(manyFoods(60), { ...settings, daysBeforeList: [0] }).truncatedCount, 0);
+  assert.deepEqual(service.buildNotificationPlanSummary(manyFoods(), { ...settings, enabled: false }), { plan: [], truncatedCount: 0 });
+});
+
+test('resync after earlier dates pass fills freed slots with the next deferred reminders', async (t) => {
+  await reset();
+  t.mock.timers.enable({ apis: ['Date'], now: new Date(2098, 11, 31, 12) });
+  const foods = manyFoods(), singleDay = { ...settings, daysBeforeList: [0] };
+  await service.queueNotificationSync(foods, singleDay);
+  const kept = os.get(ids['food-60'][0]);
+  t.mock.timers.setTime(new Date(2099, 0, 12, 12).getTime());
+  for (const [id, request] of os) if (request.trigger.date.getTime() <= Date.now()) os.delete(id);
+  await assert.doesNotReject(service.queueNotificationSync(foods, singleDay));
+  assert.equal(os.size, 60);
+  assert.deepEqual([...os.values()].map(item => item.content.data.foodId), Array.from({ length: 60 }, (_, index) => `food-${index + 12}`));
+  assert.deepEqual(os.get(kept.identifier), kept, 'existing upcoming reminders keep their IDs');
+  assert.equal(service.buildNotificationPlanSummary(foods, singleDay).truncatedCount, 29);
+});
+
+test('previously uncapped reservations converge to the capped plan without replacing retained IDs', async () => {
+  await reset();
+  const foods = manyFoods(), singleDay = { ...settings, daysBeforeList: [0] };
+  for (const item of foods.flatMap(current => service.buildNotificationPlan([current], singleDay))) {
+    const identifier = `old-${item.foodId}`;
+    os.set(identifier, { identifier, content: { title: item.title, body: item.body,
+      data: { kind: 'tabedoki-expiry-v2', planKey: item.key, foodId: item.foodId, daysBefore: item.daysBefore } } });
+  }
+  assert.equal(os.size, 100);
+  await assert.doesNotReject(service.queueNotificationSync(foods, singleDay));
+  assert.equal(os.size, 60); assert.equal(count, 0);
+  assert.deepEqual(Object.keys(ids).sort(), Array.from({ length: 60 }, (_, index) => `food-${index + 1}`).sort());
+  assert.ok([...os.keys()].every(id => id.startsWith('old-')));
+});
 test('a failure at the second reminder retains the first ID and repair creates only the missing reminder', async () => {
   await reset(); failSchedule = 2;
   await assert.rejects(service.queueNotificationSync([food()], settings), /schedule failed/);

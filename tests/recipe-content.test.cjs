@@ -28,12 +28,12 @@ function assertCompletePreparation(recipe) {
   }
   // Longest terms first: 醤油 must not count as 油, 塩こしょう must not count as 塩.
   // 水気 is a draining instruction, not an instruction to add water.
-  const pantryMentions = recipe.steps.join('\n').match(/オリーブオイル|塩こしょう|黒こしょう|マヨネーズ|顆粒だし|コンソメ|カレー粉|片栗粉|みりん|醤油|味噌|砂糖|酒|塩|油|水(?!気)/g) ?? [];
+  const pantryMentions = recipe.steps.join('\n').match(/鶏がらスープの素|オリーブオイル|塩こしょう|黒こしょう|マヨネーズ|ケチャップ|顆粒だし|コンソメ|カレー粉|片栗粉|すりごま|ごま油|薄力粉|パン粉|バター|こしょう|みりん|醤油|味噌|砂糖|酒|塩|酢|油(?!揚げ)|水(?!気)/g) ?? [];
   for (const ingredient of pantryMentions) {
     assert.ok(recipe.ingredients.includes(ingredient), `${recipe.name}: step uses unlisted ${ingredient}`);
   }
   if (recipe.steps.some((step) => /炒め|両面を焼/.test(step))) {
-    assert.ok(recipe.ingredients.includes('油'), `${recipe.name}: frying oil missing`);
+    assert.ok(recipe.ingredients.some(ingredient => ['油', 'ごま油', 'オリーブオイル', 'バター'].includes(ingredient)), `${recipe.name}: frying fat missing`);
   }
 }
 
@@ -61,6 +61,93 @@ test('every built-in recipe lists the seasoning, oil and water used by its instr
   const soup = sampleRecipes.find((recipe) => recipe.id === 'recipe-3');
   assert.deepEqual(soup.ingredients, ['豆腐', 'わかめ', '顆粒だし', '味噌', '水']);
   assert.equal(soup.ingredientAmounts.水, '400ml');
+});
+
+test('the 136-recipe catalog has unique dishes, complete amounts, servings, instructions and offline images', () => {
+  const { additionalRecipes } = require('../src/data/recipeCatalog.ts');
+  const { generatedRecipeImages } = require('../src/data/generatedRecipeImages.ts');
+  const { validateStoredData } = require('../src/services/dataValidation.ts');
+  const { isRecipeCategory } = require('../src/utils/recipeCategory.ts');
+  assert.equal(sampleRecipes.length, 136);
+  assert.equal(additionalRecipes.length, 128);
+  assert.equal(new Set(sampleRecipes.map(recipe => recipe.id)).size, 136);
+  assert.equal(new Set(sampleRecipes.map(recipe => recipe.name)).size, 136);
+  validateStoredData('recipes', sampleRecipes);
+  for (const recipe of sampleRecipes) {
+    assert.ok(isRecipeCategory(recipe.category));
+    assert.ok(Number.isInteger(recipe.servings) && recipe.servings > 0);
+    assert.ok(recipe.ingredients.length > 0);
+    assert.ok(recipe.steps.length >= 2 && recipe.steps.every(step => step.trim().length > 0));
+    assert.ok(recipe.minutes > 0 && recipe.minutes <= 60);
+  }
+  for (const recipe of additionalRecipes) {
+    assert.equal(recipe.image, generatedRecipeImages[recipe.id]);
+    if (recipe.ingredients.some(ingredient => ['鶏肉', '豚肉', '牛肉', 'ひき肉', '鶏ひき肉'].includes(ingredient))) {
+      assert.ok(recipe.steps.some(step => step.includes('75℃') && step.includes('1分間以上')), recipe.name);
+    }
+    assert.ok(!recipe.ingredients.includes('米'), 'cooked rice and raw rice must not be confused');
+  }
+});
+
+test('all 136 built-in dishes have distinct local generated images and recorded prompts', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const { generatedRecipeImages, isGeneratedRecipeImage } = require('../src/data/generatedRecipeImages.ts');
+  const manifest = require('../assets/recipes/generated/manifest.json');
+  assert.equal(Object.keys(generatedRecipeImages).length, 136);
+  assert.equal(manifest.images.length, 136);
+  assert.equal(new Set(manifest.images.map(image => image.sha256)).size, 136);
+  for (const recipe of sampleRecipes) {
+    const record = manifest.images.find(image => image.id === recipe.id);
+    assert.equal(record.name, recipe.name);
+    assert.ok(record.prompt.includes(recipe.name));
+    const file = path.resolve(__dirname, '../assets/recipes/generated', record.file);
+    assert.equal(recipe.image, file);
+    const contents = fs.readFileSync(file);
+    assert.equal(contents.readUInt16BE(0), 0xffd8, 'bundled file must be a JPEG');
+    assert.equal(contents.length, record.bytes);
+    assert.equal(isGeneratedRecipeImage(recipe), true);
+    assert.equal(isGeneratedRecipeImage({ ...recipe, image: 'file:///my-photo.jpg' }), false);
+  }
+  assert.equal(isGeneratedRecipeImage(sampleRecipes[0]), true);
+});
+
+test('generated images upgrade untouched icons without changing personal data or edited recipes', () => {
+  const { normalizeAppData } = require('../src/services/appDataMigration.ts');
+  const original = sampleRecipes.find(recipe => recipe.id === 'recipe-9');
+  const saved = { ...structuredClone(original), image: 'food-icon:other', isFavorite: true, createdAt: '2025-01-01' };
+  const edited = [
+    { ...saved, image: 'file:///my-photo.jpg' },
+    { ...saved, name: '我が家の照り焼き' },
+    { ...saved, steps: [...saved.steps, '自分のメモ'] },
+    { ...saved, servings: 4 },
+    { ...saved, servings: null },
+    { ...saved, id: 'user-recipe' },
+  ];
+  const normalize = recipe => normalizeAppData({ foods: [], recipes: [recipe], shoppingItems: [],
+    notificationSettings: { enabled: false, daysBeforeList: [3], time: '18:00' } }).recipes[0];
+  const migrated = normalize(saved);
+  assert.equal(migrated.image, original.image);
+  assert.equal(migrated.isFavorite, true);
+  assert.equal(migrated.createdAt, saved.createdAt);
+  assert.deepEqual(migrated.ingredientAmounts, saved.ingredientAmounts);
+  assert.equal(saved.image, 'food-icon:other', 'stored object must not be mutated');
+  assert.deepEqual(normalize(migrated), migrated);
+  for (const recipe of edited) assert.equal(normalize(recipe).image, recipe.image);
+});
+
+test('catalog imports preserve edits and favorites, skip existing IDs and names, and are repeatable', () => {
+  const { getNewCatalogRecipes, additionalRecipes } = require('../src/data/recipeCatalog.ts');
+  const edited = { ...sampleRecipes[0], name: '我が家の料理', image: 'file:///custom.jpg', isFavorite: true };
+  const existingNew = { ...additionalRecipes[0], name: '我が家の照り焼き', isFavorite: true };
+  const sameName = { ...additionalRecipes[1], id: 'user-saved', name: ` ${additionalRecipes[1].name} ` };
+  const current = [edited, existingNew, sameName];
+  const before = structuredClone(current);
+  const additions = getNewCatalogRecipes(current);
+  assert.equal(additions.length, 126);
+  assert.deepEqual(current, before);
+  assert.equal(getNewCatalogRecipes([...current, ...additions]).length, 0);
+  assert.ok(!additions.some(recipe => ['recipe-1', 'recipe-2'].includes(recipe.id)), 'removed older recipes stay deleted');
 });
 
 const ideaCases = [

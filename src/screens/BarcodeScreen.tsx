@@ -1,108 +1,105 @@
-import { FoodImage } from '../components/FoodImage';
-import { ProductAttribution } from '../components/ProductAttribution';
-import { SharedProductReport } from '../components/SharedProductReport';
 import { ProductLookupRateLimitError } from '../services/openFoodFactsService';
 import { isYahooProductLookupConfigured } from '../services/yahooProductLookupService';
 import { isSharedProductsConfigured } from '../services/sharedProductService';
 import { normalizeSharedBarcode } from '../../shared/productContract';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import { CompositeScreenProps, useIsFocused } from '@react-navigation/native';
+import { CompositeScreenProps, useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { BarcodeScanningResult } from 'expo-camera';
-import { useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import { ActivityIndicator, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BarcodeScanner } from '../components/BarcodeScanner';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { colors, radius, spacing } from '../constants/theme';
-import {
-  BarcodeProduct,
-  sampleMilkProduct,
-} from '../data/productCatalog';
+import { sampleMilkProduct } from '../data/productCatalog';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import {
   lookupProductByBarcode,
-  ProductLookupSource,
+  ProductLookupResult,
 } from '../services/productLookupService';
+import { assertStorageEpoch, getStorageEpoch } from '../services/storage';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Barcode'>,
   NativeStackScreenProps<RootStackParamList>
 >;
 
-type ScanResult = {
-  barcode: string;
-  type: string;
-  product: BarcodeProduct | null;
-  source: ProductLookupSource;
-};
-
-const productSourceLabels: Record<ProductLookupSource, string> = {
-  learned: '以前の登録内容',
-  shared: 'みんなの商品情報（利用者が登録）',
-  local: '端末内サンプル',
-  'yahoo-shopping': 'Yahoo!ショッピング',
-  'open-food-facts': 'Open Food Facts',
-  none: '未取得',
-};
-
 export function BarcodeScreen({ navigation }: Props) {
   const isFocused = useIsFocused();
-  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
-  const [lookupFailed, setLookupFailed] = useState(false);
-  const [lookupNotice, setLookupNotice] = useState('');
   const [manualBarcode, setManualBarcode] = useState('');
   const scanBusy = useRef(false);
+  const scanActive = useRef(false);
+  const requestId = useRef(0);
 
-  const handleScan = async (result: BarcodeScanningResult) => {
-    const barcode = result.data.trim();
-    if (!barcode || scanBusy.current) return;
-    scanBusy.current = true;
-    setIsLookingUp(true);
-    setLookupFailed(false);
-    setLookupNotice('');
-    try {
-      const lookup = await lookupProductByBarcode(barcode);
-      setScanResult({ barcode, type: result.type, ...lookup });
-    } catch (error) {
-      console.warn('商品情報を検索できませんでした。', error);
-      setLookupFailed(true);
-      if (error instanceof ProductLookupRateLimitError) setLookupNotice(error.message);
-      setScanResult({ barcode, type: result.type, product: null, source: 'none' });
-    } finally {
-      setIsLookingUp(false);
+  useFocusEffect(useCallback(() => {
+    scanActive.current = true;
+    scanBusy.current = false;
+    setIsLookingUp(false);
+    return () => {
+      scanActive.current = false;
+      requestId.current += 1;
       scanBusy.current = false;
-    }
-  };
+    };
+  }, []));
 
-  const showSampleProduct = () => {
-    setScanResult({
-      barcode: sampleMilkProduct.barcode,
-      type: 'ean13',
-      product: sampleMilkProduct,
-      source: 'local',
-    });
-  };
-
-  const openManualRegistration = (useProduct = true) => {
-    if (!scanResult) return;
-    const product = useProduct ? scanResult.product : null;
+  const openRegistration = (barcode: string, type: string, lookup: ProductLookupResult, notice?: string) => {
+    const { product, source } = lookup;
+    Keyboard.dismiss();
     navigation.navigate('AddFood', {
       initialName: product?.name,
       initialProductName: product?.name,
       initialIngredientName: product?.ingredientName,
       initialImage: product?.image,
-      initialMemo: `バーコード: ${scanResult.barcode}`,
-      initialBarcode: scanResult.barcode,
+      initialMemo: `バーコード: ${barcode}`,
+      initialBarcode: barcode,
       initialProductSource: product?.productSource,
-      allowProductSharing: scanResult.source === 'none' && ['ean13', 'ean8'].includes(scanResult.type),
+      initialLookupSource: source,
+      initialLookupNotice: notice,
+      allowProductSharing: source === 'none' && ['ean13', 'ean8'].includes(type),
       initialCategory: product?.category,
       initialTags: product?.tags,
-      initialStorage: ['learned', 'local'].includes(scanResult.source) ? product?.storage : undefined,
+      initialStorage: ['learned', 'local'].includes(source) ? product?.storage : undefined,
     });
+  };
+
+  const handleScan = async (result: BarcodeScanningResult) => {
+    const barcode = result.data.trim();
+    if (!barcode || !scanActive.current || scanBusy.current) return;
+    const epoch = getStorageEpoch();
+    try { assertStorageEpoch(epoch); } catch { return; }
+    const request = ++requestId.current;
+    scanBusy.current = true;
+    setIsLookingUp(true);
+    let lookup: ProductLookupResult;
+    let notice: string | undefined;
+    try {
+      lookup = await lookupProductByBarcode(barcode);
+    } catch (error) {
+      console.warn('商品情報を検索できませんでした。', error);
+      lookup = { product: null, source: 'none' };
+      notice = error instanceof ProductLookupRateLimitError ? error.message
+        : '商品情報を検索できませんでした。食材名を入力して登録できます。';
+    }
+    // Ignore results from a screen that was left, unmounted or restored.
+    if (!scanActive.current || request !== requestId.current) return;
+    try { assertStorageEpoch(epoch); } catch {
+      setIsLookingUp(false);
+      scanBusy.current = false;
+      return;
+    }
+    // Keep the scan locked until this screen loses focus, including repeated frames.
+    openRegistration(barcode, result.type, lookup, notice);
+  };
+
+  const showSampleProduct = () => {
+    if (!scanActive.current || scanBusy.current) return;
+    scanBusy.current = true;
+    setIsLookingUp(true);
+    openRegistration(sampleMilkProduct.barcode, 'ean13', { product: sampleMilkProduct, source: 'local' });
   };
 
   return (
@@ -110,96 +107,43 @@ export function BarcodeScreen({ navigation }: Props) {
       <ScreenHeader subtitle="JAN・EAN対応" title="バーコードを読み取る" />
       <ScrollView contentContainerStyle={styles.content}>
         {isFocused ? (
-          <BarcodeScanner active={!scanResult && !isLookingUp} onScanned={(result) => void handleScan(result)} />
+          <BarcodeScanner active={!isLookingUp} onScanned={(result) => void handleScan(result)} />
         ) : (
           <View style={styles.inactiveCamera} />
         )}
 
         {isLookingUp ? (
-          <View style={styles.lookupCard}>
+          <View accessibilityLiveRegion="polite" style={styles.lookupCard}>
             <ActivityIndicator color={colors.primary} size="small" />
             <View style={styles.lookupTextArea}>
               <Text style={styles.lookupTitle}>商品情報を検索しています</Text>
               <Text style={styles.lookupText}>端末・共有データベース・外部サービスを確認中...</Text>
             </View>
           </View>
-        ) : scanResult ? (
-          <>
-            <View>
-              <Text style={styles.resultLabel}>読み取り結果</Text>
-              {scanResult.product ? (
-                <View style={styles.productCard}>
-                  <FoodImage source={{ uri: scanResult.product.image }} style={styles.productImage} />
-                  <View style={styles.productInfo}>
-                    <Text style={styles.productName}>{scanResult.product.name}</Text>
-                    <Text style={styles.productCategory}>商品名：{scanResult.product.name}</Text>
-                    <Text style={styles.productCategory}>レシピ用分類：{scanResult.product.ingredientName}</Text>
-                    <Text style={styles.productCategory}>カテゴリ：{scanResult.product.category}</Text>
-                    <Text style={styles.barcodeText}>{scanResult.barcode}</Text>
-                    <Text style={styles.sourceText}>
-                      商品情報: {productSourceLabels[scanResult.source]}
-                    </Text>
-                  </View>
-                  <Ionicons color={colors.primary} name="checkmark-circle" size={25} />
-                </View>
-              ) : (
-                <View style={styles.productCard}>
-                  <View style={styles.unknownIcon}>
-                    <Ionicons color={colors.textMuted} name="barcode-outline" size={30} />
-                  </View>
-                  <View style={styles.productInfo}>
-                    <Text style={styles.productName}>
-                      {lookupFailed ? '商品情報を検索できませんでした' : '商品情報が見つかりません'}
-                    </Text>
-                    <Text style={styles.productCategory}>
-                      {lookupNotice || (lookupFailed ? '通信状況を確認するか、手入力してください' : '検索先に商品情報がないため、手入力できます')}
-                    </Text>
-                    <Text style={styles.barcodeText}>{scanResult.barcode}</Text>
-                  </View>
-                </View>
-              )}
-            </View>
-
-            <PrimaryButton
-              icon="create-outline"
-              label={scanResult.product ? '入力内容を確認して登録' : '手入力で登録'}
-              onPress={() => openManualRegistration()}
-              style={styles.actionButton}
-            />
-            {scanResult.source === 'shared' && scanResult.product ? <SharedProductReport key={scanResult.barcode} barcode={scanResult.barcode} onIgnore={() => openManualRegistration(false)} /> : null}
-            <Pressable
-              onPress={() => {
-                setLookupFailed(false);
-                setScanResult(null);
-              }}
-              style={styles.rescanButton}
-            >
-              <Ionicons color={colors.primary} name="scan-outline" size={19} />
-              <Text style={styles.rescanText}>もう一度読み取る</Text>
-            </Pressable>
-          </>
         ) : (
           <View style={styles.waitingArea}>
             <Text style={styles.waitingTitle}>商品バーコードをカメラに映してください</Text>
-            <Text style={styles.waitingText}>読み取り後、商品情報を確認して登録できます。</Text>
+            <Text style={styles.waitingText}>読み取り後、そのまま登録画面で期限・数量を確認できます。</Text>
             {process.env.EXPO_PUBLIC_DEMO_DATA === 'true' ? <Pressable onPress={showSampleProduct} style={styles.sampleButton}>
               <Text style={styles.sampleButtonText}>サンプル商品で動作を試す</Text>
             </Pressable> : null}
           </View>
         )}
 
-        {!scanResult ? <View style={styles.manualArea}>
+        <View style={styles.manualArea}>
           <Text style={styles.waitingTitle}>番号を入力して検索</Text>
-          <TextInput accessibilityLabel="バーコード番号" value={manualBarcode} onChangeText={setManualBarcode} keyboardType="number-pad" maxLength={13} placeholder="8桁または13桁のJAN・EAN" style={styles.manualInput} />
-          <PrimaryButton label="番号で検索" disabled={isLookingUp || !normalizeSharedBarcode(manualBarcode)} onPress={() => void handleScan({ data: normalizeSharedBarcode(manualBarcode)!, type: manualBarcode.trim().length === 8 ? 'ean8' : 'ean13' } as BarcodeScanningResult)} />
-        </View> : null}
+          <TextInput accessibilityLabel="バーコード番号" editable={!isLookingUp} value={manualBarcode} onChangeText={setManualBarcode} keyboardType="number-pad" maxLength={13} placeholder="8桁または13桁のJAN・EAN" style={styles.manualInput} />
+          <PrimaryButton label={isLookingUp ? '商品を検索中...' : '番号で検索'} disabled={isLookingUp || !normalizeSharedBarcode(manualBarcode)} onPress={() => {
+            const barcode = normalizeSharedBarcode(manualBarcode);
+            if (barcode) void handleScan({ data: barcode, type: barcode.length === 8 ? 'ean8' : 'ean13' } as BarcodeScanningResult);
+          }} />
+        </View>
         <View style={styles.note}>
           <Ionicons color={colors.textMuted} name="information-circle-outline" size={20} />
           <Text style={styles.noteText}>
             商品検索には端末内の商品候補、{isSharedProductsConfigured() ? '共有商品データベース、' : ''}{isYahooProductLookupConfigured() ? 'Yahoo!ショッピング（商品名のみ）、' : ''}Open Food Factsを使用します。商品名を確認してご利用ください。見つからない商品も、バーコード番号を引き継いで手入力できます。Yahoo!ショッピングの商品画像は使用しません。
           </Text>
         </View>
-        {scanResult?.product ? <ProductAttribution source={scanResult.product.productSource} image={scanResult.product.image} /> : null}
         <PrimaryButton label="商品データの出典・ライセンス" variant="outline"
           onPress={() => navigation.navigate('AppInformation', { section: 'services' })} />
       </ScrollView>
@@ -212,22 +156,10 @@ const styles = StyleSheet.create({
   manualInput: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.sm, padding: 12, minHeight: 48, fontSize: 16, color: colors.text },
   content: { gap: spacing.md, paddingBottom: spacing.xl },
   inactiveCamera: { backgroundColor: '#111', height: 300 },
-  resultLabel: { color: colors.textMuted, fontSize: 13, fontWeight: '700', marginBottom: spacing.sm, marginHorizontal: spacing.md },
-  productCard: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.md, flexDirection: 'row', marginHorizontal: spacing.md, padding: 13 },
-  productImage: { backgroundColor: colors.primarySoft, borderRadius: radius.sm, height: 64, width: 64 },
-  unknownIcon: { alignItems: 'center', backgroundColor: colors.background, borderRadius: radius.sm, height: 64, justifyContent: 'center', width: 64 },
-  productInfo: { flex: 1, marginLeft: 13 },
-  productName: { color: colors.text, fontSize: 16, fontWeight: '800' },
-  productCategory: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
-  barcodeText: { color: colors.textMuted, fontSize: 11, letterSpacing: 1, marginTop: 5 },
-  sourceText: { color: colors.primaryDark, fontSize: 10, marginTop: 4 },
-  actionButton: { marginHorizontal: spacing.md },
   lookupCard: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.md, flexDirection: 'row', marginHorizontal: spacing.md, padding: spacing.md },
   lookupTextArea: { flex: 1, marginLeft: 12 },
   lookupTitle: { color: colors.text, fontSize: 14, fontWeight: '700' },
   lookupText: { color: colors.textMuted, fontSize: 12, marginTop: 3 },
-  rescanButton: { alignItems: 'center', alignSelf: 'center', flexDirection: 'row', gap: 6, padding: spacing.sm },
-  rescanText: { color: colors.primary, fontSize: 14, fontWeight: '700' },
   waitingArea: { alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   waitingTitle: { color: colors.text, fontSize: 15, fontWeight: '700', textAlign: 'center' },
   waitingText: { color: colors.textMuted, fontSize: 12, marginTop: 5, textAlign: 'center' },

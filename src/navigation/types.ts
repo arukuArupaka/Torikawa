@@ -1,5 +1,6 @@
 import { NavigatorScreenParams } from '@react-navigation/native';
 import { ProductSource, StorageLocation } from '../types';
+import type { ProductLookupSource } from '../services/productLookupService';
 
 export type MainTabParamList = {
   Home: undefined;
@@ -21,6 +22,8 @@ export type RootStackParamList = {
         initialMemo?: string;
         initialBarcode?: string;
         initialProductSource?: ProductSource;
+        initialLookupSource?: ProductLookupSource;
+        initialLookupNotice?: string;
         allowProductSharing?: boolean;
         initialCategory?: string;
         initialTags?: string[];
@@ -35,6 +38,7 @@ export type RootStackParamList = {
   AddRecipe: { recipeId?: string } | undefined;
   ShoppingList: undefined;
   Statistics: undefined;
+  UsageGuide: undefined;
   AppInformation: { section: 'privacy' | 'services' };
   OssLicenses: undefined;
 };

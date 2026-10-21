@@ -6,6 +6,7 @@ import { useRef } from 'react';
 import { FoodImage } from './FoodImage';
 import { checkImageSize } from '../services/backupLimits';
 import { validateEmbeddedImage } from '../services/dataValidation';
+import { resizeImage } from '../services/imageResize';
 import { colors, radius, spacing } from '../constants/theme';
 
 type ImageSource = 'camera' | 'library';
@@ -16,6 +17,7 @@ export function FoodImagePicker({ image, onChange }: { image: string; onChange: 
   const openPicker = async (source: ImageSource) => {
     if (picking.current) return;
     picking.current = true;
+    const objectUrls = new Set<string>();
     try {
     const permission = source === 'camera'
       ? await ImagePicker.requestCameraPermissionsAsync()
@@ -37,18 +39,19 @@ export function FoodImagePicker({ image, onChange }: { image: string; onChange: 
           aspect: [1, 1],
           mediaTypes: ['images'],
           quality: 0.8,
-          base64: Platform.OS === 'web',
+          base64: false,
         })
       : await ImagePicker.launchImageLibraryAsync({
           allowsEditing: true,
           aspect: [1, 1],
           mediaTypes: ['images'],
           quality: 0.8,
-          base64: Platform.OS === 'web',
+          base64: false,
         });
 
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
+      if (Platform.OS === 'web' && asset.uri.startsWith('blob:')) objectUrls.add(asset.uri);
       checkImageSize(asset.fileSize ?? 0);
       if (asset.width * asset.height > 24_000_000) throw new Error('写真が大きすぎます。2400万画素以下の写真を選び直してください。');
       if (Platform.OS === 'web') {
@@ -58,18 +61,24 @@ export function FoodImagePicker({ image, onChange }: { image: string; onChange: 
         if (!mime || !['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(mime)) {
           throw new Error('JPEG・PNG・WebP・GIFの写真を選んでください。');
         }
-        if (!asset.base64) throw new Error('写真の保存内容を読み込めませんでした。もう一度選んでください。');
-        const uri = `data:${mime};base64,${asset.base64}`;
+      }
+      const resized = await resizeImage(asset);
+      if (Platform.OS === 'web') {
+        if (resized.uri.startsWith('blob:')) objectUrls.add(resized.uri);
+        if (!resized.base64) throw new Error('写真の保存内容を読み込めませんでした。もう一度選んでください。');
+        const uri = `data:image/jpeg;base64,${resized.base64}`;
         checkImageSize(validateEmbeddedImage(uri).size);
         onChange(uri);
-        if (asset.uri.startsWith('blob:')) URL.revokeObjectURL(asset.uri);
       } else {
-        onChange(asset.uri);
+        onChange(resized.uri);
       }
     }
     } catch (error) {
       alert('写真を選択できませんでした', (error instanceof Error ? error.message + '\n' : '') + '別の写真を選ぶか、写真を変更せずに登録を続けられます。');
-    } finally { picking.current = false; }
+    } finally {
+      for (const uri of objectUrls) URL.revokeObjectURL(uri);
+      picking.current = false;
+    }
   };
 
   const showOptions = () => {
@@ -87,6 +96,7 @@ export function FoodImagePicker({ image, onChange }: { image: string; onChange: 
         <Ionicons color={colors.primary} name="camera-outline" size={19} />
         <Text style={styles.buttonText}>写真を変更</Text>
       </Pressable>
+      <Text style={styles.note}>写真は長辺800px以内のJPEGで保存します。GIFの動きは残りません。</Text>
     </View>
   );
 }
@@ -96,4 +106,5 @@ const styles = StyleSheet.create({
   image: { backgroundColor: colors.primarySoft, borderRadius: radius.lg, height: 124, width: 124 },
   button: { alignItems: 'center', flexDirection: 'row', gap: 6, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   buttonText: { color: colors.primary, fontSize: 14, fontWeight: '700' },
+  note: { color: colors.textMuted, fontSize: 12, lineHeight: 18, textAlign: 'center', maxWidth: 300 },
 });

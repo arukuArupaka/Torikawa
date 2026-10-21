@@ -1,24 +1,10 @@
-import { Image } from 'react-native';
 import { FoodItem, NotificationSettings, Recipe, ShoppingItem } from '../types';
 import { addDays, toDateString } from '../utils/date';
-
-declare const require: (path: string) => number;
-
-const resolveRecipeImage = (asset: number | string | { uri: string }) => {
-  if (typeof asset === 'string') return asset;
-  if (typeof asset === 'object') return asset.uri;
-  return Image.resolveAssetSource(asset).uri;
-};
+import { additionalRecipes } from './recipeCatalog';
+import { generatedRecipeImages } from './generatedRecipeImages';
 
 export const sampleRecipeImages: Record<string, string> = {
-  'recipe-1': resolveRecipeImage(require('../../assets/recipes/pork-cabbage-miso-stir-fry.jpg')),
-  'recipe-2': resolveRecipeImage(require('../../assets/recipes/fluffy-omelette.jpg')),
-  'recipe-3': resolveRecipeImage(require('../../assets/recipes/tofu-wakame-miso-soup.jpg')),
-  'recipe-4': resolveRecipeImage(require('../../assets/recipes/cabbage-egg-stir-fry.jpg')),
-  'recipe-5': resolveRecipeImage(require('../../assets/recipes/milk-potage.jpg')),
-  'recipe-6': resolveRecipeImage(require('../../assets/recipes/tofu-steak.jpg')),
-  'recipe-7': resolveRecipeImage(require('../../assets/recipes/vegetable-soup.jpg')),
-  'recipe-8': resolveRecipeImage(require('../../assets/recipes/egg-sandwich.jpg')),
+  ...generatedRecipeImages,
 };
 
 export const legacySampleRecipeImages: Record<string, string> = {
@@ -42,7 +28,7 @@ export function createSampleFoods(): FoodItem[] {
       name: '牛乳',
       productName: '明治おいしい牛乳',
       ingredientName: '牛乳',
-      image: 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=300',
+      image: 'food-icon:dairy',
       category: 'dairy',
       tags: ['牛乳', '乳製品', '飲み物'],
       storage: 'refrigerated',
@@ -61,7 +47,7 @@ export function createSampleFoods(): FoodItem[] {
       name: '豆腐',
       productName: null,
       ingredientName: '豆腐',
-      image: 'https://images.unsplash.com/photo-1604329760661-e71dc83f8f26?w=300',
+      image: 'food-icon:other',
       category: 'other',
       tags: ['豆腐', '大豆製品'],
       storage: 'refrigerated',
@@ -80,7 +66,7 @@ export function createSampleFoods(): FoodItem[] {
       name: '卵',
       productName: null,
       ingredientName: '卵',
-      image: 'https://images.unsplash.com/photo-1506976785307-8732e854ad03?w=300',
+      image: 'food-icon:eggs',
       category: 'eggs',
       tags: ['卵', 'たまご'],
       storage: 'refrigerated',
@@ -99,7 +85,7 @@ export function createSampleFoods(): FoodItem[] {
       name: 'キャベツ',
       productName: null,
       ingredientName: 'キャベツ',
-      image: 'https://images.unsplash.com/photo-1594282486552-05b4d80fbb9f?w=300',
+      image: 'food-icon:vegetables',
       category: 'vegetables',
       tags: ['キャベツ', '野菜'],
       storage: 'refrigerated',
@@ -137,9 +123,10 @@ export const sampleRecipes: Recipe[] = [
     ingredients: ['豚肉', 'キャベツ', '玉ねぎ', '味噌', 'みりん', '醤油', '油'],
     ingredientAmounts: { 豚肉: '200g', キャベツ: '1/4玉', 玉ねぎ: '1/2個', 味噌: '大さじ1', みりん: '大さじ1', 醤油: '小さじ1', 油: '小さじ1' },
     steps: [
-      '豚肉と野菜を食べやすい大きさに切ります。',
-      'フライパンに油を熱して豚肉を炒め、火が通ったら野菜を加えます。',
-      '味噌、みりん、醤油を混ぜて加え、全体になじませます。',
+      '豚肉は一口大にし、キャベツはざく切り、玉ねぎは薄切りにします。味噌・みりん・醤油を小さな器で混ぜます。',
+      'フライパンに油を広げて中火で温め、豚肉を重ならないように入れます。裏返しながら加熱し、玉ねぎとキャベツを加えて炒めます。',
+      '野菜がしんなりしたら合わせた調味料を加え、焦がさないように混ぜます。',
+      '豚肉の中心温度75℃以上で1分間以上加熱したことを確認し、器に盛ります。',
     ],
     minutes: 15,
     isFavorite: false,
@@ -154,9 +141,9 @@ export const sampleRecipes: Recipe[] = [
     ingredients: ['卵', '牛乳', '玉ねぎ', '油'],
     ingredientAmounts: { 卵: '2個', 牛乳: '大さじ2', 玉ねぎ: '1/4個', 油: '小さじ1' },
     steps: [
-      '卵と牛乳をボウルでよく混ぜます。',
-      'フライパンに油を熱し、薄切りにした玉ねぎを炒めて卵液を流し入れます。',
-      '半熟になったら形を整えて盛り付けます。',
+      '玉ねぎを薄く切ります。ボウルに卵を割り、牛乳を加えて白身を切るように混ぜます。',
+      '小さめのフライパンに油を入れ、玉ねぎが透き通るまで中火で炒めます。',
+      '卵液を注いでへらで大きく混ぜ、火を弱めます。端から折りたたみ、中心にも火が通ったら皿へ移します。',
     ],
     minutes: 10,
     isFavorite: false,
@@ -171,9 +158,9 @@ export const sampleRecipes: Recipe[] = [
     ingredients: ['豆腐', 'わかめ', '顆粒だし', '味噌', '水'],
     ingredientAmounts: { 豆腐: '1/2丁', わかめ: 'ひとつまみ', 顆粒だし: '小さじ1', 味噌: '大さじ1と1/2', 水: '400ml' },
     steps: [
-      '鍋に水と顆粒だしを入れて温め、食べやすく切った豆腐を加えます。',
-      'わかめを加えてひと煮立ちさせます。',
-      '火を止めて味噌を溶き入れます。',
+      '豆腐を約1.5cm角に切ります。乾燥わかめは製品表示に従って準備します。',
+      '鍋に水400mlと顆粒だしを入れて温め、豆腐とわかめを加えます。具が温まったら火を止めます。',
+      'お玉に味噌を取り、鍋の汁を少しずつ加えて溶き戻します。煮立たせずに温め、器に分けます。',
     ],
     minutes: 8,
     isFavorite: false,
@@ -188,9 +175,10 @@ export const sampleRecipes: Recipe[] = [
     ingredients: ['キャベツ', '卵', '醤油', '油'],
     ingredientAmounts: { キャベツ: '1/4玉', 卵: '2個', 醤油: '小さじ2', 油: '小さじ2' },
     steps: [
-      'キャベツをざく切りにし、卵は溶いておきます。',
-      'フライパンに油を熱し、卵を半熟に炒めて一度取り出します。',
-      'キャベツを炒め、卵を戻して醤油で味を整えます。',
+      'キャベツの葉を一口大、芯は薄めに切ります。卵はボウルで溶きほぐします。',
+      'フライパンで油の半量を中火で温め、卵を入れて大きく混ぜます。固まり始めたらいったん取り出します。',
+      '残りの油を入れ、キャベツを芯、葉の順に加えて炒めます。卵を戻し、醤油を回し入れます。',
+      '卵の中心まで火が通るよう炒め合わせ、熱いうちに器へ移します。',
     ],
     minutes: 10,
     isFavorite: false,
@@ -205,9 +193,10 @@ export const sampleRecipes: Recipe[] = [
     ingredients: ['牛乳', '玉ねぎ', 'じゃがいも', '油', '塩こしょう', '水'],
     ingredientAmounts: { 牛乳: '200ml', 玉ねぎ: '1/2個', じゃがいも: '1個', 油: '小さじ1', 塩こしょう: '少々', 水: '100ml' },
     steps: [
-      '玉ねぎとじゃがいもを薄切りにします。',
-      '鍋に油を熱して野菜を炒め、水を加えて柔らかく煮ます。',
-      '牛乳を加えて温め、塩こしょうで味を整えます。',
+      'じゃがいもの皮と芽を取り、玉ねぎとともに薄く切ります。',
+      '小鍋に油を入れて中火で温め、玉ねぎとじゃがいもを焦がさないよう炒めます。水100mlを加え、ふたをして弱火で煮ます。',
+      'じゃがいもがへらで崩れるほど柔らかくなったら火を止め、鍋の中で細かくつぶします。',
+      '牛乳を少しずつ混ぜ、弱火で温め直します。塩こしょうで調え、沸騰させる前に火を止めます。',
     ],
     minutes: 18,
     isFavorite: false,
@@ -222,9 +211,9 @@ export const sampleRecipes: Recipe[] = [
     ingredients: ['豆腐', '醤油', '片栗粉', '油'],
     ingredientAmounts: { 豆腐: '1丁', 醤油: '大さじ1', 片栗粉: '適量', 油: '小さじ2' },
     steps: [
-      '豆腐の水気を切り、食べやすい厚さに切ります。',
-      '片栗粉をまぶし、油を熱したフライパンで両面を焼きます。',
-      '醤油を回しかけて香ばしく仕上げます。',
+      '豆腐を厚さ1.5〜2cmに切り、キッチンペーパーで挟んで余分な水気を取ります。',
+      '表面に片栗粉を薄く付けます。フライパンで油を中火で温め、豆腐を並べます。',
+      '焼き色が付いたら静かに裏返し、反対側も焼いて中まで温めます。火を弱めて醤油を加え、両面にからめます。',
     ],
     minutes: 12,
     isFavorite: false,
@@ -239,9 +228,9 @@ export const sampleRecipes: Recipe[] = [
     ingredients: ['キャベツ', '玉ねぎ', 'にんじん', 'コンソメ', '塩こしょう', '油', '水'],
     ingredientAmounts: { キャベツ: '2枚', 玉ねぎ: '1/2個', にんじん: '1/3本', コンソメ: '小さじ2', 塩こしょう: '少々', 油: '小さじ1', 水: '400ml' },
     steps: [
-      '野菜を食べやすい大きさに切ります。',
-      '鍋に油を熱して野菜を軽く炒め、水を加えて煮込みます。',
-      'コンソメを加え、塩こしょうで味を整えます。',
+      'キャベツと玉ねぎを約1cm角、にんじんを薄いいちょう切りにします。',
+      '鍋に油を入れ、中火で野菜を炒めます。玉ねぎが透き通ったら水400mlとコンソメを加えます。',
+      '煮立ったら火を弱め、にんじんが柔らかくなるまで煮ます。塩こしょうで味を調え、器へよそいます。',
     ],
     minutes: 20,
     isFavorite: false,
@@ -256,12 +245,13 @@ export const sampleRecipes: Recipe[] = [
     ingredients: ['卵', '食パン', 'マヨネーズ', '塩こしょう', '水'],
     ingredientAmounts: { 卵: '2個', 食パン: '2枚', マヨネーズ: '大さじ1', 塩こしょう: '少々', 水: '卵が浸る量（ゆで用）' },
     steps: [
-      '鍋に卵と卵が浸る量の水を入れてゆで卵を作り、粗くつぶします。',
-      'マヨネーズと塩こしょうで味を整えます。',
-      '食パンにはさんで食べやすく切ります。',
+      '小鍋に卵と、卵が十分浸る量の水を入れて加熱します。黄身の中心まで固まるようにゆで、水で冷まして殻をむきます。',
+      '卵をボウルに入れ、フォークで細かくつぶします。マヨネーズと塩こしょうを混ぜます。',
+      '食パン1枚に卵の具を均等に広げ、もう1枚を重ねます。軽く押さえてから食べやすく切ります。',
     ],
     minutes: 12,
     isFavorite: false,
     createdAt: new Date().toISOString(),
   },
+  ...additionalRecipes,
 ];

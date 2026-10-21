@@ -41,6 +41,7 @@ const nativeMock = {
   AppState: { addEventListener: () => ({ remove() {} }) },
   Modal: 'Modal',
   Platform: { OS: 'web' }, KeyboardAvoidingView: 'KeyboardAvoidingView',
+  Keyboard: { dismiss() {} },
   Image: { resolveAssetSource: () => ({ uri: 'test-image' }) },
   Alert: { alert: (...args) => alerts.push(args) },
   StyleSheet: { create: (styles) => styles },
@@ -51,6 +52,7 @@ Module._load = function (request, ...args) {
   if (request === '@react-native-async-storage/async-storage') return asyncStorage;
   if (request === 'react-native') return { ...nativeMock, Image: Object.assign((props) => React.createElement('Image', props), nativeMock.Image) };
   if (request === '@expo/vector-icons') return { Ionicons: (props) => React.createElement('Icon', props) };
+  if (request === 'react-native-safe-area-context') return { useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) };
   if (request.startsWith('../components/')) {
     const name = request.split('/').at(-1);
     if (name === 'AnimatedDisclosure') return { AnimatedDisclosure: (props) => React.createElement(name, props,
@@ -101,6 +103,25 @@ async function mount() {
   await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer))); });
   return renderer;
 }
+test('calendar confirmation changes only the expiry date and keeps stock edited while the dialog was open', async t => {
+  reset(); alerts.length = 0;
+  t.mock.timers.enable({ apis: ['Date'], now: new Date(2026, 9, 17, 12).getTime() });
+  const original = { ...createSampleFoods()[0], expiryDate: '2026-10-17', quantity: 1000, quantityUnit: 'ml', memo: '変更前' };
+  store.set(storageKeys.foods, JSON.stringify([original]));
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
+    React.createElement(CalendarScreen, { navigation: {} }))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  await act(async () => renderer.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel?.endsWith('の期限日を変更')).props.onPress());
+  await act(async () => renderer.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel?.startsWith('10月18日、')).props.onPress());
+  const confirm = alerts.at(-1)[2].find(button => button.text === '変更する').onPress;
+  await act(async () => context.updateFood(original.id, { ...context.foods[0], quantity: 600, memo: '調理後のメモ' }));
+  const current = context.foods[0];
+  await act(async () => confirm());
+  assert.deepEqual(context.foods[0], { ...current, expiryDate: '2026-10-18', revision: (current.revision ?? 0) + 1 });
+  assert.equal(JSON.parse(store.get(storageKeys.foods))[0].quantity, 600);
+  assert.equal(JSON.parse(store.get(storageKeys.foods))[0].memo, '調理後のメモ');
+});
 function reset() {
   // The interaction regressions intentionally exercise the sample inventory.
   process.env.EXPO_PUBLIC_DEMO_DATA = 'true';
@@ -153,6 +174,135 @@ test('home used/disposed and detail shopping actions offer undo and restore the 
   await act(async () => toastState.runAction(toastState.toast.id));
   assert.equal(context.foods[0].status, 'active');
   assert.equal(context.shoppingItems.length, 1, 'undo restores the food only');
+});
+
+async function mountQuantityDetail(t) {
+  reset();
+  const original = { ...createSampleFoods()[0], id: 'quantity-milk', name: '牛乳', ingredientName: '牛乳', productName: null,
+    category: 'dairy', quantity: 1000, quantityUnit: 'ml', memo: '残すメモ', revision: 3,
+    consumptionHistory: [{ operationId: 'old-cooking', recipeId: 'old-recipe', recordedAt: '2026-10-14T00:00:00.000Z',
+      amount: 200, before: 1200, after: 1000, unit: 'ml' }] };
+  store.set(storageKeys.foods, JSON.stringify([original]));
+  let renderer, toastState;
+  function ToastProbe() { toastState = useToastState(); return null; }
+  await act(async () => { renderer = create(React.createElement(AppToastProvider, null,
+    React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(ToastProbe),
+      React.createElement(FoodDetailScreen, { navigation: {}, route: { params: { foodId: original.id } } })))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  return { renderer, original, toast: () => toastState,
+    open: () => renderer.root.findByProps({ accessibilityLabel: '残量を変更' }).props.onPress(),
+    input: () => renderer.root.findByProps({ accessibilityLabel: '変更後の残量' }),
+    button: label => renderer.root.findAllByType('PrimaryButton').find(node => node.props.label === label),
+  };
+}
+
+test('the used action follows remaining quantity before product details, and still requires confirmation', async t => {
+  const app = await mountQuantityDetail(t);
+  alerts.length = 0;
+  const longName = '毎日飲みたい牛乳 '.repeat(12).trim();
+  await act(async () => context.updateFood(app.original.id, { ...context.foods[0], name: longName, productName: longName }));
+  const nodes = app.renderer.root.findAll(node => node.type === 'Text' || node.type === 'PrimaryButton'
+    || (node.type === 'Pressable' && node.props.accessibilityLabel === '残量を変更'));
+  const quantityIndex = nodes.findIndex(node => node.props.accessibilityLabel === '残量を変更');
+  const usedIndex = nodes.findIndex(node => node.type === 'PrimaryButton' && node.props.label === '使い切った');
+  const detailsIndex = nodes.findIndex(node => node.type === 'Text' && node.props.children === '商品名');
+  assert.ok(quantityIndex >= 0 && quantityIndex < usedIndex && usedIndex < detailsIndex);
+  assert.equal(app.renderer.root.findAllByType('PrimaryButton').filter(node => node.props.label === '使い切った').length, 1);
+  assert.ok(nodes.some(node => node.type === 'Text' && node.props.children === longName), 'the complete product name remains visible');
+  for (const label of ['捨てた', 'この食材を編集', '食材の登録を削除する']) {
+    assert.ok(nodes.findIndex(node => node.type === 'PrimaryButton' && node.props.label === label) > detailsIndex);
+  }
+  const before = context.foods[0];
+  const savedWrites = writes.length;
+  await act(async () => app.button('使い切った').props.onPress());
+  assert.equal(alerts.at(-1)[0], '使い切ったとして記録');
+  assert.deepEqual(alerts.at(-1)[2].map(button => button.text), ['キャンセル', '記録だけ', '買い物リストにも追加']);
+  const cancel = alerts.at(-1)[2].find(button => button.text === 'キャンセル');
+  assert.equal(cancel.style, 'cancel');
+  await act(async () => cancel.onPress?.());
+  assert.strictEqual(context.foods[0], before);
+  assert.equal(writes.length, savedWrites);
+});
+
+test('completed food details offer restore instead of the quick used action', async t => {
+  const app = await mountQuantityDetail(t);
+  for (const record of [() => context.markFoodUsed(app.original.id), () => context.markFoodDisposed(app.original.id)]) {
+    await act(async () => record());
+    assert.equal(app.button('使い切った'), undefined);
+    assert.equal(app.renderer.root.findAllByProps({ accessibilityLabel: '残量を変更' }).length, 0);
+    assert.ok(app.button('記録を取り消す'));
+    assert.ok(app.button('食材の登録を削除する'));
+    await act(async () => context.restoreFood(app.original.id));
+    assert.ok(app.button('使い切った'));
+  }
+});
+
+test('quick quantity editing saves once, keeps other fields and history, and offers saved undo without navigation', async t => {
+  const app = await mountQuantityDetail(t);
+  const before = context.foods[0];
+  await act(async () => app.open());
+  assert.equal(app.input().props.value, '1000'); assert.equal(app.input().props.autoFocus, true);
+  await act(async () => app.input().props.onChangeText('700'));
+  const save = app.button('残量を保存').props.onPress;
+  await act(async () => { save(); save(); });
+  assert.equal(app.renderer.root.findAllByType('Modal').length, 0);
+  assert.deepEqual(context.foods[0], { ...before, quantity: 700, revision: 4 });
+  assert.equal(JSON.parse(store.get(storageKeys.foods))[0].quantity, 700);
+  assert.equal(savedProducts.length, 0); assert.equal(sharedPayloads.length, 0);
+  assert.match(app.toast().toast.message, /700ml/); assert.equal(app.toast().toast.action.label, '元に戻す');
+  await act(async () => app.toast().runAction(app.toast().toast.id));
+  assert.deepEqual(context.foods[0], { ...before, revision: 5 });
+  assert.equal(JSON.parse(store.get(storageKeys.foods))[0].quantity, 1000);
+});
+
+test('quick quantity editing can cancel, validates zero and decimals, and closes unchanged input without a write', async t => {
+  const app = await mountQuantityDetail(t);
+  const before = context.foods[0];
+  await act(async () => app.open());
+  for (const value of ['', '0', '-1', '5.555', '100000', 'abc']) {
+    await act(async () => app.input().props.onChangeText(value));
+    await act(async () => app.button('残量を保存').props.onPress());
+    assert.strictEqual(context.foods[0], before);
+    assert.equal(app.renderer.root.findAllByType('Modal').length, 1);
+    const error = app.renderer.root.findByProps({ accessibilityRole: 'alert' });
+    assert.match(String(error.props.children), value === '0' ? /使い切った/ : /数値/);
+  }
+  await act(async () => app.button('キャンセル').props.onPress());
+  assert.equal(app.renderer.root.findAllByType('Modal').length, 0);
+  await act(async () => app.open()); assert.equal(app.input().props.value, '1000');
+  const savedWrites = writes.length;
+  await act(async () => app.button('残量を保存').props.onPress());
+  assert.strictEqual(context.foods[0], before); assert.equal(writes.length, savedWrites);
+  assert.equal(app.toast().toast, null);
+});
+
+test('a quantity panel rejects stale edits and closes when its food is used or deleted', async t => {
+  const app = await mountQuantityDetail(t);
+  await act(async () => app.open());
+  await act(async () => app.input().props.onChangeText('700'));
+  await act(async () => context.updateFood(app.original.id, { ...context.foods[0], memo: '後で編集したメモ' }));
+  await act(async () => app.button('残量を保存').props.onPress());
+  assert.equal(context.foods[0].quantity, 1000); assert.equal(context.foods[0].memo, '後で編集したメモ');
+  assert.match(String(app.renderer.root.findByProps({ accessibilityRole: 'alert' }).props.children), /確認中に/);
+  await act(async () => app.renderer.root.findByType('Modal').props.onRequestClose());
+  await act(async () => app.open());
+  await act(async () => context.markFoodUsed(app.original.id));
+  assert.equal(app.renderer.root.findAllByType('Modal').length, 0);
+  assert.equal(app.renderer.root.findAllByProps({ accessibilityLabel: '残量を変更' }).length, 0);
+  assert.ok(app.renderer.root.findAllByType('Text').some(node => node.props.children === '1000ml'), 'history still shows the last positive quantity');
+  await act(async () => context.restoreFood(app.original.id));
+  await act(async () => app.open());
+  await act(async () => context.deleteFood(app.original.id));
+  assert.equal(app.renderer.root.findAllByType('Modal').length, 0);
+});
+
+test('an unchanged legacy quantity is preserved by the quick panel instead of rounded on opening', async t => {
+  const app = await mountQuantityDetail(t);
+  await act(async () => context.updateFood(app.original.id, { ...context.foods[0], quantity: 1.234 }));
+  const before = context.foods[0];
+  await act(async () => app.open()); assert.equal(app.input().props.value, '1.234');
+  await act(async () => app.button('残量を保存').props.onPress());
+  assert.strictEqual(context.foods[0], before); assert.equal(app.renderer.root.findAllByType('Modal').length, 0);
 });
 
 test('barcode registration carries product attribution into inventory and learned defaults; replacing a photo removes its old image credit', async (t) => {
@@ -239,8 +389,8 @@ test('phase 2 product corrections unify display names and send only metadata to 
   let renderer; let back = 0;
   await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(AddFoodScreen, { route: { params: { foodId: original.id } }, navigation: { goBack: () => back++ } }))); });
   const field = (label) => renderer.root.findAllByType('FormField').find((node) => node.props.label === label);
-  assert.equal(field('表示名').props.value, original.productName);
-  await act(async () => field('表示名').props.onChangeText('訂正した牛乳'));
+  assert.equal(field('食材名・商品名').props.value, original.productName);
+  await act(async () => field('食材名・商品名').props.onChangeText('訂正した牛乳'));
   correctionFailure = true;
   const save = () => renderer.root.findByType('PrimaryButton').props.onPress();
   await act(async () => save());
@@ -264,7 +414,7 @@ test('phase 2 product correction can stay on inventory only and uncertain barcod
   store.set(storageKeys.foods, JSON.stringify([original]));
   let renderer;
   await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(AddFoodScreen, { route: { params: { foodId: original.id } }, navigation: { goBack() {} } }))); });
-  await act(async () => renderer.root.findAllByType('FormField').find((node) => node.props.label === '表示名').props.onChangeText('この在庫の名前'));
+  await act(async () => renderer.root.findAllByType('FormField').find((node) => node.props.label === '食材名・商品名').props.onChangeText('この在庫の名前'));
   await act(async () => renderer.root.findByProps({ accessibilityRole: 'checkbox' }).props.onPress());
   await act(async () => renderer.root.findByType('PrimaryButton').props.onPress());
   assert.equal(productCorrections.length, 0);
@@ -340,6 +490,82 @@ test('hydration persists corrected defaults, preserves edits and never restores 
   await act(async () => renderer.unmount());
   renderer = await mount();
   assert.deepEqual(context.recipes, persisted, 'a second launch must leave the migrated data intact');
+  await act(async () => renderer.unmount());
+});
+
+test('adding missing batches preserves an existing 100-recipe collection across restart', async () => {
+  reset();
+  const saved = structuredClone(sampleRecipes.slice(0, 100));
+  saved[0] = { ...saved[0], name: '自分の味噌炒め', isFavorite: true, image: 'file:///my-photo.jpg' };
+  store.set(storageKeys.recipes, JSON.stringify(saved));
+  let renderer = await mount();
+  assert.deepEqual(context.recipes, saved, 'loading does not import new recipes');
+  await act(async () => { context.addNewCatalogRecipes(); context.addNewCatalogRecipes(); });
+  assert.equal(context.recipes.length, 136);
+  assert.deepEqual(context.recipes.slice(0, 100), saved);
+  const expected = structuredClone(context.recipes);
+  assert.deepEqual(JSON.parse(store.get(storageKeys.recipes)), expected);
+  await act(async () => renderer.unmount());
+  renderer = await mount();
+  assert.deepEqual(context.recipes, expected);
+  await act(async () => renderer.unmount());
+});
+
+test('adding missing classics preserves an existing 120-recipe collection across restart', async () => {
+  reset();
+  const saved = structuredClone(sampleRecipes.slice(0, 120));
+  saved[101] = { ...saved[101], name: '我が家のブロッコリー', image: 'file:///personal.jpg', isFavorite: true };
+  store.set(storageKeys.recipes, JSON.stringify(saved));
+  let renderer = await mount();
+  assert.deepEqual(context.recipes, saved, 'loading does not import the classics');
+  await act(async () => { context.addNewCatalogRecipes(); context.addNewCatalogRecipes(); });
+  assert.equal(context.recipes.length, 136);
+  assert.deepEqual(context.recipes.slice(0, 120), saved);
+  assert.deepEqual(context.recipes.slice(120).map(recipe => recipe.id), Array.from({ length: 16 }, (_, i) => `recipe-${121 + i}`));
+  const expected = structuredClone(context.recipes);
+  assert.deepEqual(JSON.parse(store.get(storageKeys.recipes)), expected);
+  await act(async () => renderer.unmount());
+  renderer = await mount();
+  assert.deepEqual(context.recipes, expected);
+  await act(async () => renderer.unmount());
+});
+
+test('adding nine classic recipes preserves an existing 127-recipe collection across restart', async () => {
+  reset();
+  const saved = structuredClone(sampleRecipes.slice(0, 127));
+  saved[120] = { ...saved[120], name: '我が家のカレー', image: 'file:///my-curry.jpg', isFavorite: true };
+  store.set(storageKeys.recipes, JSON.stringify(saved));
+  let renderer = await mount();
+  assert.deepEqual(context.recipes, saved, 'loading does not import the new classics');
+  await act(async () => { context.addNewCatalogRecipes(); context.addNewCatalogRecipes(); });
+  assert.equal(context.recipes.length, 136);
+  assert.deepEqual(context.recipes.slice(0, 127), saved);
+  assert.deepEqual(context.recipes.slice(127).map(recipe => recipe.id), Array.from({ length: 9 }, (_, i) => `recipe-${128 + i}`));
+  const expected = structuredClone(context.recipes);
+  assert.deepEqual(JSON.parse(store.get(storageKeys.recipes)), expected);
+  await act(async () => renderer.unmount());
+  renderer = await mount();
+  assert.deepEqual(context.recipes, expected);
+  await act(async () => renderer.unmount());
+});
+
+test('explicitly adding the new catalog saves 128 recipes once and keeps personal data across restart', async () => {
+  reset();
+  const edited = { ...sampleRecipes[0], name: '自分の味噌炒め', isFavorite: true, image: 'file:///my-photo.jpg' };
+  store.set(storageKeys.recipes, JSON.stringify([edited]));
+  let renderer = await mount();
+  assert.equal(context.recipes.length, 1, 'no automatic import during hydration');
+  await act(async () => { context.addNewCatalogRecipes(); context.addNewCatalogRecipes(); });
+  assert.equal(context.recipes.length, 129);
+  assert.deepEqual(context.recipes[0], edited);
+  assert.ok(!context.recipes.some(recipe => recipe.id === 'recipe-2'), 'deleted older recipes remain deleted');
+  assert.equal(JSON.parse(store.get(storageKeys.recipes)).length, 129);
+  await act(async () => context.deleteRecipe('recipe-100'));
+  const expected = structuredClone(context.recipes);
+  await act(async () => renderer.unmount());
+  renderer = await mount();
+  assert.deepEqual(context.recipes, expected);
+  assert.ok(!context.recipes.some(recipe => recipe.id === 'recipe-100'), 'restart does not reimport a deleted addition');
   await act(async () => renderer.unmount());
 });
 
@@ -584,6 +810,26 @@ test('changing people updates visible quantities and usage, clears stale selecti
   assert.equal(context.foods.find((food) => food.name === 'キャベツ').quantity, 0.5);
 });
 
+test('recipe detail marks generated images and removes the note when the user replaces the photo', async (t) => {
+  reset();
+  const original = sampleRecipes.find(recipe => recipe.id === 'recipe-9');
+  store.set(storageKeys.recipes, JSON.stringify([{ ...original, image: 'food-icon:other' }]));
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
+      React.createElement(RecipeDetailScreen, { route: { params: { recipeId: original.id } }, navigation: {} })));
+  });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const note = () => renderer.root.findAllByType('Text').some(node =>
+    node.props.children === 'AI生成のイメージです。実際の調理写真ではありません。');
+  assert.equal(note(), true);
+  assert.equal(renderer.root.findByType('FoodImage').props.accessibilityLabel, `${original.name}のAI生成イメージ`);
+  await act(async () => { context.updateRecipe(original.id, { ...original, image: 'file:///my-photo.jpg' }); });
+  assert.equal(note(), false);
+  assert.equal(renderer.root.findByType('FoodImage').props.accessibilityLabel, `${original.name}の画像`);
+  assert.equal(context.recipes[0].image, 'file:///my-photo.jpg');
+});
+
 test('recipe editor validates servings and preserves saved or explicitly unset values after reload', async (t) => {
   reset(); alerts.length = 0;
   let renderer;
@@ -707,6 +953,31 @@ test('shopping check is reversible without navigation, registration carries the 
   await act(async () => control('卵を買い物リストから削除').props.onPress());
   await act(async () => control('卵の削除を確定').props.onPress());
   assert.deepEqual(context.shoppingItems.map((item) => item.id), ['buy-milk']);
+});
+
+test('shopping check offers a saved undo action and returns to the original list without losing other items', async (t) => {
+  reset(); store.set(storageKeys.shopping, JSON.stringify([
+    { id: 'buy-egg', name: '卵', checked: false, memo: 'このメモを残す', createdAt: '2026-10-15' },
+    { id: 'buy-milk', name: '牛乳', checked: false, createdAt: '2026-10-15' },
+  ]));
+  let renderer, toastState;
+  function ToastProbe() { toastState = useToastState(); return null; }
+  await act(async () => { renderer = create(React.createElement(AppToastProvider, null,
+    React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(ToastProbe),
+      React.createElement(ShoppingListScreen, { navigation: {} })))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const control = label => renderer.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === label);
+  await act(async () => control('卵を購入済みにする').props.onPress());
+  assert.match(toastState.toast.message, /卵.*購入済み/); assert.equal(toastState.toast.action.label, '元に戻す');
+  const firstId = toastState.toast.id;
+  await act(async () => control('購入済み1件').props.onPress());
+  assert.ok(control('卵を食材として登録'));
+  await act(async () => toastState.runAction(firstId));
+  assert.ok(control('卵を購入済みにする')); assert.ok(control('牛乳を購入済みにする'));
+  assert.equal(context.shoppingItems[0].memo, 'このメモを残す');
+  assert.equal(JSON.parse(store.get(storageKeys.shopping))[0].checked, false);
+  await act(async () => toastState.runAction(firstId));
+  assert.equal(context.shoppingItems[0].checked, false, 'a repeated old undo cannot toggle it again');
 });
 
 test('shopping duplicate feedback is visible on Web and does not clear the input or overwrite its memo', async (t) => {
@@ -1004,7 +1275,152 @@ test('choosing a previous registration retains incoming shopping memo and calend
   await act(async () => press('写真・カテゴリ・購入日・メモを編集').props.onPress());
   assert.equal(renderer.root.findAllByType('FormField').find((node) => node.props.label === 'メモ（任意）').props.value, '追記した買い物のメモ');
   assert.equal(renderer.root.findByType('StorageSelector').props.value, 'refrigerated');
+  await act(async () => renderer.root.findByProps({ accessibilityLabel: '数量の単位を変更（個）' }).props.onPress());
   assert.equal(renderer.root.findByType('QuantityUnitSelector').props.value, 'piece');
+});
+
+test('a long barcode product name expands fully, follows edits and saves without truncation', async (t) => {
+  reset(); store.set(storageKeys.foods, '[]');
+  const oldPlatform = nativeMock.Platform.OS;
+  nativeMock.Platform.OS = 'ios';
+  t.after(() => { nativeMock.Platform.OS = oldPlatform; });
+  const initialName = 'テストレモン お菓子のまとめ買いセット 商品名の最後まで確認';
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
+    React.createElement(AddFoodScreen, { route: { params: {
+      initialBarcode: '4901625421798', initialProductName: initialName, initialLookupSource: 'yahoo-shopping',
+    } }, navigation: { getState: () => ({ index: 1 }), popToTop() {}, navigate() {} } }))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const field = () => renderer.root.findAllByType('FormField').find(node => node.props.label === '食材名・商品名');
+  const preview = () => renderer.root.findAllByProps({ testID: 'food-name-full-text' });
+  assert.equal(preview().length, 0);
+  assert.equal(renderer.root.findByProps({ accessibilityLabel: '食材名・商品名の全文を見る' }).props.accessibilityState.expanded, false);
+  await act(async () => renderer.root.findByProps({ accessibilityLabel: '食材名・商品名の全文を見る' }).props.onPress());
+  assert.equal(preview()[0].props.children, initialName);
+  assert.equal(preview()[0].props.numberOfLines, undefined);
+  assert.equal(preview()[0].props.selectable, true);
+  const editedName = initialName + ' 名前を編集しました';
+  await act(async () => field().props.onChangeText(editedName));
+  assert.equal(preview()[0].props.children, editedName);
+  assert.equal(context.foods.length, 0, 'previewing and editing must not register food');
+  await act(async () => renderer.root.findByProps({ accessibilityLabel: '食材名・商品名の全文を閉じる' }).props.onPress());
+  assert.equal(preview().length, 0);
+  assert.equal(field().props.value, editedName);
+  await act(async () => renderer.root.findAllByType('PrimaryButton').find(node => node.props.label === '保存する').props.onPress());
+  assert.equal(context.foods.length, 1);
+  assert.equal(context.foods[0].name, editedName);
+  assert.equal(JSON.parse(store.get(storageKeys.foods))[0].name, editedName);
+});
+
+test('short or empty food names keep the compact form, and manually entered long names can expand', async (t) => {
+  reset(); store.set(storageKeys.foods, '[]');
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
+    React.createElement(AddFoodScreen, { route: { params: {} }, navigation: {} }))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const field = () => renderer.root.findAllByType('FormField').find(node => node.props.label === '食材名・商品名');
+  const toggles = () => renderer.root.findAllByType('Pressable').filter(node => node.props.accessibilityLabel?.startsWith('食材名・商品名の全文'));
+  assert.equal(toggles().length, 0);
+  await act(async () => field().props.onChangeText('牛乳'));
+  assert.equal(toggles().length, 0);
+  const longName = '自分で入力した食材の商品名も最後の一文字まで確認します';
+  await act(async () => field().props.onChangeText(longName));
+  await act(async () => toggles()[0].props.onPress());
+  assert.equal(renderer.root.findByProps({ testID: 'food-name-full-text' }).props.children, longName);
+  await act(async () => field().props.onChangeText('  '));
+  assert.equal(toggles().length, 0);
+  assert.equal(renderer.root.findAllByProps({ testID: 'food-name-full-text' }).length, 0);
+  assert.equal(context.foods.length, 0);
+});
+
+test('quick food registration preserves chosen dates and quantities while changing units and saves once', async (t) => {
+  reset(); store.set(storageKeys.foods, '[]');
+  t.mock.timers.enable({ apis: ['Date'], now: new Date(2026, 9, 14, 12) });
+  const destinations = [];
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
+    React.createElement(AddFoodScreen, { route: { params: {} }, navigation: {
+      getState: () => ({ index: 1 }), popToTop() {}, navigate: (...args) => destinations.push(args),
+    } }))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const name = () => renderer.root.findAllByType('FormField').find(node => node.props.label === '食材名・商品名');
+  const control = label => renderer.root.findByProps({ accessibilityLabel: label });
+  await act(async () => name().props.onChangeText('牛乳'));
+  assert.equal(control('残量').props.value, '1000');
+  assert.equal(renderer.root.findAllByType('FormField').some(node => node.props.label === 'レシピ用分類'), false);
+  assert.ok(control('レシピ用分類を変更'));
+  await act(async () => control('期限を明日にする').props.onPress());
+  assert.equal(renderer.root.findAllByType('DatePickerField').find(node => node.props.label === '期限日').props.value, '2026-10-15');
+  await act(async () => control('数量の単位を変更（ml）').props.onPress());
+  await act(async () => renderer.root.findByType('QuantityUnitSelector').props.onChange('pack'));
+  assert.equal(renderer.root.findAllByType('QuantityUnitSelector').length, 0, 'unit choices close after selection');
+  await act(async () => control('残量').props.onChangeText('2'));
+  await act(async () => name().props.onChangeText('豆腐'));
+  assert.equal(control('残量').props.value, '2');
+  assert.ok(control('数量の単位を変更（パック）'));
+  const save = renderer.root.findByType('PrimaryButton').props.onPress;
+  await act(async () => { await save(); await save(); });
+  assert.equal(context.foods.length, 1);
+  assert.equal(context.foods[0].name, '豆腐');
+  assert.equal(context.foods[0].quantity, 2);
+  assert.equal(context.foods[0].quantityUnit, 'pack');
+  assert.equal(context.foods[0].expiryDate, '2026-10-15');
+  assert.equal(JSON.parse(store.get(storageKeys.foods)).length, 1);
+  assert.equal(destinations.length, 1);
+});
+
+test('unknown classifications and cleared classification errors remain visible in the shorter form', async (t) => {
+  reset(); store.set(storageKeys.foods, '[]');
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
+    React.createElement(AddFoodScreen, { route: { params: {} }, navigation: {} }))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const field = label => renderer.root.findAllByType('FormField').find(node => node.props.label === label);
+  await act(async () => field('食材名・商品名').props.onChangeText('未知の調理品XYZ'));
+  assert.ok(field('レシピ用分類'), 'uncertain automatic classifications must not be hidden');
+  await act(async () => field('レシピ用分類').props.onChangeText('調'));
+  assert.equal(field('レシピ用分類').props.value, '調', 'classification editor must stay open while typing');
+  await act(async () => field('レシピ用分類').props.onChangeText(''));
+  await act(async () => renderer.root.findByType('PrimaryButton').props.onPress());
+  assert.equal(context.foods.length, 0);
+  assert.equal(field('レシピ用分類').props.error, 'レシピ用分類を入力してください。');
+  await act(async () => field('レシピ用分類').props.onChangeText('調理品'));
+  await act(async () => field('食材名・商品名').props.onChangeText('別の商品名'));
+  assert.equal(field('レシピ用分類').props.value, '調理品', 'explicit classification must survive a product-name edit');
+});
+
+test('recent food shortcuts are immediately available and never carry a previous purchase quantity', async (t) => {
+  reset();
+  const previous = { ...createSampleFoods()[0], id: 'recent-milk', quantity: 150, expiryDate: '2000-01-01' };
+  store.set(storageKeys.foods, JSON.stringify([previous]));
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
+    React.createElement(AddFoodScreen, { route: { params: {} }, navigation: {} }))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  assert.equal(renderer.root.findAllByProps({ accessibilityLabel: '前の登録を検索' }).length, 0);
+  await act(async () => renderer.root.findByProps({ accessibilityLabel: `${previous.productName || previous.name}の前回の設定を使う` }).props.onPress());
+  assert.equal(renderer.root.findByProps({ accessibilityLabel: '今回の購入量' }).props.value, '');
+  assert.notEqual(renderer.root.findAllByType('DatePickerField').find(node => node.props.label === '期限日').props.value, previous.expiryDate);
+  await act(async () => renderer.root.findByType('PrimaryButton').props.onPress());
+  assert.equal(context.foods.length, 1, 'a blank new purchase quantity must not be saved');
+});
+
+test('expiry shortcuts follow local midnight and do not silently replace an explicitly chosen date', async (t) => {
+  reset(); store.set(storageKeys.foods, '[]');
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: new Date(2026, 9, 14, 23, 59, 59) });
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
+    React.createElement(AddFoodScreen, { route: { params: { initialName: '卵' } }, navigation: {} }))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const date = () => renderer.root.findAllByType('DatePickerField').find(node => node.props.label === '期限日').props.value;
+  const today = () => renderer.root.findByProps({ accessibilityLabel: '期限を今日にする' });
+  await act(async () => today().props.onPress());
+  assert.equal(date(), '2026-10-14');
+  await act(async () => t.mock.timers.tick(1000));
+  assert.equal(date(), '2026-10-14');
+  assert.equal(today().props.accessibilityState.selected, false);
+  await act(async () => today().props.onPress());
+  assert.equal(date(), '2026-10-15');
 });
 
 test('editing a food retains its values and manual entry does not get replaced by previous registrations', async (t) => {
@@ -1018,9 +1434,9 @@ test('editing a food retains its values and manual entry does not get replaced b
   await act(async () => renderer.unmount());
   await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer), React.createElement(AddFoodScreen, { route: { params: {} }, navigation: {} }))); });
   t.after(async () => { await act(async () => renderer.unmount()); });
-  await act(async () => renderer.root.findAllByType('FormField').find((node) => node.props.label === '表示名').props.onChangeText('手入力の食材'));
+  await act(async () => renderer.root.findAllByType('FormField').find((node) => node.props.label === '食材名・商品名').props.onChangeText('手入力の食材'));
   assert.equal(renderer.root.findAllByType('Text').filter((node) => node.props.children === '前の登録から選ぶ').length, 0);
-  assert.equal(renderer.root.findAllByType('FormField').find((node) => node.props.label === '表示名').props.value, '手入力の食材');
+  assert.equal(renderer.root.findAllByType('FormField').find((node) => node.props.label === '食材名・商品名').props.value, '手入力の食材');
 });
 
 test('food detail reopens used history as a separate new registration', async (t) => {
@@ -1101,6 +1517,65 @@ test('invalid public product text is checked before any local save or publicatio
   await act(async () => renderer.root.findByProps({ accessibilityRole: 'checkbox' }).props.onPress());
   await act(async () => save());
   assert.equal(context.foods.length, 1, 'opting out still allows private names');
+});
+
+test('barcode manual entry focuses the empty name, keeps the lookup notice and can return to scanning without saving', async (t) => {
+  reset();
+  store.set(storageKeys.foods, JSON.stringify([createSampleFoods()[0]]));
+  let renderer, returned = 0;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
+    React.createElement(AddFoodScreen, { navigation: { goBack: () => returned++ }, route: { params: {
+      initialBarcode: '4901234567887', initialLookupSource: 'none',
+      initialLookupNotice: '商品検索が混み合っています。60秒ほど待つか、手入力してください。',
+    } } }))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const name = renderer.root.findAllByType('FormField').find(node => node.props.label === '食材名・商品名');
+  assert.equal(name.props.autoFocus, true); assert.equal(name.props.value, '');
+  assert.ok(renderer.root.findAllByType('Text').some(node => String(node.props.children).includes('60秒')));
+  await act(async () => renderer.root.findByProps({ accessibilityLabel: 'バーコードを読み取り直す' }).props.onPress());
+  assert.equal(returned, 1); assert.equal(context.foods.length, 1); assert.equal(savedProducts.length, 0);
+});
+
+test('ignoring shared information clears its fields in the same form while preserving the barcode and requiring manual input', async (t) => {
+  reset(); store.set(storageKeys.foods, '[]');
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
+    React.createElement(AddFoodScreen, { navigation: { getState: () => ({ index: 1 }), popToTop() {}, navigate() {} }, route: { params: {
+      initialBarcode: '4901234567887', initialLookupSource: 'shared', initialName: '共有テスト牛乳', initialProductName: '共有テスト牛乳',
+      initialIngredientName: '牛乳', initialCategory: '乳製品', initialTags: ['共有テスト'], initialImage: 'https://example.com/shared-image.jpg',
+      initialMemo: 'バーコード: 4901234567887', allowProductSharing: false,
+    } } }))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const field = label => renderer.root.findAllByType('FormField').find(node => node.props.label === label);
+  assert.equal(context.foods.length, 0, 'lookup alone does not save');
+  assert.equal(field('食材名・商品名').props.value, '共有テスト牛乳');
+  await act(async () => renderer.root.findByType('SharedProductReport').props.onIgnore());
+  assert.equal(field('食材名・商品名').props.value, ''); assert.equal(field('食材名・商品名').props.autoFocus, true);
+  assert.equal(renderer.root.findAllByType('SharedProductReport').length, 0);
+  assert.equal(renderer.root.findAllByType('ProductAttribution').length, 0);
+  await act(async () => renderer.root.findByType('PrimaryButton').props.onPress());
+  assert.equal(context.foods.length, 0, 'blank ignored fields cannot be saved');
+  await act(async () => field('食材名・商品名').props.onChangeText('卵'));
+  await act(async () => renderer.root.findByType('PrimaryButton').props.onPress());
+  assert.equal(context.foods.length, 1); assert.equal(context.foods[0].barcode, '4901234567887');
+  assert.equal(context.foods[0].ingredientName, '卵'); assert.ok(!context.foods[0].tags.includes('共有テスト'));
+  assert.notEqual(context.foods[0].image, 'https://example.com/shared-image.jpg');
+  assert.equal(sharedPayloads.length, 0, 'ignored metadata is not republished');
+});
+
+test('external lookup attribution is available in registration without a shared DB report or automatic save', async (t) => {
+  reset(); store.set(storageKeys.foods, '[]');
+  const source = { provider: 'yahoo-shopping', barcode: '4901234567887', productUrl: 'https://shopping.yahoo.co.jp/', fetchedAt: '2026-10-14T00:00:00.000Z' };
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppDataProvider, null, React.createElement(Consumer),
+    React.createElement(AddFoodScreen, { navigation: {}, route: { params: { initialBarcode: source.barcode,
+      initialLookupSource: 'yahoo-shopping', initialProductName: '牛乳', initialIngredientName: '牛乳', initialProductSource: source,
+    } } }))); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  assert.equal(context.foods.length, 0); assert.equal(savedProducts.length, 0);
+  assert.equal(renderer.root.findAllByType('SharedProductReport').length, 0);
+  assert.deepEqual(renderer.root.findByType('ProductAttribution').props.source, source);
+  assert.equal(renderer.root.findAllByType('FormField').find(node => node.props.label === '食材名・商品名').props.autoFocus, false);
 });
 
 test('phase 4 shopping registration shows its linked food and prevents repeating the same purchase in the UI', async (t) => {

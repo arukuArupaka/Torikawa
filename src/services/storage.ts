@@ -12,6 +12,7 @@ export const storageKeys = {
 
 export const generationKey = '@food-manager/active-generation';
 const generationPrefix = '@food-manager/generation/';
+export const RETAINED_GENERATIONS = 2;
 export const snapshotKeys = [storageKeys.foods, storageKeys.recipes, storageKeys.shopping,
   storageKeys.notifications, storageKeys.learnedProducts] as const;
 const isSnapshotKey = (key: string) => (snapshotKeys as readonly string[]).includes(key);
@@ -139,6 +140,48 @@ export function readRecoveryData(): Promise<Record<string, string | null>> {
 
 export class RestoreNeedsReloadError extends Error {}
 
+/** Keep current data and only the retained originals; never interpret unknown IDs as old data. */
+export function pruneGenerations(): Promise<void> {
+  if (restoring || erasing || uncertainCommit) return Promise.resolve();
+  return serialized(async () => {
+    try {
+      if (restoring || erasing || uncertainCommit) return;
+      await assertNoErasure();
+      const current = await readGeneration();
+      if (!current || (knownGeneration !== undefined && knownGeneration !== current)) return;
+      const generations = new Map<string, number>();
+      const entries = (await AsyncStorage.getAllKeys()).flatMap((key) => {
+        if (!key.startsWith(generationPrefix)) return [];
+        const match = /^([0-9a-z]+-[0-9a-z]+)\/(.+)$/.exec(key.slice(generationPrefix.length));
+        if (!match) return [];
+        const [id, suffix] = match.slice(1);
+        const prefix = id.split('-')[0];
+        const timestamp = Number.parseInt(prefix, 36);
+        if (!Number.isSafeInteger(timestamp) || timestamp < 0 || timestamp.toString(36) !== prefix) return [];
+        generations.set(id, timestamp);
+        return [{ key, id, suffix }];
+      });
+      const retained = new Set([current, ...[...generations]
+        .filter(([id]) => id !== current)
+        .sort(([a, timeA], [b, timeB]) => timeB - timeA || b.localeCompare(a))
+        .slice(0, RETAINED_GENERATIONS - 1).map(([id]) => id)]);
+      const obsolete = entries.filter(({ id, suffix }) => id !== current && !(retained.has(id) && suffix === 'original'))
+        // Remove obsolete data before archives, so an interrupted cleanup keeps photo references protected.
+        .sort((a, b) => Number(a.suffix === 'original') - Number(b.suffix === 'original'));
+      for (const { key } of obsolete) {
+        if (restoring || erasing || uncertainCommit) return;
+        if (await readGeneration() !== current) return;
+        if (restoring || erasing || uncertainCommit) return;
+        await AsyncStorage.removeItem(key);
+      }
+      // Photos referenced only by a removed original may now be removed by collectStoredImages.
+      // References in current data and retained/unknown originals remain protected there.
+    } catch (error) {
+      console.warn('古い復元データの整理を次回に延期します。', error);
+    }
+  });
+}
+
 /** Prepare images under the same lock; the head is the only commit point. */
 export async function commitRestoredValues(prepare: () => Promise<Record<string, unknown>>): Promise<void> {
   if (erasing) throw new DataErasurePendingError('削除中は復元できません。');
@@ -190,6 +233,8 @@ export async function commitRestoredValues(prepare: () => Promise<Record<string,
   } finally {
     restoring = false;
   }
+  // Enqueue after leaving the restore lock; nesting serialized operations would deadlock.
+  await pruneGenerations();
 }
 
 /** Delete only after durable saves, including references in retained originals. */

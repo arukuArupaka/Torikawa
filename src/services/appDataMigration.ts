@@ -10,7 +10,9 @@ import { inferFoodCategory, isFoodCategory } from '../utils/foodCategory';
 import { isFoodQuantityUnit } from '../utils/foodQuantity';
 import { normalizeProductToIngredient } from '../utils/ingredientNormalizer';
 import { inferRecipeCategory, isRecipeCategory } from '../utils/recipeCategory';
-import { migrateSampleRecipe } from '../utils/recipeMigration';
+import { hasOriginalRecipeContent, migrateSampleRecipe } from '../utils/recipeMigration';
+import { generatedRecipeImages } from '../data/generatedRecipeImages';
+import legacyRecipeImageAssets from '../data/legacyRecipeImageAssets.v1.json';
 import { isValidServings } from '../utils/recipeServings';
 
 import { validateSnapshot } from './dataValidation';
@@ -78,8 +80,45 @@ function normalizeRecipeImage(recipe: StoredRecipe): string {
   const sampleImage = sampleRecipeImages[recipe.id];
   const legacyImage = legacySampleRecipeImages[recipe.id];
   if (!sampleImage) return recipe.image;
-  if (!recipe.image.trim() || recipe.image === legacyImage) return sampleImage;
+  const original = sampleRecipes.find(sample => sample.id === recipe.id);
+  if (Object.hasOwn(generatedRecipeImages, recipe.id) && recipe.image === 'food-icon:other'
+    && original && hasOriginalRecipeContent(recipe, original)) return sampleImage;
+  if (!recipe.image.trim() || recipe.image === legacyImage || isLegacyBundledRecipeImage(recipe.image, recipe.id)
+    || isSameMetroRecipeImage(recipe.image, sampleImage)) return sampleImage;
   return recipe.image;
+}
+
+/** Only the recorded path AND content hash identify a replaced built-in photo. Personal photos stay untouched. */
+function isLegacyBundledRecipeImage(image: string, id: string): boolean {
+  const asset = legacyRecipeImageAssets.find(record => record.id === id);
+  if (!asset || !/^(?:https?:\/\/|\/|\.\/assets\/)/.test(image)) return false;
+  try {
+    const url = new URL(image, 'https://bundled.invalid/');
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.hash) return false;
+    if (url.pathname === '/assets/') {
+      return ![...url.searchParams.keys()].some(key => !['unstable_path', 'platform', 'hash'].includes(key))
+        && url.searchParams.getAll('unstable_path').length === 1 && url.searchParams.getAll('hash').length === 1
+        && url.searchParams.get('unstable_path') === asset.metroPath && url.searchParams.get('hash') === asset.md5;
+    }
+    const filename = asset.metroPath.slice('./assets/recipes/'.length).replace(/\.jpg$/, `.${asset.md5}.jpg`);
+    return !url.search && url.pathname.endsWith(`/assets/assets/recipes/${filename}`);
+  } catch { return false; }
+}
+
+/** Expo Go hosts change between sessions; match the known asset path and contents, never just its filename. */
+function isSameMetroRecipeImage(savedImage: string, currentImage: string): boolean {
+  try {
+    const saved = new URL(savedImage);
+    const current = new URL(currentImage);
+    if (![saved, current].every(url => ['http:', 'https:'].includes(url.protocol)
+      && !url.username && !url.password && url.pathname === '/assets/')) return false;
+    if (saved.hash || [...saved.searchParams.keys()].some(key => !['unstable_path', 'platform', 'hash'].includes(key))) return false;
+    const assetPath = current.searchParams.get('unstable_path');
+    const hash = current.searchParams.get('hash');
+    return Boolean(assetPath?.startsWith('./assets/recipes/') && hash
+      && saved.searchParams.getAll('unstable_path').length === 1 && saved.searchParams.getAll('hash').length === 1
+      && saved.searchParams.get('unstable_path') === assetPath && saved.searchParams.get('hash') === hash);
+  } catch { return false; }
 }
 
 function normalizeNotificationSettings(

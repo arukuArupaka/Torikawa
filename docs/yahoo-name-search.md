@@ -13,6 +13,17 @@ Yahoo!ショッピングAPI v3のJAN検索を、サーバー経由で利用し�
 
 ID未設定時はAPIが503を返し、アプリはOFF検索・手入力へ進みます。通常のWeb書き出しには検索APIのURLを設定しません。実際のYahoo検索を有効にするにはIDの設定が必要です。GitHub PagesやNetlifyへの静的ファイル配置だけではこのサーバーは動きません。
 
+## iPhoneのExpo Goで有効にする
+
+Expo Goの開発サーバーを起動しただけでは、Yahoo検索APIは起動しません。`YAHOO_SHOPPING_APP_ID` が設定済みでも、`EXPO_PUBLIC_YAHOO_LOOKUP_URL` が空ならYahoo検索を使わず、次の検索先へ進みます。
+
+1. 前述の `serve-web-test.cjs ... --yahoo` を起動し、そのサーバーにHTTPSのトンネルを接続する。Expo Goのトンネルとは別の接続です。
+2. Git対象外の `.env.local` に `EXPO_PUBLIC_YAHOO_LOOKUP_URL=https://接続先/api/yahoo-product` を設定する。iPhoneでは `/api/yahoo-product` だけの相対URLやPCのlocalhostを使わない。Client IDはサーバー用の `.env` に残す。
+3. Expo Goを完全に再読み込みする。設定が反映されない場合はExpoの開発サーバーを再起動し、新しいQRコードから開く。
+4. バーコード画面の検索先案内に「Yahoo!ショッピング（商品名のみ）」があることを確認し、商品を読み取る。Yahooで見つかると、登録画面の取得元に「Yahoo!ショッピング」が表示される。写真は食材アイコンまたは自分の写真を使う。
+
+ネイティブの通常のfetchにはWebのOriginヘッダーがなく、現在の検索APIはこの要求を受け付けます。Webの別Originを許可する変更は行いません。サーバーとトンネルはテスト中に起動しておきます。一時トンネルのURLが変わったら `.env.local` のURLも更新してください。これは手元の実機確認用で、公開版には固定のHTTPS APIと利用制限の設計が必要です。
+
 ## 通信と制限
 
 検索APIは `GET /api/yahoo-product?barcode=JANコード` です。8桁または13桁のチェックディジットを検証し、検索先は固定のYahoo APIだけです。在庫・数量・期限・メモ・写真は送信しません。応答にIDや画像URLを含めず、上流の例外も返しません。商品情報の永続DBはサーバーに作りません。
@@ -21,6 +32,8 @@ ID未設定時はAPIが503を返し、アプリはOFF検索・手入力へ進み
 
 ## 出典と残る確認事項
 
-検索を設定したアプリには「Webサービス by Yahoo! JAPAN」を下部に表示します。Web版では公式のテキストリンクと余白を使います。[公式のクレジット表示](https://developer.yahoo.co.jp/attribution/)、[ID管理](https://e.developer.yahoo.co.jp/)、[商品検索仕様](https://developer.yahoo.co.jp/webapi/shopping/v3/itemsearch.html)を参照してください。
+Expo Go・iOS・Android版では、設定の「外部サービス・ライセンス」に「Webサービス by Yahoo! JAPAN」と公式リンクをまとめ、各画面の下部には固定表示しません。Web版は検索の接続設定があるとき、引き続き公式のテキストリンクと余白で下部に表示します。表示の有無は、実際の検索接続の成功・失敗を示すものではありません。
+
+[公式のクレジット表示](https://developer.yahoo.co.jp/attribution/)には全画面への常時表示までは明記されていないため、ネイティブ版のアプリ内表示は設定にまとめています。これは公開時に必要な自サイト、または自サイトがない場合のストアページ下部へのクレジットを代替するものではありません。公開時にはその表示先も確認してください。[ID管理](https://e.developer.yahoo.co.jp/)、[商品検索仕様](https://developer.yahoo.co.jp/webapi/shopping/v3/itemsearch.html)も参照してください。
 
 この変更は画像とIDの扱いを改善するもので、商品名の保存・再利用や将来の広告・課金を含む全用途の適法性・規約適合性を保証するものではありません。登録前には商品名とパッケージの期限を本人が確認します。

@@ -3,13 +3,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { CompositeScreenProps } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Animated, Pressable, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SectionHeader } from '../components/SectionHeader';
 import { SwipeableFoodCard } from '../components/SwipeableFoodCard';
 import { MotionIconButton } from '../components/MotionIconButton';
+import { PrimaryButton } from '../components/PrimaryButton';
 import { SelectionHighlight } from '../components/SelectionHighlight';
 import { colors, radius, spacing } from '../constants/theme';
 import { useFoodData } from '../context/AppDataContext';
@@ -36,6 +37,9 @@ type FoodSection = {
 };
 
 type HomeViewMode = 'expiry' | 'storage' | 'category';
+type ExpiryFilter = 'all' | 'expired' | 'today' | 'soon';
+
+const expiryFilterLabels = { expired: '期限切れ', today: '今日まで', soon: '明日〜3日以内' };
 
 const viewModeOptions: { key: HomeViewMode; label: string }[] = [
   { key: 'expiry', label: '期限順' },
@@ -47,14 +51,14 @@ export function HomeScreen({ navigation }: Props) {
   const alert = useAppAlert();
   const statusFeedback = useFoodStatusFeedback();
   const { foods, addShoppingItem, markFoodDisposed, markFoodUsed } = useFoodData();
-  const [expiredOnly, setExpiredOnly] = useState(false);
+  const [expiryFilter, setExpiryFilter] = useState<ExpiryFilter>('all');
   const [query, setQuery] = useState('');
   const [viewMode, setViewMode] = useState<HomeViewMode>('expiry');
-  const listMotion = useViewModeFade(viewMode);
+  const listMotion = useViewModeFade(`${viewMode}-${expiryFilter}`);
   const [viewModeWidth, setViewModeWidth] = useState(0);
   const listMotionStyle = { opacity: listMotion.opacity, transform: [{ translateY: listMotion.translateY }] };
   const currentDay = useCurrentDay();
-  const swipeGuideCheckStarted = useRef(false);
+  const [showSwipeGuide, setShowSwipeGuide] = useState(false);
   const activeFoods = useMemo(
     () => foods.filter((food) => food.status === 'active'),
     [foods],
@@ -72,14 +76,18 @@ export function HomeScreen({ navigation }: Props) {
   const hasUrgentFoods = expirySummary.today + expirySummary.soon > 0;
 
   useEffect(() => {
-    if (expiredOnly && expirySummary.expired === 0) setExpiredOnly(false);
-  }, [expiredOnly, expirySummary.expired]);
+    if (expiryFilter === 'expired' && expirySummary.expired === 0) setExpiryFilter('all');
+  }, [expiryFilter, expirySummary.expired]);
 
   const sections = useMemo<FoodSection[]>(() => {
     const today = parseDate(currentDay);
     const normalizedQuery = query.trim().toLocaleLowerCase('ja-JP');
     const filtered = activeFoods
-      .filter((food) => !expiredOnly || daysUntil(food.expiryDate, today) < 0)
+      .filter((food) => {
+        const days = daysUntil(food.expiryDate, today);
+        return expiryFilter === 'all' || (expiryFilter === 'expired' && days < 0)
+          || (expiryFilter === 'today' && days === 0) || (expiryFilter === 'soon' && days >= 1 && days <= 3);
+      })
       .filter((food) =>
         !normalizedQuery
         || getFoodSearchTerms(food).some((term) => term.toLocaleLowerCase('ja-JP').includes(normalizedQuery)),
@@ -111,29 +119,20 @@ export function HomeScreen({ navigation }: Props) {
       }) },
       { key: 'other', title: 'その他', tone: 'green', foods: filtered.filter((food) => daysUntil(food.expiryDate, today) > 3) },
     ];
-  }, [activeFoods, currentDay, query, viewMode, expiredOnly]);
+  }, [activeFoods, currentDay, query, viewMode, expiryFilter]);
+
+  const showExpiryFilter = (filter: ExpiryFilter) => {
+    setExpiryFilter(filter);
+    setQuery('');
+    setViewMode('expiry');
+  };
 
   useEffect(() => {
-    if (activeFoods.length === 0 || swipeGuideCheckStarted.current) return;
-    swipeGuideCheckStarted.current = true;
     let mounted = true;
 
     void loadStoredValue<boolean>(storageKeys.swipeGuideSeen)
       .then((seen) => {
-        if (!mounted || seen) return;
-        alert(
-          '食材カードの操作',
-          '食材カードを右にスワイプすると「捨てた」、左にスワイプすると「使い切った」として記録できます。',
-          [{
-            text: 'OK',
-            onPress: () => {
-              void saveStoredValue(storageKeys.swipeGuideSeen, true).catch((error) => {
-                console.warn('スワイプ操作ガイドの確認状態を保存できませんでした。', error);
-              });
-            },
-          }],
-          { cancelable: false },
-        );
+        if (mounted) setShowSwipeGuide(!seen);
       })
       .catch((error) => {
         console.warn('スワイプ操作ガイドの状態を読み込めませんでした。', error);
@@ -142,7 +141,14 @@ export function HomeScreen({ navigation }: Props) {
     return () => {
       mounted = false;
     };
-  }, [activeFoods.length]);
+  }, []);
+
+  const dismissSwipeGuide = () => {
+    setShowSwipeGuide(false);
+    void saveStoredValue(storageKeys.swipeGuideSeen, true).catch((error) => {
+      console.warn('スワイプ操作ガイドの確認状態を保存できませんでした。', error);
+    });
+  };
 
   const confirmStatusChange = (food: FoodItem, status: 'used' | 'disposed') => {
     const isUsed = status === 'used';
@@ -211,8 +217,8 @@ export function HomeScreen({ navigation }: Props) {
           onPress={() => navigation.navigate('FoodDetail', { foodId: food.id })} /></Animated.View>}
         ListHeaderComponent={<>
         {expirySummary.expired > 0 ? <Pressable accessibilityRole="button" accessibilityLabel={`期限切れ${expirySummary.expired}件を確認`}
-          accessibilityState={{ selected: expiredOnly }} aria-pressed={expiredOnly}
-          onPress={() => { setExpiredOnly(true); setQuery(''); setViewMode('expiry'); }} style={styles.expiredNotice}>
+          accessibilityState={{ selected: expiryFilter === 'expired' }} aria-pressed={expiryFilter === 'expired'}
+          onPress={() => showExpiryFilter('expired')} style={styles.expiredNotice}>
           <Text style={styles.expiredTitle}>期限切れ {expirySummary.expired}件を確認</Text>
           <Text style={styles.expiredHint}>期限と状態を確認してください。食べられるかどうかを判定する表示ではありません。</Text>
         </Pressable> : null}
@@ -223,15 +229,25 @@ export function HomeScreen({ navigation }: Props) {
               <Text style={styles.summaryScope}>在庫全体</Text>
             </View>
             <View style={styles.summaryCounts}>
-              <View accessible accessibilityLabel={`今日まで ${expirySummary.today}件`} style={styles.summaryCount}>
+              <Pressable accessibilityRole="button" accessibilityLabel={`今日まで ${expirySummary.today}件`}
+                accessibilityHint="今日が期限の食材だけを表示します。"
+                accessibilityState={{ selected: expiryFilter === 'today' }} aria-pressed={expiryFilter === 'today'}
+                onPress={() => showExpiryFilter('today')}
+                style={({ pressed }) => [styles.summaryCount, expiryFilter === 'today' && styles.selectedSummaryCount, pressed && styles.summaryCountPressed]}>
                 <Text style={styles.summaryLabel}>今日まで</Text>
                 <Text style={styles.summaryNumber}>{expirySummary.today}<Text style={styles.summaryUnit}> 件</Text></Text>
-              </View>
+                <View style={styles.summaryLink}><Text style={styles.summaryLinkText}>食材を見る</Text><Ionicons name="chevron-forward" size={14} color={colors.primaryDark} /></View>
+              </Pressable>
               <View style={styles.summaryDivider} />
-              <View accessible accessibilityLabel={`明日から3日以内 ${expirySummary.soon}件`} style={styles.summaryCount}>
+              <Pressable accessibilityRole="button" accessibilityLabel={`明日から3日以内 ${expirySummary.soon}件`}
+                accessibilityHint="明日から3日後が期限の食材だけを表示します。"
+                accessibilityState={{ selected: expiryFilter === 'soon' }} aria-pressed={expiryFilter === 'soon'}
+                onPress={() => showExpiryFilter('soon')}
+                style={({ pressed }) => [styles.summaryCount, expiryFilter === 'soon' && styles.selectedSummaryCount, pressed && styles.summaryCountPressed]}>
                 <Text style={styles.summaryLabel}>明日〜3日以内</Text>
                 <Text style={styles.summaryNumber}>{expirySummary.soon}<Text style={styles.summaryUnit}> 件</Text></Text>
-              </View>
+                <View style={styles.summaryLink}><Text style={styles.summaryLinkText}>食材を見る</Text><Ionicons name="chevron-forward" size={14} color={colors.primaryDark} /></View>
+              </Pressable>
             </View>
             {!hasUrgentFoods ? <Text style={styles.summaryEmpty}>{expirySummary.expired > 0 ? '期限内で3日以内の食材はありません' : '期限が近い食材はありません'}</Text> : null}
             <Pressable
@@ -274,8 +290,10 @@ export function HomeScreen({ navigation }: Props) {
           />
         </View>
 
-        {expiredOnly ? <Pressable accessibilityRole="button" onPress={() => setExpiredOnly(false)} style={styles.expiredNotice}>
-          <Text style={styles.expiredTitle}>期限切れのみ表示中 · すべての食材に戻す</Text>
+        {expiryFilter !== 'all' ? <Pressable accessibilityRole="button" accessibilityLabel="絞り込みを解除してすべての食材を表示"
+          onPress={() => showExpiryFilter('all')} style={[styles.filterNotice, expiryFilter === 'expired' && styles.expiredNotice]}>
+          <Text style={[styles.filterTitle, expiryFilter === 'expired' && styles.expiredTitle]}>{expiryFilterLabels[expiryFilter]}のみ表示中 · すべての食材に戻す</Text>
+          <Ionicons name="close-circle-outline" size={20} color={expiryFilter === 'expired' ? colors.danger : colors.primaryDark} />
         </Pressable> : null}
 
         <View style={styles.viewModeTabs}>
@@ -298,12 +316,16 @@ export function HomeScreen({ navigation }: Props) {
           </View>
         </View>
 
-        {activeFoods.length > 0 ? (
+        {activeFoods.length > 0 && showSwipeGuide ? (
           <View style={styles.swipeHint}>
             <Ionicons color={colors.primary} name="swap-horizontal-outline" size={18} />
             <Text style={styles.swipeHintText}>
-              右スワイプ：捨てた　／　左スワイプ：使い切った
+              {'左へスワイプ：使い切った\n右へスワイプ：捨てた'}
             </Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="スワイプ操作の案内を閉じる"
+              onPress={dismissSwipeGuide} style={styles.swipeHintClose}>
+              <Ionicons color={colors.textMuted} name="close" size={20} />
+            </Pressable>
           </View>
         ) : null}
 
@@ -312,13 +334,17 @@ export function HomeScreen({ navigation }: Props) {
             <Ionicons color={colors.primary} name="leaf-outline" size={48} />
             <Text style={styles.emptyTitle}>食材を登録してみましょう</Text>
             <Text style={styles.emptyText}>期限が近い食材をここで確認できます。</Text>
+            <View style={styles.emptyActions}>
+              <PrimaryButton icon="add-outline" label="食材を登録" onPress={() => navigation.navigate('AddFood')} />
+              <PrimaryButton icon="barcode-outline" label="バーコードで登録" onPress={() => navigation.navigate('Barcode')} variant="outline" />
+            </View>
           </View>
         ) : null}
 
         {activeFoods.length > 0 && sections.every((section) => section.foods.length === 0) ? (
-          <Text style={styles.noResults}>{query.trim()
+          <Text accessibilityLiveRegion="polite" style={styles.noResults}>{query.trim()
             ? `「${query}」に一致する食材はありません。`
-            : expiredOnly ? '「期限切れ」の食材はありません。' : '食材はありません。'}</Text>
+            : expiryFilter !== 'all' ? `「${expiryFilterLabels[expiryFilter]}」の食材はありません。` : '食材はありません。'}</Text>
         ) : null}
         </>}
       />
@@ -336,11 +362,18 @@ const styles = StyleSheet.create({
   summaryTitle: { color: colors.text, fontSize: 16, fontWeight: '700' },
   summaryScope: { color: colors.primaryDark, fontSize: 12 },
   summaryCounts: { alignItems: 'center', flexDirection: 'row', marginVertical: 12 },
-  summaryCount: { flex: 1 },
+  summaryCount: { flex: 1, minHeight: 88, borderRadius: radius.sm, borderWidth: 1, borderColor: 'transparent', padding: spacing.sm },
+  selectedSummaryCount: { backgroundColor: colors.surface, borderColor: colors.primary },
+  summaryCountPressed: { opacity: 0.7 },
+  summaryLink: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 },
+  summaryLinkText: { color: colors.primaryDark, fontSize: 12, fontWeight: '600' },
   summaryLabel: { color: colors.primaryDark, fontSize: 13, fontWeight: '600' },
   summaryNumber: { color: colors.text, fontSize: 28, fontWeight: '800', lineHeight: 36 },
   summaryUnit: { fontSize: 14, fontWeight: '500' },
-  summaryDivider: { alignSelf: 'stretch', backgroundColor: '#CBE4D0', marginRight: spacing.md, width: 1 },
+  summaryDivider: { alignSelf: 'stretch', backgroundColor: '#CBE4D0', marginHorizontal: spacing.sm, width: 1 },
+  filterNotice: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.primarySoft,
+    borderRadius: radius.sm, padding: spacing.md, marginTop: spacing.sm },
+  filterTitle: { flex: 1, color: colors.primaryDark, fontSize: 14, fontWeight: '700', lineHeight: 21 },
   summaryEmpty: { color: colors.primaryDark, fontSize: 13, marginBottom: 12 },
   recipeButton: { alignItems: 'center', backgroundColor: colors.primaryDark, borderRadius: radius.sm, flexDirection: 'row', gap: spacing.sm, minHeight: 46, paddingHorizontal: 12, paddingVertical: 10 },
   recipeButtonPressed: { opacity: 0.8 },
@@ -373,11 +406,14 @@ const styles = StyleSheet.create({
   viewModeTab: { alignItems: 'center', borderRadius: 7, flex: 1, justifyContent: 'center', minHeight: 44, paddingVertical: 6 },
   viewModeText: { color: colors.textMuted, fontSize: 13, fontWeight: '700' },
   selectedViewModeText: { color: colors.primaryDark },
-  swipeHint: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm, paddingHorizontal: 2, paddingVertical: 4 },
-  swipeHintText: { color: colors.textMuted, flex: 1, fontSize: 12, lineHeight: 18 },
+  swipeHint: { alignItems: 'center', backgroundColor: colors.primarySoft, borderRadius: radius.sm, flexDirection: 'row', gap: spacing.sm,
+    marginTop: spacing.sm, marginBottom: spacing.sm, paddingLeft: spacing.sm, paddingRight: spacing.xs, paddingVertical: spacing.xs },
+  swipeHintText: { color: colors.textMuted, flex: 1, fontSize: 13, lineHeight: 20 },
+  swipeHintClose: { alignItems: 'center', justifyContent: 'center', minHeight: 44, minWidth: 44 },
   list: { gap: spacing.sm },
   empty: { alignItems: 'center', paddingHorizontal: spacing.lg, paddingTop: 70 },
   emptyTitle: { color: colors.text, fontSize: 18, fontWeight: '700', marginTop: spacing.md },
   emptyText: { color: colors.textMuted, marginTop: spacing.sm, textAlign: 'center' },
+  emptyActions: { alignSelf: 'stretch', gap: spacing.sm, marginTop: spacing.lg },
   noResults: { color: colors.textMuted, paddingVertical: 60, textAlign: 'center' },
 });

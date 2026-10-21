@@ -3,7 +3,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useRef, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -27,6 +26,7 @@ import { getStorageEpoch, assertStorageEpoch } from '../services/storage';
 import { NewRecipe, RecipeCategory } from '../types';
 import { inferRecipeCategory } from '../utils/recipeCategory';
 import { isValidServings, parseServingsInput } from '../utils/recipeServings';
+import { getRecipeFallbackImage } from '../utils/recipeImages';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddRecipe'>;
 
@@ -41,7 +41,7 @@ type StepInput = {
   text: string;
 };
 
-const fallbackImage = 'https://images.unsplash.com/photo-1547592180-85f173990554?w=800';
+const fallbackImage = getRecipeFallbackImage('other');
 
 function createLocalId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -75,6 +75,7 @@ export function AddRecipeScreen({ navigation, route }: Props) {
   );
   const [submitted, setSubmitted] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const savingLock = useRef(false);
   const formEpoch = useRef(getStorageEpoch());
 
   const parsedMinutes = Number(minutes);
@@ -124,7 +125,8 @@ export function AddRecipeScreen({ navigation, route }: Props) {
       alert('材料名が重複しています', '同じ材料は1件にまとめて入力してください。');
       return;
     }
-    if (isSaving) return;
+    if (savingLock.current) return;
+    savingLock.current = true;
     setIsSaving(true);
 
     let savedImage = image;
@@ -134,6 +136,7 @@ export function AddRecipeScreen({ navigation, route }: Props) {
       console.warn('レシピ画像を保存できませんでした。', error);
       alert('画像を保存できませんでした', '別の画像を選ぶか、もう一度お試しください。');
       setIsSaving(false);
+      savingLock.current = false;
       return;
     }
 

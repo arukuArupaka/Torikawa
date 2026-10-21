@@ -33,7 +33,8 @@ test('unconfigured privacy view describes retention without presenting a publish
   try {
     await act(async () => { renderer = create(React.createElement(AppInformationScreen, { navigation: { goBack() {} }, route: { params: { section: 'privacy' } } })); });
     const text = JSON.stringify(renderer.toJSON());
-    assert.match(text, /退避データは現在、自動では期限切れにならず/);
+    assert.match(text, /復元前の原本は通常2世代分を保持/);
+    assert.match(text, /日時を判別できない世代は安全のため残します/);
     assert.match(text, /公開用プライバシーポリシーは準備中/);
     assert.equal(renderer.root.findAllByProps({ accessibilityRole: 'link' }).length, 0);
   } finally { if (renderer) await act(async () => renderer.unmount()); restore(); }
@@ -54,4 +55,34 @@ test('configured contact and policy open the specified destinations; link failur
     await act(async () => { renderer.root.findByProps({ accessibilityLabel: 'メールで問い合わせる' }).props.onPress(); });
     assert.equal(alerts.at(-1)[0], 'リンクを開けませんでした');
   } finally { if (renderer) await act(async () => renderer.unmount()); restore(); }
+});
+
+test('external service information retains the full Yahoo credit and working official link', async t => {
+  clear();
+  t.after(restore);
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppInformationScreen, {
+    navigation: { goBack() {} }, route: { params: { section: 'services' } },
+  })); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const credits = renderer.root.findAllByType('Text').filter(node =>
+    node.props.children === 'Webサービス by Yahoo! JAPAN （https://developer.yahoo.co.jp/sitemap/）');
+  assert.equal(credits.length, 1);
+  assert.equal(credits[0].props.selectable, true);
+  await act(async () => renderer.root.findByProps({ accessibilityLabel: 'Yahoo!デベロッパーネットワーク' }).props.onPress());
+  assert.deepEqual(opened, ['https://developer.yahoo.co.jp/sitemap/']);
+  assert.deepEqual(alerts, []);
+});
+
+test('image information distinguishes generated recipe illustrations from retained personal images', async t => {
+  clear(); t.after(restore);
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppInformationScreen, {
+    navigation: { goBack() {} }, route: { params: { section: 'services' } },
+  })); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const text = JSON.stringify(renderer.toJSON());
+  assert.match(text, /内蔵レシピの画像はAI生成/);
+  assert.match(text, /利用者が選んだ写真や、以前保存した外部画像はそのまま保持/);
+  assert.doesNotMatch(text, /Unsplash/);
 });

@@ -36,14 +36,17 @@ const server = http.createServer((request, response) => {
   response.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
   response.setHeader('X-Content-Type-Options', 'nosniff');
   response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  if (new URL(request.url, 'http://localhost').pathname === '/api/yahoo-product' && yahooHandler) {
+  let url;
+  try { url = new URL(request.url, 'http://localhost'); }
+  catch { response.writeHead(400).end(); return; }
+  if (url.pathname === '/api/yahoo-product' && yahooHandler) {
     void yahooHandler(request, response); return;
   }
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     response.writeHead(405, { Allow: 'GET, HEAD' }).end(); return;
   }
   let pathname;
-  try { pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname); }
+  try { pathname = decodeURIComponent(url.pathname); }
   catch { response.writeHead(400).end(); return; }
   const file = path.resolve(root, '.' + (pathname === '/' ? '/index.html' : pathname));
   if (!manifest.has(file) || !file.startsWith(root + path.sep)) {

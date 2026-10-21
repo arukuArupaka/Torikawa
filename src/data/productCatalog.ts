@@ -17,7 +17,7 @@ const sampleMilkInfo = normalizeProductToIngredient('明治おいしい牛乳');
 export const sampleMilkProduct: BarcodeProduct = {
   barcode: '4901234567894',
   name: '明治おいしい牛乳',
-  image: 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=300',
+  image: 'food-icon:dairy',
   category: sampleMilkInfo.categoryLabel,
   ingredientName: sampleMilkInfo.ingredientName,
   tags: sampleMilkInfo.tags,

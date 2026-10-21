@@ -1,0 +1,42 @@
+[
+  {
+    "id": "recipe-1",
+    "metroPath": "./assets/recipes/pork-cabbage-miso-stir-fry.jpg",
+    "md5": "46a7b199774ae623e80483222448a677"
+  },
+  {
+    "id": "recipe-2",
+    "metroPath": "./assets/recipes/fluffy-omelette.jpg",
+    "md5": "2214cf0814cd8f99bce25b81aa34127b"
+  },
+  {
+    "id": "recipe-3",
+    "metroPath": "./assets/recipes/tofu-wakame-miso-soup.jpg",
+    "md5": "83654f42224bfc2f4f903db8e29231dd"
+  },
+  {
+    "id": "recipe-4",
+    "metroPath": "./assets/recipes/cabbage-egg-stir-fry.jpg",
+    "md5": "be4d31dc00cbc45a0672a9ca7a73b2c1"
+  },
+  {
+    "id": "recipe-5",
+    "metroPath": "./assets/recipes/milk-potage.jpg",
+    "md5": "4a86e7f106718840ab78a4852eff8a0d"
+  },
+  {
+    "id": "recipe-6",
+    "metroPath": "./assets/recipes/tofu-steak.jpg",
+    "md5": "1fa22fc83e664baf1d25e379e4983ae6"
+  },
+  {
+    "id": "recipe-7",
+    "metroPath": "./assets/recipes/vegetable-soup.jpg",
+    "md5": "405686863e2820d0a5d2d02f91938fae"
+  },
+  {
+    "id": "recipe-8",
+    "metroPath": "./assets/recipes/egg-sandwich.jpg",
+    "md5": "764b73afa67185298ca7bfd9016179f1"
+  }
+]

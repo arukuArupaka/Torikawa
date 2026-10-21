@@ -72,7 +72,7 @@ function validateImages(payload: BackupPayload): void {
   for (const uri of imageUris(payload)) {
     if (uri.startsWith('data:')) embedded(uri);
     if (uri.startsWith(IMAGE_REF) && (!payload.images || !Object.hasOwn(payload.images, uri.slice(IMAGE_REF.length)))) throw new Error('参照する写真がありません。');
-    if (uri.startsWith(ASSET_REF) && !/^recipe-[1-8]$/.test(uri.slice(ASSET_REF.length))) throw new Error('対応していない組み込み画像です。');
+    if (uri.startsWith(ASSET_REF) && !Object.hasOwn(bundledImages(), uri.slice(ASSET_REF.length))) throw new Error('対応していない組み込み画像です。');
   }
 }
 export type PreparedBackup = { contents: string; bytes: number; embeddedCount: number; externalCount: number; storageEpoch: number };

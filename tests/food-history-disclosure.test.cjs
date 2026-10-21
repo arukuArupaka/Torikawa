@@ -10,6 +10,8 @@ const original = Module._load;
 Module._load = function(request, ...args) {
   if (request === 'react-native') return { StyleSheet: { create: (styles) => styles }, ScrollView: 'ScrollView', Text: 'Text', View: 'View', Pressable: 'Pressable' };
   if (request === '@expo/vector-icons') return { Ionicons: 'Icon' };
+  if (request === 'react-native-safe-area-context') return { useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) };
+  if (request.endsWith('/services/storage')) return { getStorageEpoch: () => 0, assertStorageEpoch() {} };
   if (request.endsWith('/context/AppDataContext')) return { useAppData: () => data };
   if (request.endsWith('/context/AppAlertContext')) return { useAppAlert: () => () => {} };
   if (request.endsWith('/hooks/useCurrentDay')) return { useCurrentDay: () => '2026-10-14' };

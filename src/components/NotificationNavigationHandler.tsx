@@ -39,13 +39,16 @@ export function NotificationNavigationHandler({
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
+    let active = true;
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      void handleResponse(response);
+      if (active) void handleResponse(response);
     });
     void Notifications.getLastNotificationResponseAsync().then((response) => {
-      if (response) void handleResponse(response);
+      // Loading, restoration or unmounting can replace this food/navigation snapshot
+      // before the native response arrives. Only the current effect may consume it.
+      if (active && response) void handleResponse(response);
     }).catch((error) => console.warn('起動時の通知を確認できませんでした。', error));
-    return () => subscription.remove();
+    return () => { active = false; subscription.remove(); };
   }, [handleResponse]);
 
   useEffect(() => {
