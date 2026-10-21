@@ -1,14 +1,14 @@
 'use strict';
 const fs = require('node:fs');
 
-const fields = ['operator', 'supportEmail', 'privacyPolicyUrl'];
+const fields = ['operator', 'supportFormUrl', 'privacyPolicyUrl'];
 function validatePublicationConfig(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('公開設定はJSONオブジェクトで指定してください。');
   }
   if (Object.keys(value).some(key => !fields.includes(key))) {
     // Never echo an unexpected key or value: it might contain a credential.
-    throw new Error('公開設定には運営者・問い合わせメール・ポリシーURLの3項目だけを指定してください。');
+    throw new Error('公開設定には運営者・問い合わせフォームURL・ポリシーURLの3項目だけを指定してください。');
   }
   const result = {};
   for (const field of fields) {
@@ -19,14 +19,13 @@ function validatePublicationConfig(value) {
     result[field] = value[field].trim();
   }
   if (result.operator.length > 120) throw new Error('運営者表示名は120文字以内で指定してください。');
-  if (result.supportEmail.length > 254 || !/^[^\s@?&#]+@[^\s@?&#]+\.[^\s@?&#]+$/.test(result.supportEmail)) {
-    throw new Error('問い合わせメールの形式が不正です。');
+  for (const [field, label] of [['supportFormUrl', '問い合わせフォームURL'], ['privacyPolicyUrl', 'ポリシーURL']]) {
+    try {
+      const url = new URL(result[field]);
+      if (url.protocol !== 'https:' || url.username || url.password || result[field].length > 2048) throw Error();
+      result[field] = url.href;
+    } catch { throw new Error(`${label}は認証情報を含まないHTTPSのURLで指定してください。`); }
   }
-  try {
-    const url = new URL(result.privacyPolicyUrl);
-    if (url.protocol !== 'https:' || url.username || url.password || result.privacyPolicyUrl.length > 2048) throw Error();
-    result.privacyPolicyUrl = url.href;
-  } catch { throw new Error('ポリシーURLは認証情報を含まないHTTPSのURLで指定してください。'); }
   return result;
 }
 
@@ -50,7 +49,8 @@ function createWebTestEnvironment(parentEnvironment, { basePath = '', yahooEnabl
     EXPO_PUBLIC_YAHOO_LOOKUP_URL: yahooEnabled ? '/api/yahoo-product' : '',
     EXPO_PUBLIC_SHARED_PRODUCTS_URL: '',
     EXPO_PUBLIC_OPERATOR_NAME: contact?.operator ?? '',
-    EXPO_PUBLIC_SUPPORT_EMAIL: contact?.supportEmail ?? '',
+    EXPO_PUBLIC_SUPPORT_FORM_URL: contact?.supportFormUrl ?? '',
+    EXPO_PUBLIC_SUPPORT_EMAIL: '',
     EXPO_PUBLIC_PRIVACY_POLICY_URL: contact?.privacyPolicyUrl ?? '',
   });
   // Server-only Yahoo configuration has no role in the export process.

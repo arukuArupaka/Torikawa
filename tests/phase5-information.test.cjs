@@ -16,9 +16,9 @@ Module._load = function(request, ...args) {
   if (request.startsWith('../components/')) { const name = request.split('/').at(-1); return { [name]: (props) => React.createElement(name, props) }; }
   return original.call(this, request, ...args);
 };
-const { publicHttpsUrl } = require('../src/constants/publication.ts');
+const { publicHttpsUrl, getPublicationInformation } = require('../src/constants/publication.ts');
 const { AppInformationScreen } = require('../src/screens/AppInformationScreen.tsx');
-const keys = ['EXPO_PUBLIC_OPERATOR_NAME', 'EXPO_PUBLIC_SUPPORT_EMAIL', 'EXPO_PUBLIC_PRIVACY_POLICY_URL'];
+const keys = ['EXPO_PUBLIC_OPERATOR_NAME', 'EXPO_PUBLIC_SUPPORT_FORM_URL', 'EXPO_PUBLIC_SUPPORT_EMAIL', 'EXPO_PUBLIC_PRIVACY_POLICY_URL'];
 const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 const clear = () => { keys.forEach((key) => delete process.env[key]); alerts.length = 0; opened.length = 0; failLink = false; };
 const restore = () => keys.forEach((key) => { if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key]; });
@@ -26,6 +26,18 @@ const restore = () => keys.forEach((key) => { if (saved[key] === undefined) dele
 test('policy URLs reject executable schemes, HTTP and embedded credentials', () => {
   for (const value of ['', 'javascript:alert(1)', 'http://example.com', 'https://user:pass@example.com', 'broken']) assert.equal(publicHttpsUrl(value), null);
   assert.equal(publicHttpsUrl(' https://example.com/privacy '), 'https://example.com/privacy');
+});
+
+test('support form accepts HTTPS without an email and rejects unsafe or malformed destinations', t => {
+  clear(); t.after(restore);
+  for (const value of ['', 'mailto:support@example.com', 'javascript:alert(1)', 'http://example.com/contact',
+    'https://user:password@example.com/contact', 'https://example.com/\ncontact', `https://example.com/${'a'.repeat(2048)}`]) {
+    process.env.EXPO_PUBLIC_SUPPORT_FORM_URL = value;
+    assert.equal(getPublicationInformation().supportFormUrl, null, value);
+  }
+  process.env.EXPO_PUBLIC_SUPPORT_FORM_URL = ' https://forms.example/contact?source=app&lang=ja ';
+  assert.equal(getPublicationInformation().supportFormUrl, 'https://forms.example/contact?source=app&lang=ja');
+  assert.equal(getPublicationInformation().supportEmail, null);
 });
 
 test('unconfigured privacy view describes retention without presenting a published policy or contact', async () => {
@@ -36,25 +48,45 @@ test('unconfigured privacy view describes retention without presenting a publish
     assert.match(text, /復元前の原本は通常2世代分を保持/);
     assert.match(text, /日時を判別できない世代は安全のため残します/);
     assert.match(text, /公開用プライバシーポリシーは準備中/);
+    assert.match(text, /公開用の問い合わせフォームは準備中/);
     assert.equal(renderer.root.findAllByProps({ accessibilityRole: 'link' }).length, 0);
   } finally { if (renderer) await act(async () => renderer.unmount()); restore(); }
 });
 
-test('configured contact and policy open the specified destinations; link failures are recoverable', async () => {
+test('configured form and policy open only the specified destinations; link failures are recoverable', async () => {
   clear(); let renderer;
   process.env.EXPO_PUBLIC_OPERATOR_NAME = 'テスト運営者';
-  process.env.EXPO_PUBLIC_SUPPORT_EMAIL = 'support@example.com';
+  process.env.EXPO_PUBLIC_SUPPORT_FORM_URL = 'https://example.com/contact?source=app&lang=ja';
   process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL = 'https://example.com/privacy';
   try {
     await act(async () => { renderer = create(React.createElement(AppInformationScreen, { navigation: { goBack() {} }, route: { params: { section: 'privacy' } } })); });
     assert.match(JSON.stringify(renderer.toJSON()), /テスト運営者/);
     await act(async () => { renderer.root.findByProps({ accessibilityLabel: 'プライバシーポリシーを開く' }).props.onPress(); });
-    await act(async () => { renderer.root.findByProps({ accessibilityLabel: 'メールで問い合わせる' }).props.onPress(); });
-    assert.deepEqual(opened, ['https://example.com/privacy', 'mailto:support@example.com']);
+    await act(async () => { renderer.root.findByProps({ accessibilityLabel: '問い合わせフォームを開く' }).props.onPress(); });
+    assert.deepEqual(opened, ['https://example.com/privacy', 'https://example.com/contact?source=app&lang=ja']);
+    assert.match(JSON.stringify(renderer.toJSON()), /在庫や写真を自動で送信することはありません/);
     failLink = true;
-    await act(async () => { renderer.root.findByProps({ accessibilityLabel: 'メールで問い合わせる' }).props.onPress(); });
+    await act(async () => { renderer.root.findByProps({ accessibilityLabel: '問い合わせフォームを開く' }).props.onPress(); });
     assert.equal(alerts.at(-1)[0], 'リンクを開けませんでした');
+    assert.doesNotMatch(alerts.at(-1)[1], /メールアプリ/);
+    failLink = false;
+    await act(async () => { renderer.root.findByProps({ accessibilityLabel: '問い合わせフォームを開く' }).props.onPress(); });
+    assert.equal(opened.at(-1), 'https://example.com/contact?source=app&lang=ja');
   } finally { if (renderer) await act(async () => renderer.unmount()); restore(); }
+});
+
+test('a legacy email alone does not create a mail contact or bypass the pending form state', async t => {
+  clear(); t.after(restore);
+  process.env.EXPO_PUBLIC_SUPPORT_EMAIL = 'legacy@example.com';
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppInformationScreen, {
+    navigation: { goBack() {} }, route: { params: { section: 'privacy' } },
+  })); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const text = JSON.stringify(renderer.toJSON());
+  assert.match(text, /公開用の問い合わせフォームは準備中/);
+  assert.doesNotMatch(text, /legacy@example.com|mailto:|メールで問い合わせる/);
+  assert.equal(renderer.root.findAllByProps({ accessibilityRole: 'link' }).length, 0);
 });
 
 test('external service information retains the full Yahoo credit and working official link', async t => {

@@ -1,13 +1,15 @@
 'use strict';
 const sections = require('../shared/dataHandlingSections.json');
+const { validatePublicationConfig } = require('./publication-config.cjs');
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 }
 
 function contactHtml(publication) {
-  if (!publication) return '<p>正式なプライバシーポリシー・運営者・問い合わせ先は準備中です。</p>';
-  return `<p>運営者：${escapeHtml(publication.operator)}</p><p><a href="${escapeHtml(publication.privacyPolicyUrl)}">プライバシーポリシーを開く</a></p><p><a href="mailto:${escapeHtml(publication.supportEmail)}">${escapeHtml(publication.supportEmail)}</a></p>`;
+  if (!publication) return '<p>正式なプライバシーポリシー・運営者・問い合わせフォームは準備中です。</p>';
+  publication = validatePublicationConfig(publication);
+  return `<p>運営者：${escapeHtml(publication.operator)}</p><p><a href="${escapeHtml(publication.privacyPolicyUrl)}">プライバシーポリシーを開く</a></p><p><a href="${escapeHtml(publication.supportFormUrl)}">問い合わせフォームを開く</a></p><p>外部のフォームが開きます。在庫や写真を自動で送信することはありません。</p>`;
 }
 
 function productSearchDescription(yahooEnabled) {

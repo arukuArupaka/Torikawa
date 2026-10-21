@@ -4,13 +4,14 @@ import { CompositeScreenProps, useFocusEffect } from '@react-navigation/native';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { AnimatedDisclosure } from '../components/AnimatedDisclosure';
 import { EraseDataControl } from '../components/EraseDataControl';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { colors, radius, spacing } from '../constants/theme';
+import { getPublicationInformation } from '../constants/publication';
 import { version } from '../../package.json';
 import { useAppData } from '../context/AppDataContext';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
@@ -35,6 +36,7 @@ type Props = CompositeScreenProps<
 
 export function SettingsScreen({ navigation }: Props) {
   const alert = useAppAlert();
+  const { supportFormUrl } = getPublicationInformation();
   const {
     foods,
     notificationSettings,
@@ -239,10 +241,40 @@ export function SettingsScreen({ navigation }: Props) {
     }
   };
 
+  const openSupportForm = async () => {
+    if (!supportFormUrl) return;
+    try { await Linking.openURL(supportFormUrl); }
+    catch { alert('リンクを開けませんでした', '通信環境や、ブラウザーの設定を確認してください。'); }
+  };
+
   return (
     <Screen>
       <ScreenHeader title="設定" />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Text accessibilityRole="header" style={styles.sectionLabel}>使い方・お問い合わせ</Text>
+        <View style={styles.menuGroup}>
+          <Pressable accessibilityRole="button" accessibilityLabel="使い方"
+            onPress={() => navigation.navigate('UsageGuide')} style={styles.menuRow}>
+            <View style={styles.iconBox}><Ionicons color={colors.primary} name="book-outline" size={22} /></View>
+            <View style={styles.settingText}>
+              <Text style={styles.settingTitle}>使い方</Text>
+              <Text style={styles.settingDescription}>登録からバックアップまでの基本操作</Text>
+            </View>
+            <Ionicons color={colors.textMuted} name="chevron-forward" size={21} />
+          </Pressable>
+          <View style={styles.divider} />
+          <Pressable accessibilityRole="link" accessibilityLabel="お問い合わせ"
+            accessibilityHint={supportFormUrl ? 'ブラウザーで外部の問い合わせフォームを開きます。' : '問い合わせフォームは準備中です。'}
+            accessibilityState={{ disabled: !supportFormUrl }} disabled={!supportFormUrl}
+            onPress={() => void openSupportForm()} style={[styles.menuRow, !supportFormUrl && styles.busyRow]}>
+            <View style={styles.iconBox}><Ionicons color={colors.primary} name="chatbubble-ellipses-outline" size={22} /></View>
+            <View style={styles.settingText}>
+              <Text style={styles.settingTitle}>お問い合わせ</Text>
+              <Text style={styles.settingDescription}>{supportFormUrl ? 'ご質問・不具合の報告・ご意見。外部フォームが開きます。' : '問い合わせフォームは準備中です。'}</Text>
+            </View>
+            <Ionicons color={colors.textMuted} name="open-outline" size={21} />
+          </Pressable>
+        </View>
         <Text accessibilityRole="header" style={styles.sectionLabel}>通知</Text>
         {web ? <View style={styles.menuRow}>
           <View style={styles.iconBox}><Ionicons color={colors.primary} name="notifications-outline" size={22} /></View>
@@ -399,6 +431,31 @@ export function SettingsScreen({ navigation }: Props) {
         ) : null}
         </View>}
 
+        <Text accessibilityRole="header" style={styles.sectionLabel}>記録と買い物</Text>
+        <View style={styles.menuGroup}>
+        <Pressable accessibilityRole="button" accessibilityLabel="食材ロス統計" onPress={() => navigation.navigate('Statistics')} style={styles.menuRow}>
+          <View style={styles.iconBox}>
+            <Ionicons color={colors.primary} name="stats-chart-outline" size={22} />
+          </View>
+          <View style={styles.settingText}>
+            <Text style={styles.settingTitle}>食材ロス統計</Text>
+            <Text style={styles.settingDescription}>使い切った食材と捨てた食材を集計</Text>
+          </View>
+          <Ionicons color={colors.textMuted} name="chevron-forward" size={21} />
+        </Pressable>
+        <View style={styles.divider} />
+        <Pressable accessibilityRole="button" accessibilityLabel="買い物リスト" onPress={() => navigation.navigate('ShoppingList')} style={styles.menuRow}>
+          <View style={styles.iconBox}>
+            <Ionicons color={colors.primary} name="basket-outline" size={22} />
+          </View>
+          <View style={styles.settingText}>
+            <Text style={styles.settingTitle}>買い物リスト</Text>
+            <Text style={styles.settingDescription}>{shoppingItems.length}件の食材</Text>
+          </View>
+          <Ionicons color={colors.textMuted} name="chevron-forward" size={21} />
+        </Pressable>
+        </View>
+
         <Text accessibilityRole="header" style={styles.sectionLabel}>データ管理</Text>
         <View style={styles.menuGroup}>
         <Pressable
@@ -434,47 +491,12 @@ export function SettingsScreen({ navigation }: Props) {
           <Text style={styles.backupNoteText}>復元すると現在のデータは置き換わります。先にバックアップしてください。復元前の保存データは端末内にも退避します。</Text>
         </View>
 
-        <Text accessibilityRole="header" style={styles.sectionLabel}>記録と買い物</Text>
-        <View style={styles.menuGroup}>
-        <Pressable accessibilityRole="button" accessibilityLabel="食材ロス統計" onPress={() => navigation.navigate('Statistics')} style={styles.menuRow}>
-          <View style={styles.iconBox}>
-            <Ionicons color={colors.primary} name="stats-chart-outline" size={22} />
-          </View>
-          <View style={styles.settingText}>
-            <Text style={styles.settingTitle}>食材ロス統計</Text>
-            <Text style={styles.settingDescription}>使い切った食材と捨てた食材を集計</Text>
-          </View>
-          <Ionicons color={colors.textMuted} name="chevron-forward" size={21} />
-        </Pressable>
-        <View style={styles.divider} />
-        <Pressable accessibilityRole="button" accessibilityLabel="買い物リスト" onPress={() => navigation.navigate('ShoppingList')} style={styles.menuRow}>
-          <View style={styles.iconBox}>
-            <Ionicons color={colors.primary} name="basket-outline" size={22} />
-          </View>
-          <View style={styles.settingText}>
-            <Text style={styles.settingTitle}>買い物リスト</Text>
-            <Text style={styles.settingDescription}>{shoppingItems.length}件の食材</Text>
-          </View>
-          <Ionicons color={colors.textMuted} name="chevron-forward" size={21} />
-        </Pressable>
-        </View>
-
         <Text accessibilityRole="header" style={styles.sectionLabel}>このアプリについて</Text>
         <View style={styles.menuGroup}>
-          <Pressable accessibilityRole="button" accessibilityLabel="使い方"
-            onPress={() => navigation.navigate('UsageGuide')} style={styles.menuRow}>
-            <View style={styles.iconBox}><Ionicons color={colors.primary} name="book-outline" size={22} /></View>
-            <View style={styles.settingText}>
-              <Text style={styles.settingTitle}>使い方</Text>
-              <Text style={styles.settingDescription}>登録からバックアップまでの基本操作</Text>
-            </View>
-            <Ionicons color={colors.textMuted} name="chevron-forward" size={21} />
-          </Pressable>
-          <View style={styles.divider} />
-          <Pressable accessibilityRole="button" accessibilityLabel="データの取り扱い・お問い合わせ"
+          <Pressable accessibilityRole="button" accessibilityLabel="データの取り扱い"
             onPress={() => navigation.navigate('AppInformation', { section: 'privacy' })} style={styles.menuRow}>
             <View style={styles.iconBox}><Ionicons color={colors.primary} name="shield-checkmark-outline" size={22} /></View>
-            <Text style={[styles.settingTitle, styles.settingText]}>データの取り扱い・お問い合わせ</Text>
+            <Text style={[styles.settingTitle, styles.settingText]}>データの取り扱い</Text>
             <Ionicons color={colors.textMuted} name="chevron-forward" size={21} />
           </Pressable>
           <View style={styles.divider} />

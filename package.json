@@ -46,6 +46,7 @@
     "publication:check": "node scripts/check-publication.cjs",
     "typecheck": "tsc --noEmit",
     "shared-api": "node server/start.cjs",
+    "yahoo-api": "node server/yahoo-product-server.cjs",
     "test": "node --test tests/*.test.cjs",
     "licenses": "node scripts/generate-oss-notices.cjs"
   },

@@ -37,7 +37,7 @@ node scripts/check-publication.cjs publication.local.json
 node scripts/export-web-test.cjs --yahoo --publication-config publication.local.json
 ```
 
-公開設定は運営者名・問い合わせメール・HTTPSの正式ポリシーURLの3項目だけです。指定がなければ準備中と表示します。ローカル `.env` を書き出し時に読み込むことはなく、API認証情報や共有API設定をこのJSONから反映することもありません。
+公開設定は運営者名・HTTPSの問い合わせフォームURL・HTTPSの正式ポリシーURLの3項目だけです。メールアドレスは必須にしません。指定がなければ準備中と表示します。ローカル `.env` を書き出し時に読み込むことはなく、API認証情報や共有API設定をこのJSONから反映することもありません。
 
 2026-10-03に `dist-web-test/site-ZOtBGm` を書き出し、ローカル設定が含まれないこと、HTTPS URLでのホーム・案内ページの往復、レシピ画像8枚とアイコン用フォントの配信を確認しました。配信の境界・書き込み拒否・隠しファイル拒否・フォント配信の自動テスト、型チェック、Web exportも合格しました。実際のiPhone Safariでの確認は残ります。一時URLとプロセスの情報は作業用の `.review/web-share-state.json` に記録し、Gitには含めません。このPCの現在の共有は `.review/stop-web-share.ps1` で専用プロセスだけ停止できます。
 

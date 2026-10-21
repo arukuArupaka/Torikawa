@@ -17,7 +17,7 @@ export function AppInformationScreen({ navigation, route }: Props) {
   const privacy = route.params.section === 'privacy';
   const open = async (url: string) => {
     try { await Linking.openURL(url); }
-    catch { alert('リンクを開けませんでした', '通信環境や、ブラウザー・メールアプリの設定を確認してください。'); }
+    catch { alert('リンクを開けませんでした', '通信環境や、ブラウザーの設定を確認してください。'); }
   };
   const link = (label: string, url: string) => (
     <Pressable accessibilityRole="link" accessibilityLabel={label} onPress={() => void open(url)} style={styles.link}>
@@ -39,10 +39,10 @@ export function AppInformationScreen({ navigation, route }: Props) {
             <Text style={styles.body}>運営者：{publication.operator ?? '公開準備中'}</Text>
             {publication.privacyUrl ? link('プライバシーポリシーを開く', publication.privacyUrl)
               : <Text style={styles.body}>公開用プライバシーポリシーは準備中です。この画面は現在のアプリの動作説明です。</Text>}
-            {publication.supportEmail ? <>
-              <Text selectable style={styles.body}>{publication.supportEmail}</Text>
-              {link('メールで問い合わせる', `mailto:${publication.supportEmail}`)}
-            </> : <Text style={styles.body}>公開用の問い合わせ先は準備中です。</Text>}
+            {publication.supportFormUrl ? <>
+              {link('問い合わせフォームを開く', publication.supportFormUrl)}
+              <Text style={styles.body}>外部のフォームが開きます。在庫や写真を自動で送信することはありません。</Text>
+            </> : <Text style={styles.body}>公開用の問い合わせフォームは準備中です。</Text>}
           </View>
         </> : <>
           <View style={styles.card}>

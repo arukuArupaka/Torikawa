@@ -17,10 +17,20 @@ ID未設定時はAPIが503を返し、アプリはOFF検索・手入力へ進み
 
 Expo Goの開発サーバーを起動しただけでは、Yahoo検索APIは起動しません。`YAHOO_SHOPPING_APP_ID` が設定済みでも、`EXPO_PUBLIC_YAHOO_LOOKUP_URL` が空ならYahoo検索を使わず、次の検索先へ進みます。
 
-1. 前述の `serve-web-test.cjs ... --yahoo` を起動し、そのサーバーにHTTPSのトンネルを接続する。Expo Goのトンネルとは別の接続です。
-2. Git対象外の `.env.local` に `EXPO_PUBLIC_YAHOO_LOOKUP_URL=https://接続先/api/yahoo-product` を設定する。iPhoneでは `/api/yahoo-product` だけの相対URLやPCのlocalhostを使わない。Client IDはサーバー用の `.env` に残す。
-3. Expo Goを完全に再読み込みする。設定が反映されない場合はExpoの開発サーバーを再起動し、新しいQRコードから開く。
-4. バーコード画面の検索先案内に「Yahoo!ショッピング（商品名のみ）」があることを確認し、商品を読み取る。Yahooで見つかると、登録画面の取得元に「Yahoo!ショッピング」が表示される。写真は食材アイコンまたは自分の写真を使う。
+1. `npm.cmd run yahoo-api` を起動する。ルートの `.env` にあるClient IDをサーバーだけが読み、`127.0.0.1:8103` の `/api/yahoo-product` だけを受け付ける。Web版やプロジェクトファイルは配信しない。必要な場合は `YAHOO_LOOKUP_PORT` でポートを変更できる。
+2. 検索APIにスマートフォンから届くHTTPSの接続先を用意する。一時トンネルを使う場合は、このAPI専用サーバーに接続する。Expo Go自体の接続とは別で、Expo Goは同じWi-Fiのままでも使える。
+3. Git対象外の `.env.local` に `EXPO_PUBLIC_YAHOO_LOOKUP_URL=https://接続先/api/yahoo-product` を設定する。iPhoneでは `/api/yahoo-product` だけの相対URLやPCのlocalhostを使わない。Client IDはサーバー用の `.env` に残す。
+4. Expo Goを完全に再読み込みする。設定が反映されない場合はExpoの開発サーバーを再起動し、新しいQRコードから開く。
+5. バーコード画面の検索先案内に「Yahoo!ショッピング（商品名のみ）」があることを確認し、商品を読み取る。Yahooで見つかると、登録画面の取得元に「Yahoo!ショッピング」が表示される。写真は食材アイコンまたは自分の写真を使う。
+
+### QRコードを提示する前の確認
+
+このプロジェクトで「QRコードを出して」と依頼された場合は、Expo Goの起動だけでなく、Yahooの商品名検索も使える状態を確認してから提示する。期限切れの一時URLをそのまま使わない。
+
+- サーバー用Client IDとHTTPSの検索先が設定されていることを確認する。Client IDをアプリに入れない。
+- 既知のJANコード（例：`4901625421798`）で、設定したHTTPS接続先から商品名が返り、画像URLが返らないことを確認する。
+- Expo Goに新しい接続設定を反映し、iPhone向けの配信情報・JavaScriptの取得まで確認する。
+- 検索APIとExpo Goの接続方法・起動が必要なPC側の処理を案内する。不通の場合は検索が使えると案内しない。
 
 ネイティブの通常のfetchにはWebのOriginヘッダーがなく、現在の検索APIはこの要求を受け付けます。Webの別Originを許可する変更は行いません。サーバーとトンネルはテスト中に起動しておきます。一時トンネルのURLが変わったら `.env.local` のURLも更新してください。これは手元の実機確認用で、公開版には固定のHTTPS APIと利用制限の設計が必要です。
 

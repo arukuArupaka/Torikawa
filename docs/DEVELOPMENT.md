@@ -22,6 +22,7 @@ VS Codeを使う場合は、リポジトリのフォルダーで `code .` を実
 | Androidで起動する | `npm.cmd run android` |
 | iOSで起動する（macOS） | `npm.cmd run ios` |
 | 共有APIを起動する | `npm.cmd run shared-api` |
+| Expo Go用のYahoo商品名検索APIを起動する | `npm.cmd run yahoo-api`（接続手順は[Yahooの商品名検索](yahoo-name-search.md)） |
 | 自動テスト | `npm.cmd test` |
 | 型チェック | `npm.cmd run typecheck` |
 | Web配布用の公開設定を確認 | `npm.cmd run publication:check -- publication.local.json` |
@@ -50,7 +51,8 @@ Copy-Item .env.example .env
 | `EXPO_PUBLIC_YAHOO_LOOKUP_URL` | アプリから呼ぶ検索APIのHTTPS URL。Web同一サイトなら `/api/yahoo-product` |
 | `EXPO_PUBLIC_SHARED_PRODUCTS_URL` | 共有APIのベースURL。ローカルPCでは `http://127.0.0.1:8787` |
 | `EXPO_PUBLIC_OPERATOR_NAME` | 公開する運営者名 |
-| `EXPO_PUBLIC_SUPPORT_EMAIL` | 公開する問い合わせ先メールアドレス |
+| `EXPO_PUBLIC_SUPPORT_FORM_URL` | 公開する問い合わせフォームのHTTPS URL。未設定なら準備中 |
+| `EXPO_PUBLIC_SUPPORT_EMAIL` | Open Food Factsの識別用に使う任意の旧設定。問い合わせ先には表示せず、公開設定の必須項目にも含めない。空欄はリポジトリURLを使用 |
 | `EXPO_PUBLIC_PRIVACY_POLICY_URL` | 正式なプライバシーポリシーのHTTPS URL |
 | `EXPO_PUBLIC_DEMO_DATA` | 開発用サンプル在庫・商品を使う場合だけ `true`。通常・公開版は `false` |
 

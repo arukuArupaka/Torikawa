@@ -7,6 +7,8 @@ const Module = require('node:module');
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const platform = { OS: 'ios' };
 const alerts = [];
+const linkRequests = [];
+let linkFailure = false;
 let update = async () => {}, permission = true, statusFailure = false, pickerFailure = false, permissionFailure = false;
 let pickerAsset = { uri: 'picked.jpg', width: 1000, height: 1000, fileSize: 100 };
 let pickerOptions;
@@ -22,7 +24,8 @@ const data = { foods: [], recipes: [], shoppingItems: [], notificationSettings: 
 const original = Module._load;
 Module._load = function(request, ...args) {
   if (request === 'react-native') return { Platform: platform, StyleSheet: { create: (value) => value },
-    Text: 'Text', View: 'View', Image: 'Image', Pressable: 'Pressable', ScrollView: 'ScrollView', Switch: 'Switch', TextInput: 'TextInput' };
+    Text: 'Text', View: 'View', Image: 'Image', Pressable: 'Pressable', ScrollView: 'ScrollView', Switch: 'Switch', TextInput: 'TextInput',
+    Linking: { openURL: async url => { linkRequests.push(url); if (linkFailure) throw Error('unavailable'); } } };
   if (request === '@expo/vector-icons') return { Ionicons: 'Icon' };
   if (request === '@react-navigation/native') return { useFocusEffect: (callback) => React.useEffect(callback, [callback]) };
   if (request.endsWith('/context/AppDataContext')) return { useAppData: () => data };
@@ -65,6 +68,7 @@ const flush = () => new Promise(setImmediate);
 const toggleNotificationSettings = renderer => renderer.root.findByProps({ accessibilityLabel: '期限通知の設定' }).props.onPress();
 const openNotificationSettings = async renderer => { await act(async () => toggleNotificationSettings(renderer)); };
 const reset = () => { alerts.length = 0; platform.OS = 'ios'; permission = true; statusFailure = false; pickerFailure = false; permissionFailure = false; update = async () => {}; notificationPlan = { plan: [], truncatedCount: 0 }; scheduledCount = 2;
+  linkRequests.length = 0; linkFailure = false;
   pickedBackup = null; backupRequests.length = 0; sharedBackups.length = 0;
   resizeFailure = false; resizeRequests.length = 0; resizedImage = { uri: 'file:///resized-photo.jpg', width: 800, height: 800, base64: 'YWJjZA==' }; };
 
@@ -167,10 +171,10 @@ test('Settings groups backup, records and app information before deletion and ke
   })); });
   t.after(async () => { await act(async () => renderer.unmount()); });
   const headings = renderer.root.findAllByType('Text').filter(node => node.props.accessibilityRole === 'header');
-  assert.deepEqual(headings.map(node => node.props.children), ['通知', 'データ管理', '記録と買い物', 'このアプリについて', 'データの削除']);
+  assert.deepEqual(headings.map(node => node.props.children), ['使い方・お問い合わせ', '通知', '記録と買い物', 'データ管理', 'このアプリについて', 'データの削除']);
   assert.equal(renderer.root.findByProps({ accessibilityLabel: '期限通知の設定' }).props.accessibilityState.expanded, false);
   assert.equal(renderer.root.findAllByType('Switch').length, 0);
-  for (const label of ['食材ロス統計', '買い物リスト', '使い方', 'データの取り扱い・お問い合わせ', '外部サービス・ライセンス']) {
+  for (const label of ['食材ロス統計', '買い物リスト', '使い方', 'データの取り扱い', '外部サービス・ライセンス']) {
     const button = renderer.root.findByProps({ accessibilityLabel: label });
     assert.equal(button.props.accessibilityRole, 'button');
     await act(async () => button.props.onPress());
@@ -180,6 +184,69 @@ test('Settings groups backup, records and app information before deletion and ke
   const lastHeading = content.findIndex(node => node.type === 'Text' && node.props.children === 'データの削除');
   assert.ok(content.findIndex(node => node.type === 'EraseDataControl') > lastHeading);
   assert.deepEqual(backupRequests, []); assert.deepEqual(sharedBackups, []);
+});
+
+test('Settings opens the configured support form directly on iOS and Web without navigating or appending data', async t => {
+  const previous = process.env.EXPO_PUBLIC_SUPPORT_FORM_URL;
+  t.after(() => { if (previous === undefined) delete process.env.EXPO_PUBLIC_SUPPORT_FORM_URL; else process.env.EXPO_PUBLIC_SUPPORT_FORM_URL = previous; });
+  const url = 'https://example.com/contact?source=app&lang=ja';
+  process.env.EXPO_PUBLIC_SUPPORT_FORM_URL = url;
+  for (const os of ['ios', 'web']) {
+    reset(); platform.OS = os;
+    const destinations = []; let renderer;
+    try {
+      await act(async () => { renderer = create(React.createElement(SettingsScreen, {
+        navigation: { navigate: (...args) => destinations.push(args) },
+      })); });
+      const link = renderer.root.findByProps({ accessibilityLabel: 'お問い合わせ' });
+      assert.equal(link.props.accessibilityRole, 'link');
+      assert.equal(link.props.disabled, false);
+      assert.match(link.props.accessibilityHint, /外部の問い合わせフォーム/);
+      await act(async () => { link.props.onPress(); await flush(); });
+      assert.deepEqual(linkRequests, [url]);
+      assert.deepEqual(destinations, []);
+      assert.deepEqual(alerts, []);
+    } finally { if (renderer) await act(async () => renderer.unmount()); }
+  }
+});
+
+test('Settings leaves support visible but unavailable for missing or unsafe form URLs', async t => {
+  const previous = process.env.EXPO_PUBLIC_SUPPORT_FORM_URL;
+  t.after(() => { if (previous === undefined) delete process.env.EXPO_PUBLIC_SUPPORT_FORM_URL; else process.env.EXPO_PUBLIC_SUPPORT_FORM_URL = previous; });
+  for (const url of [undefined, '', 'javascript:alert(1)', 'http://example.com/contact', 'https://user:pass@example.com/contact']) {
+    reset();
+    if (url === undefined) delete process.env.EXPO_PUBLIC_SUPPORT_FORM_URL; else process.env.EXPO_PUBLIC_SUPPORT_FORM_URL = url;
+    let renderer;
+    try {
+      await act(async () => { renderer = create(React.createElement(SettingsScreen, { navigation: {} })); });
+      const link = renderer.root.findByProps({ accessibilityLabel: 'お問い合わせ' });
+      assert.equal(link.props.disabled, true);
+      assert.equal(link.props.accessibilityState.disabled, true);
+      assert.match(JSON.stringify(link.findAllByType('Text').map(node => node.props.children)), /問い合わせフォームは準備中です/);
+      await act(async () => { link.props.onPress(); await flush(); });
+      assert.deepEqual(linkRequests, []);
+      assert.deepEqual(alerts, []);
+    } finally { if (renderer) await act(async () => renderer.unmount()); }
+  }
+});
+
+test('Settings explains a failed support link and allows retry from the same row', async t => {
+  reset();
+  const previous = process.env.EXPO_PUBLIC_SUPPORT_FORM_URL;
+  t.after(() => { if (previous === undefined) delete process.env.EXPO_PUBLIC_SUPPORT_FORM_URL; else process.env.EXPO_PUBLIC_SUPPORT_FORM_URL = previous; });
+  const url = 'https://example.com/contact';
+  process.env.EXPO_PUBLIC_SUPPORT_FORM_URL = url;
+  linkFailure = true; let renderer;
+  try {
+    await act(async () => { renderer = create(React.createElement(SettingsScreen, { navigation: {} })); });
+    const link = renderer.root.findByProps({ accessibilityLabel: 'お問い合わせ' });
+    await act(async () => { link.props.onPress(); await flush(); });
+    assert.deepEqual(alerts, [['リンクを開けませんでした', '通信環境や、ブラウザーの設定を確認してください。']]);
+    linkFailure = false;
+    await act(async () => { link.props.onPress(); await flush(); });
+    assert.deepEqual(linkRequests, [url, url]);
+    assert.equal(alerts.length, 1);
+  } finally { if (renderer) await act(async () => renderer.unmount()); reset(); }
 });
 
 test('notification drafts survive closing the panel, remain marked unsaved and save only on request', async t => {
