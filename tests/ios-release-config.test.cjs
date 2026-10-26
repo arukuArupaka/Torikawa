@@ -32,7 +32,7 @@ test('the production profile makes a signed device store build using production 
   assert.equal(profile.env.EXPO_NO_DOTENV, '1');
   assert.equal(profile.env.EXPO_PUBLIC_OPERATOR_NAME, 'たべどき!!運営');
   assert.equal(profile.env.EXPO_PUBLIC_SUPPORT_FORM_URL, 'https://forms.gle/Rjoy4xiwzE7uBDf57');
-  assert.equal(profile.env.EXPO_PUBLIC_PRIVACY_POLICY_URL, 'https://maeken07.github.io/tabedoki-website/privacy.html');
+  assert.equal(profile.env.EXPO_PUBLIC_PRIVACY_POLICY_URL, new URL('privacy.html', require('../website/site-config.json').siteUrl).href);
   assert.equal(profile.env.EXPO_PUBLIC_SHARED_PRODUCTS_URL, '');
   const lookup = new URL(profile.env.EXPO_PUBLIC_YAHOO_LOOKUP_URL);
   assert.equal(lookup.protocol, 'https:');

@@ -6,7 +6,7 @@ import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { CompositeScreenProps } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ScrollViewInstance } from 'react-native';
 import { Screen } from '../components/Screen';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { AnimatedDisclosure } from '../components/AnimatedDisclosure';
@@ -86,7 +86,7 @@ export function RecipesScreen({ navigation, route }: Props) {
   const [expandedRecipes, setExpandedRecipes] = useState<Record<string, boolean>>({});
   const [visibleRecipeCount, setVisibleRecipeCount] = useState(20);
   const currentDay = useCurrentDay();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const initialFilter = route?.params?.initialFilter;
   const newCatalogCount = useMemo(() => getNewCatalogRecipes(recipes).length, [recipes]);
 

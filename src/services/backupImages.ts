@@ -37,7 +37,8 @@ export function restoreImage(uri: string, prefix: string, created: string[]): st
     `restored-${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}${getImageExtension(embedded?.mime ?? getImageMimeType(uri))}`,
   );
   created.push(file.uri);
-  if (embedded) file.write(embedded.base64, { encoding: 'base64' });
+  // 復元先の検証・世代の切り替えより先に、写真の書き込みを完了させる。
+  if (embedded) file.writeSync(embedded.base64, { encoding: 'base64' });
   else source!.copy(file);
   const expectedSize = embedded?.size ?? source!.size;
   if (!file.exists || file.size !== expectedSize) throw new Error('復元した写真を保存できませんでした。');

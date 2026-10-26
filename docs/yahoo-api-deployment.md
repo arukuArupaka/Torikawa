@@ -8,7 +8,7 @@
 
 ## 何を置くのか
 
-iPhone → Cloudflareの検索API → Yahoo!ショッピングの順で問い合わせます。Cloudflareへ置くのは商品名検索の中継処理だけです。紹介サイトはGitHub Pagesのままで、在庫アプリ・共有商品DB・ローカルファイルは配信しません。既存のNodeサーバーも開発用として維持します。
+iPhone → Cloudflareの検索API → Yahoo!ショッピングの順で問い合わせます。このWorkerへ置くのは商品名検索の中継処理だけです。公式サイトは別のCloudflare Pagesプロジェクトで配信し、旧GitHub Pagesは転送案内に使用します。在庫アプリ・共有商品DB・ローカルファイルは配信しません。既存のNodeサーバーも開発用として維持します。
 
 Node側とCloudflare側は `server/yahoo-product-lookup.cjs` の要求検証と検索処理を共用します。返すのはバーコード・商品名・出典URLのみで、Yahooの商品画像や説明文は返しません。Client IDはCloudflareのSecretとして設定し、アプリ・Git・サイトへ入れません。
 

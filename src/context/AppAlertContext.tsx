@@ -36,7 +36,7 @@ export function AppAlertProvider({ children }: PropsWithChildren) {
       } catch (error) { finishNative(); throw error; }
       return;
     }
-    const next = { title, message, buttons: buttons?.length ? buttons : [{ text: 'OK' }], options };
+    const next = { title: title ?? '', message: message ?? undefined, buttons: buttons?.length ? buttons : [{ text: 'OK' }], options };
     if (current.current) {
       pending.current.push(next);
     } else {

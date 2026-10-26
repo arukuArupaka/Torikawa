@@ -1,102 +1,110 @@
 {
   "scope": "Installed dependency graph from package.json dependencies (including installed peers/optional dependencies); includes build tools. Native/OS/font dependencies require final-build review.",
-  "packages": 531,
-  "withText": 474,
+  "packages": 525,
+  "withText": 477,
   "missing": [
-    {
-      "package": "tr46@0.0.3",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "@react-native/normalize-colors@0.74.89",
-      "reason": "license text not found at package root"
-    },
     {
       "package": "react-devtools-core@6.1.5",
       "reason": "license text not found at package root"
     },
     {
-      "package": "metro-source-map@0.84.6",
+      "package": "metro-source-map@0.87.1",
       "reason": "license text not found at package root"
     },
     {
-      "package": "ob1@0.84.6",
+      "package": "ob1@0.87.1",
       "reason": "license text not found at package root"
     },
     {
-      "package": "metro-symbolicate@0.84.6",
+      "package": "metro-symbolicate@0.87.1",
       "reason": "license text not found at package root"
     },
     {
-      "package": "metro-runtime@0.84.6",
+      "package": "metro-runtime@0.87.1",
       "reason": "license text not found at package root"
     },
     {
-      "package": "hermes-compiler@250829098.0.17",
+      "package": "hermes-compiler@260318099.0.4",
       "reason": "license text not found at package root"
     },
     {
-      "package": "@react-native/virtualized-lists@0.86.3",
+      "package": "flow-parser@0.327.0",
       "reason": "license text not found at package root"
     },
     {
-      "package": "@react-native/normalize-colors@0.86.3",
+      "package": "flow-estree@0.327.0",
       "reason": "license text not found at package root"
     },
     {
-      "package": "@react-native/js-polyfills@0.86.3",
+      "package": "@react-native/virtualized-lists@0.88.0",
       "reason": "license text not found at package root"
     },
     {
-      "package": "@react-native/gradle-plugin@0.86.3",
+      "package": "@react-native/normalize-colors@0.88.0",
       "reason": "license text not found at package root"
     },
     {
-      "package": "@react-native/community-cli-plugin@0.86.3",
+      "package": "@react-native/gradle-plugin@0.88.0",
       "reason": "license text not found at package root"
     },
     {
-      "package": "metro-core@0.84.6",
+      "package": "@react-native/community-cli-plugin@0.88.0",
       "reason": "license text not found at package root"
     },
     {
-      "package": "metro-resolver@0.84.6",
+      "package": "@react-native/metro-config@0.88.0",
       "reason": "license text not found at package root"
     },
     {
-      "package": "metro-config@0.84.6",
+      "package": "metro-config@0.87.1",
       "reason": "license text not found at package root"
     },
     {
-      "package": "metro-cache@0.84.6",
+      "package": "metro-core@0.87.1",
       "reason": "license text not found at package root"
     },
     {
-      "package": "metro@0.84.6",
+      "package": "metro-resolver@0.87.1",
       "reason": "license text not found at package root"
     },
     {
-      "package": "metro-transform-worker@0.84.6",
+      "package": "metro-cache@0.87.1",
       "reason": "license text not found at package root"
     },
     {
-      "package": "metro-transform-plugins@0.84.6",
+      "package": "metro@0.87.1",
       "reason": "license text not found at package root"
     },
     {
-      "package": "metro-minify-terser@0.84.6",
+      "package": "metro-transform-worker@0.87.1",
       "reason": "license text not found at package root"
     },
     {
-      "package": "metro-cache-key@0.84.6",
+      "package": "metro-transform-plugins@0.87.1",
       "reason": "license text not found at package root"
     },
     {
-      "package": "metro-babel-transformer@0.84.6",
+      "package": "metro-minify-terser@0.87.1",
       "reason": "license text not found at package root"
     },
     {
-      "package": "metro-file-map@0.84.6",
+      "package": "metro-cache-key@0.87.1",
+      "reason": "license text not found at package root"
+    },
+    {
+      "package": "metro-babel-transformer@0.87.1",
+      "reason": "license text not found at package root"
+    },
+    {
+      "package": "flow-parser@0.331.0",
+      "reason": "license text not found at package root"
+    },
+    {
+      "package": "flow-estree@0.331.0",
+      "reason": "license text not found at package root"
+    },
+    {
+      "package": "metro-file-map@0.87.1",
       "reason": "license text not found at package root"
     },
     {
@@ -108,11 +116,31 @@
       "reason": "license text not found at package root"
     },
     {
-      "package": "@react-native/dev-middleware@0.86.3",
+      "package": "@react-native/metro-babel-transformer@0.88.0",
       "reason": "license text not found at package root"
     },
     {
-      "package": "@react-native/debugger-shell@0.86.3",
+      "package": "@react-native/babel-preset@0.88.0",
+      "reason": "license text not found at package root"
+    },
+    {
+      "package": "@react-native/babel-plugin-codegen@0.88.0",
+      "reason": "license text not found at package root"
+    },
+    {
+      "package": "@react-native/codegen@0.88.0",
+      "reason": "license text not found at package root"
+    },
+    {
+      "package": "@react-native/js-polyfills@0.88.0",
+      "reason": "license text not found at package root"
+    },
+    {
+      "package": "@react-native/dev-middleware@0.88.0",
+      "reason": "license text not found at package root"
+    },
+    {
+      "package": "@react-native/debugger-shell@0.88.0",
       "reason": "license text not found at package root"
     },
     {
@@ -120,15 +148,19 @@
       "reason": "license text not found at package root"
     },
     {
-      "package": "@react-native/debugger-frontend@0.86.3",
+      "package": "@react-native/debugger-frontend@0.88.0",
       "reason": "license text not found at package root"
     },
     {
-      "package": "@react-native/codegen@0.86.3",
+      "package": "@react-native/asset-utils@0.88.0",
       "reason": "license text not found at package root"
     },
     {
-      "package": "@react-native/assets-registry@0.86.3",
+      "package": "tr46@0.0.3",
+      "reason": "license text not found at package root"
+    },
+    {
+      "package": "@react-native/normalize-colors@0.74.89",
       "reason": "license text not found at package root"
     },
     {
@@ -144,79 +176,11 @@
       "reason": "license text not found at package root"
     },
     {
-      "package": "@react-native/babel-plugin-codegen@0.86.3",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "metro-transform-worker@0.84.5",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "metro-transform-plugins@0.84.5",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "metro-source-map@0.84.5",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "ob1@0.84.5",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "metro-symbolicate@0.84.5",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "metro-minify-terser@0.84.5",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "metro-cache-key@0.84.5",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "metro-cache@0.84.5",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "metro-core@0.84.5",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "metro-resolver@0.84.5",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "metro-babel-transformer@0.84.5",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "metro@0.84.5",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "metro-runtime@0.84.5",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "metro-file-map@0.84.5",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "metro-config@0.84.5",
-      "reason": "license text not found at package root"
-    },
-    {
       "package": "bplist-parser@0.3.1",
       "reason": "license text not found at package root"
     },
     {
       "package": "stream-buffers@2.2.0",
-      "reason": "license text not found at package root"
-    },
-    {
-      "package": "@expo/sdk-runtime-versions@1.0.0",
       "reason": "license text not found at package root"
     },
     {

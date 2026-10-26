@@ -13,6 +13,24 @@ function inputs() {
     config: { siteUrl: 'https://example.com/tabedoki/', appStoreUrl: null, googlePlayUrl: null } };
 }
 
+test('the current official site and iPhone policy link use the branded host and preserve relative navigation', () => {
+  const input = loadOfficialSiteSources(path.resolve(__dirname, '..'));
+  assert.equal(input.config.siteUrl, 'https://tabedoki-official.pages.dev/');
+  const files = createOfficialSiteFiles(input);
+  assert.match(files['index.html'], /rel="canonical" href="https:\/\/tabedoki-official\.pages\.dev\/"/);
+  assert.match(files['sitemap.xml'], /https:\/\/tabedoki-official\.pages\.dev\/privacy\.html/);
+  assert.match(files['robots.txt'], /Sitemap: https:\/\/tabedoki-official\.pages\.dev\/sitemap\.xml/);
+  for (const file of ['index.html', 'privacy.html', 'support.html', 'sitemap.xml', 'robots.txt']) {
+    assert.doesNotMatch(files[file], /maeken07\.github\.io/);
+  }
+  assert.match(files['privacy.html'], /Cloudflare Pages/);
+  assert.match(files['privacy.html'], /旧URLから新しいサイトへの案内にはGitHub Pages/);
+  assert.match(files['index.html'], /href="privacy.html"/);
+  assert.match(files['support.html'], /href="privacy.html"/);
+  const profile = require('../eas.json').build.production;
+  assert.equal(profile.env.EXPO_PUBLIC_PRIVACY_POLICY_URL, new URL('privacy.html', input.config.siteUrl).href);
+});
+
 test('official site exports a fixed public allowlist and links work under a Pages subdirectory', () => {
   const input = inputs();
   const files = createOfficialSiteFiles(input);
@@ -24,7 +42,7 @@ test('official site exports a fixed public allowlist and links work under a Page
   for (const html of [files['index.html'], files['privacy.html'], files['support.html']]) {
     for (const match of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
       const target = match[1].replace(/&amp;/g, '&').split('?')[0];
-      if (target.startsWith('#')) assert.ok(files['index.html'].includes(`id="${target.slice(1)}"`));
+      if (target.startsWith('#')) assert.ok(html.includes(`id="${target.slice(1)}"`));
       else if (!target.startsWith('https:') && target !== './') assert.ok(Object.hasOwn(files, target), target);
       assert.equal(target.startsWith('/'), false, 'root-relative paths break project Pages sites');
     }
@@ -122,7 +140,7 @@ test('publishing the real final policy keeps the iPhone release pending and its 
     assert.match(files[file], /href="privacy.html"/);
     assert.doesNotMatch(files[file], /【公開前に設定：|掲載用原稿・未施行/);
   }
-  assert.match(files['sitemap.xml'], /https:\/\/maeken07\.github\.io\/tabedoki-website\/privacy.html/);
+  assert.ok(files['sitemap.xml'].includes(new URL('privacy.html', input.config.siteUrl).href));
 });
 
 test('returning visitors get new asset URLs when styles, scripts or screenshots change', () => {

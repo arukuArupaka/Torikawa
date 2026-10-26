@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
+import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { colors, radius } from '../constants/theme';
 import { FoodItem } from '../types';
 import { FoodCard } from './FoodCard';
@@ -17,11 +17,12 @@ export function SwipeableFoodCard({
   onMarkUsed: () => void;
   onMarkDisposed: () => void;
 }) {
-  const swipeableRef = useRef<Swipeable>(null);
+  const swipeableRef = useRef<SwipeableMethods>(null);
 
-  const handleSwipeOpen = (direction: 'left' | 'right', swipeable: Swipeable) => {
-    swipeable.close();
-    if (direction === 'left') {
+  const handleSwipeOpen = (direction: 'left' | 'right') => {
+    swipeableRef.current?.close();
+    // 後継APIは指を動かした方向を返す。右へスワイプで廃棄、左へスワイプで使い切りを維持する。
+    if (direction === 'right') {
       onMarkDisposed();
     } else {
       onMarkUsed();

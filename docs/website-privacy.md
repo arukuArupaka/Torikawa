@@ -14,7 +14,7 @@
 
 ## ページの配信
 
-このサイトはGitHub Pagesを利用して配信します。GitHubの案内では、GitHub Pagesの訪問者のIPアドレスはセキュリティのため記録・保存されます。GitHubによる情報の取り扱いは、次の案内をご確認ください。
+このサイトはCloudflare Pagesを利用して配信します。Cloudflareの基盤でIPアドレスや通信情報などが処理される場合があります。[Cloudflareのプライバシーポリシー](https://www.cloudflare.com/privacypolicy/)をご確認ください。旧URLから新しいサイトへの案内にはGitHub Pagesを使用します。GitHubの案内では、GitHub Pagesの訪問者のIPアドレスはセキュリティのため記録・保存されます。GitHubによる情報の取り扱いは、次の案内をご確認ください。
 
 - [GitHub Pagesのデータ収集について](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages#data-collection)
 - [GitHubのプライバシーに関する方針](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)

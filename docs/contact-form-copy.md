@@ -29,7 +29,7 @@
 個人情報の開示・訂正・削除や事業者情報の確認をご希望の場合は、「その他」に希望する内容をご記入ください。回答が必要な手続では、連絡を受け取れる返信先もご記入ください。
 
 送信前に、情報の取り扱いをご確認ください。
-プライバシーポリシー：https://maeken07.github.io/tabedoki-website/privacy.html
+プライバシーポリシー：https://tabedoki-official.pages.dev/privacy.html
 
 ## 質問
 

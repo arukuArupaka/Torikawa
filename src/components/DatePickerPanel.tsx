@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
-import { Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, type ViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '../constants/theme';
 import { useReducedMotion } from '../context/MotionPreferenceContext';
@@ -20,7 +20,7 @@ export function DatePickerPanel({ label, value, onChange }: {
   const today = useCurrentDay();
   const openRef = useRef(false);
   const sessionRef = useRef(0);
-  const selectedDayRef = useRef<View>(null);
+  const selectedDayRef = useRef<ViewInstance>(null);
   const [editor, setEditor] = useState<{ original: string; selected: string; month: string; session: number } | null>(null);
 
   useEffect(() => {

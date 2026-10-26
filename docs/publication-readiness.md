@@ -1,8 +1,8 @@
 # 公開準備の状況と最後の確認
 
-更新：2026-10-26。紹介サイトは [GitHub Pages](https://maeken07.github.io/tabedoki-website/) で公開済みです。Yahoo商品名検索APIもCloudflare Workersへ常設し、実商品名を確認しました。iPhoneアプリの一般配信・ストア申請は未実施で、アプリを正式公開できるとの判定ではありません。
+更新：2026-10-26。紹介サイトは [Cloudflare Pages](https://tabedoki-official.pages.dev/) で公開済みです。旧GitHub Pagesは新URLへの転送案内に使用します。Yahoo商品名検索APIもCloudflare Workersへ常設し、実商品名を確認しました。iPhoneアプリの一般配信・ストア申請は未実施で、アプリを正式公開できるとの判定ではありません。
 
-紹介サイトには[正式プライバシーポリシー](https://maeken07.github.io/tabedoki-website/privacy.html)を掲載済みです。公式サイト・お問い合わせには2026-10-26から、iPhone版には公開版の提供開始時から適用します。[サイトの更新方法と確認結果](official-site.md)を参照してください。
+紹介サイトには[正式プライバシーポリシー](https://tabedoki-official.pages.dev/privacy.html)を掲載済みです。公式サイト・お問い合わせには2026-10-26から、iPhone版には公開版の提供開始時から適用します。[サイトの更新方法と確認結果](official-site.md)を参照してください。
 
 初回公開のiPhone版は、本人の回答により **無料・広告なし** の方針です。将来の有料化・広告導入は未定です。問い合わせの確認頻度と保存期間は本人が採用し、フォームにも反映しました。Yahoo商品名の保存・再利用条件と、実際の配布版・問い合わせ運用の受け入れ確認は残っています。
 

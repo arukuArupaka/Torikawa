@@ -56,8 +56,12 @@ function renderMarkdown(markdown) {
         if (cells.every(cell => /^:?-{3,}:?$/.test(cell))) continue;
         rows.push(cells);
       }
-      const row = (cells, tag) => `<tr>${cells.map(cell => `<${tag}>${inline(cell)}</${tag}>`).join('')}</tr>`;
-      output.push(`<div class="table"><table><thead>${row(rows[0], 'th')}</thead><tbody>${rows.slice(1).map(cells => row(cells, 'td')).join('')}</tbody></table></div>`);
+      const row = (cells, header) => `<tr role="row">${cells.map((cell, index) => {
+        const heading = header || index === 0;
+        const tag = heading ? 'th' : 'td';
+        return `<${tag} role="${header ? 'columnheader' : heading ? 'rowheader' : 'cell'}"${heading ? ` scope="${header ? 'col' : 'row'}"` : ''}>${inline(cell)}</${tag}>`;
+      }).join('')}</tr>`;
+      output.push(`<div class="table"><table role="table"><thead role="rowgroup">${row(rows[0], true)}</thead><tbody role="rowgroup">${rows.slice(1).map(cells => row(cells, false)).join('')}</tbody></table></div>`);
       continue;
     }
     if (line.startsWith('- ')) {
@@ -72,6 +76,24 @@ function renderMarkdown(markdown) {
   return output.join('\n');
 }
 
+function policyDocument(body) {
+  const title = body.match(/^<h1>[\s\S]*?<\/h1>/)?.[0] || '';
+  let content = body.slice(title.length).trimStart();
+  const date = content.match(/^<p>制定日[\s\S]*?<\/p>/)?.[0] || '';
+  content = content.slice(date.length).trimStart();
+  const headings = [];
+  content = content.replace(/<h2>([\s\S]*?)<\/h2>([\s\S]*?)(?=<h2>|$)/g, (_match, heading, text) => {
+    const id = `policy-section-${headings.length + 1}`;
+    headings.push({ id, label: heading.replace(/<[^>]*>/g, '') });
+    return `<section class="policy-section" aria-labelledby="${id}"><h2 id="${id}" tabindex="-1">${heading}</h2>${text}</section>`;
+  });
+  const links = headings.map(({ id, label }) => `<li><a href="#${id}">${label}</a></li>`).join('');
+  const toc = links ? `<aside class="policy-sidebar"><nav aria-label="このページの目次"><p class="policy-toc-title">このページの内容</p><ol>${links}</ol></nav></aside>` : '';
+  const mobileToc = links ? `<details class="policy-mobile-toc"><summary>目次から探す</summary><nav aria-label="このページの目次（スマートフォン）"><ol>${links}</ol></nav></details>` : '';
+  const heading = title.replace('<h1>たべどき！！ ', '<h1><span class="policy-title-brand">たべどき！！</span> ');
+  return `<header class="policy-header">${heading}${date}</header>${mobileToc}<div class="policy-layout">${toc}<article class="policy-content" aria-label="プライバシーポリシー本文">${content}</article></div>`;
+}
+
 function createPolicyPages(sources, { preview = false } = {}) {
   for (const document of documents) {
     const source = sources[document.source];
@@ -80,7 +102,7 @@ function createPolicyPages(sources, { preview = false } = {}) {
       throw new Error('未確定の項目が残っています。正式掲載用の出力は作成できません。確認用には --preview を指定してください。');
     }
   }
-  const page = (title, body) => `<!doctype html>
+  const page = (title, body, policy = false) => `<!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer">
 ${preview ? '<meta name="robots" content="noindex, nofollow, noarchive">' : ''}
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
@@ -92,12 +114,20 @@ h1 { font-size: clamp(25px, 5vw, 34px); line-height: 1.5; } h2 { font-size: 21px
 .note { border-left: 4px solid #9b7200; background: #fff7df; padding: 16px; border-radius: 8px; margin: 24px 0; } ul { padding-left: 24px; }
 .table { overflow-x: auto; } table { width: 100%; border-collapse: collapse; font-size: 15px; } th, td { border: 1px solid #d6dfd7; padding: 12px; text-align: left; vertical-align: top; } th { background: #e9f5eb; }
 code { overflow-wrap: anywhere; } footer { border-top: 1px solid #d6dfd7; margin-top: 36px; padding-top: 16px; font-size: 14px; }
-</style></head><body><main><nav aria-label="ページの移動"><a href="index.html">たべどき！！</a><a href="privacy.html">プライバシーポリシー</a><a href="support.html">サポート</a></nav>
+main.policy-document { max-width: 1120px; } .policy-header { margin-bottom: 40px; } .policy-title-brand { display: block; font-size: 15px; color: #146c34; margin-bottom: 10px; }
+.policy-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 48px; } .policy-content { min-width: 0; } .policy-sidebar { align-self: start; position: sticky; top: 24px; }
+.policy-sidebar nav { display: block; max-height: calc(100dvh - 48px); overflow: auto; border: 1px solid #d6dfd7; border-radius: 16px; padding: 16px; }
+.policy-sidebar ol, .policy-mobile-toc ol { list-style: none; padding: 0; margin: 0; } .policy-sidebar a, .policy-mobile-toc a { display: block; padding: 10px 0; font-size: 14px; }
+.policy-toc-title { font-weight: 700; } .policy-mobile-toc { display: none; } .policy-section { scroll-margin-top: 24px; } .policy-section + .policy-section { border-top: 1px solid #d6dfd7; padding-top: 24px; margin-top: 36px; }
+.policy-content h2 { margin-top: 0; } .policy-content p, .policy-content li { line-height: 2; } .policy-content li + li { margin-top: 12px; } .policy-content table { font-size: 16px; table-layout: fixed; } .policy-content th:first-child { width: 28%; }
+@media (max-width: 900px) { .policy-layout { display: block; } .policy-sidebar { display: none; } .policy-mobile-toc { display: block; padding: 16px 20px; margin-bottom: 32px; border: 1px solid #d6dfd7; border-radius: 12px; } .policy-mobile-toc summary { cursor: pointer; font-weight: 700; } .policy-header h1 { font-size: clamp(24px, 6vw, 34px); } }
+@media (max-width: 600px) { .policy-content table, .policy-content tbody, .policy-content tr, .policy-content th, .policy-content td { display: block; width: 100%; } .policy-content thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } .policy-content tr { margin-bottom: 18px; } .policy-content tbody th:first-child { width: 100%; background: #e9f5eb; } }
+</style></head><body><main${policy ? ' class="policy-document" id="policy-top"' : ''}><nav aria-label="ページの移動"><a href="index.html">たべどき！！</a><a href="privacy.html">プライバシーポリシー</a><a href="support.html">サポート</a></nav>
 ${preview ? '<aside class="note" role="note">確認用プレビューです。未確定の項目があるため、正式掲載・施行はまだ行っていません。</aside>' : ''}
-${body}<footer>たべどき!!運営</footer></main></body></html>\n`;
+${policy ? policyDocument(body) : body}<footer>たべどき!!運営${policy ? ' · <a href="#policy-top">ページの先頭へ</a>' : ''}</footer></main></body></html>\n`;
   return {
     'index.html': page('ご案内', '<h1>たべどき！！</h1><p>食材の期限と残量を管理するiPhoneアプリです。</p><ul><li><a href="privacy.html">プライバシーポリシー</a></li><li><a href="support.html">お問い合わせ・サポート</a></li></ul>'),
-    ...Object.fromEntries(documents.map(document => [document.file, page(document.title, renderMarkdown(sources[document.source]))])),
+    ...Object.fromEntries(documents.map(document => [document.file, page(document.title, renderMarkdown(sources[document.source]), document.file === 'privacy.html')])),
   };
 }
 

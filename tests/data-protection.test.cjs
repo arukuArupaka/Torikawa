@@ -31,7 +31,7 @@ class File {
   get size() { return files.get(this.uri)?.length ?? 0; }
   async text() { if (!this.exists) throw new Error('missing file'); return files.get(this.uri).toString(); }
   async base64() { if (!this.exists) throw new Error('missing image'); return files.get(this.uri).toString('base64'); }
-  write(value, options) {
+  writeSync(value, options) {
     files.set(this.uri, Buffer.from(value, options?.encoding === 'base64' ? 'base64' : 'utf8'));
     if (truncateImage && options?.encoding === 'base64') files.set(this.uri, Buffer.from('x'));
     if (failImage && options?.encoding === 'base64') throw new Error('photo disk full');

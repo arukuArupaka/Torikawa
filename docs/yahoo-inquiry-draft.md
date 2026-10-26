@@ -12,7 +12,7 @@
 
 Yahoo!ショッピング商品検索（v3）の利用条件について確認を希望します。
 
-食材の期限・在庫を個人の端末で管理するiPhoneアプリ「たべどき！！」を開発しています。運営者の表示名は「たべどき!!運営」、紹介サイトは https://maeken07.github.io/tabedoki-website/ です。App Storeでの一般配信はまだ行っていません。初回のiPhone版は無料・広告なしで提供する予定で、将来の有料化・広告導入は未定です。
+食材の期限・在庫を個人の端末で管理するiPhoneアプリ「たべどき！！」を開発しています。運営者の表示名は「たべどき!!運営」、紹介サイトは https://tabedoki-official.pages.dev/ です。App Storeでの一般配信はまだ行っていません。初回のiPhone版は無料・広告なしで提供する予定で、将来の有料化・広告導入は未定です。
 
 利用するAPIは `https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch` で、JANコードによる商品名の入力補助を目的としています。注文・出品管理などの出店者向けAPIや、Yahoo! JAPAN IDの認証連携は利用していません。
 

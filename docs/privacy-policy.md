@@ -101,7 +101,7 @@
 
 | 対象 | 提供者・役割と情報の取り扱い |
 | --- | --- |
-| 公式サイト・ポリシーページの配信 | GitHub Pagesを使用します。GitHubはセキュリティのため訪問者のIPアドレスを記録・保存すると案内しています。運営者独自のアクセスログ収集機能は設けていません。[GitHub Pagesのデータ収集](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages#data-collection)と[GitHubのプライバシーに関する方針](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)を参照してください。GitHubは米国など複数の国で処理し、目的や法的義務に応じて保持すると説明しています。 |
+| 公式サイト・ポリシーページの配信 | Cloudflare Pagesを使用します。Cloudflareの基盤でIPアドレスや通信情報などが処理される場合があります。同社の[プライバシーポリシー](https://www.cloudflare.com/privacypolicy/)を参照してください。旧URLから新しいサイトへの案内にはGitHub Pagesを使用します。GitHubはセキュリティのため訪問者のIPアドレスを記録・保存すると案内しています。[GitHub Pagesのデータ収集](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages#data-collection)と[GitHubのプライバシーに関する方針](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)を参照してください。運営者独自のアクセスログ収集機能は設けていません。 |
 | Yahooの商品名検索サーバー | Cloudflare Workersを使用します。独自の永続記録は、過剰利用を防ぐための対象日・当日の回数・次回受付可能時刻のみで、検索時に同じ記録を更新します。商品名・バーコード・IPを独自DBに保存せず、検索要求のログ出力とWorkers observabilityも無効にしています。Cloudflareの基盤ではIPアドレスや通信情報などが処理される場合があります。同社の[プライバシーポリシー](https://www.cloudflare.com/privacypolicy/)では、米国・欧州経済領域を中心とした保存、世界各地での処理、目的や法的義務に応じた保持・削除を説明しています。 |
 | 共有商品サーバー | 初回公開のiPhone版では接続せず、商品共有・通報の記録を収集しません。 |
 | お問い合わせフォーム | Googleフォームを使用します。問い合わせの種類・内容は必須、返信用メールアドレスは任意です。回答画面はログインせず開けます。運営者が指定した対応担当者に限って回答を閲覧し、返信先が記入されている場合はその宛先へメールで連絡します。Googleは米国を含む世界各地で情報を処理する場合があり、本アプリの運営者が保存国を日本に限定すると保証するものではありません。Google自身による接続情報などの取り扱いは、[Googleのプライバシーポリシー](https://policies.google.com/privacy?hl=ja)を参照してください。問い合わせ記録の保存・削除は第8項に従います。 |

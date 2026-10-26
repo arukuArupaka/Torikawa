@@ -1,5 +1,5 @@
 import { ReactNode, Ref } from 'react';
-import { StyleSheet, Text, TextInput, TextInputProps, View } from 'react-native';
+import { StyleSheet, Text, TextInput, TextInputProps, View, type TextInputInstance } from 'react-native';
 import { colors, radius } from '../constants/theme';
 
 export function FormField({
@@ -14,7 +14,7 @@ export function FormField({
   hint?: string;
   error?: string;
   children?: ReactNode;
-  inputRef?: Ref<TextInput>;
+  inputRef?: Ref<TextInputInstance>;
 }) {
   return (
     <View style={styles.group}>

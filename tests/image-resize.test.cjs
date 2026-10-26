@@ -42,7 +42,7 @@ function reset(width = 1600, height = 1200) {
   return { uri: 'file:///original.jpg', width, height };
 }
 
-test('resize uses SDK 57 context API, bounds the longer edge, keeps aspect ratio and saves JPEG at quality 0.7', async () => {
+test('resize uses the ImageManipulator context API, bounds the longer edge, keeps aspect ratio and saves JPEG at quality 0.7', async () => {
   for (const [width, height, expectedAction, expectedWidth, expectedHeight] of [
     [1600, 1200, { width: 800 }, 800, 600], [1200, 1600, { height: 800 }, 600, 800], [2000, 2000, { width: 800 }, 800, 800],
   ]) {

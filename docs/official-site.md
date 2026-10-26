@@ -1,6 +1,26 @@
 # たべどき！！ 公式Webサイト
 
-更新：2026-10-26。アプリの紹介、使い方、画面ギャラリー、FAQ、ダウンロード案内、サポートをまとめる静的サイトです。掲載先は https://maeken07.github.io/tabedoki-website/ です。[正式プライバシーポリシー](https://maeken07.github.io/tabedoki-website/privacy.html)を掲載済みで、現在の更新には `npm.cmd run site:build` の通常出力を使います。iPhoneアプリの一般配信は引き続き準備中です。
+更新：2026-10-26。アプリの紹介、使い方、画面ギャラリー、FAQ、ダウンロード案内、サポートをまとめる静的サイトです。掲載先は https://tabedoki-official.pages.dev/ です。[正式プライバシーポリシー](https://tabedoki-official.pages.dev/privacy.html)を掲載済みで、現在の更新には `npm.cmd run site:build` の通常出力を使います。iPhoneアプリの一般配信は引き続き準備中です。
+
+## 現在の公開先と更新方法
+
+個人のGitHubアカウント名がURLへ入らないよう、2026-10-26にCloudflare Pagesの `tabedoki-official` プロジェクトへ移しました。ドメインの購入・有料プランへの変更はしていません。独自のFunctions・アクセス解析は追加せず、確認済みの静的ファイル16個だけを配信します。
+
+- 公式サイト：<https://tabedoki-official.pages.dev/>
+- ポリシー：<https://tabedoki-official.pages.dev/privacy.html>
+- サポート：<https://tabedoki-official.pages.dev/support.html>
+
+1. 原稿・`website/site-config.json` を更新し、テストと型チェックを実行します。
+2. `npm.cmd run site:build` で通常の正式出力を作ります。出力された `dist-web-test/site-official-…` の16ファイルだけを対象とし、リポジトリ全体・`.env`・ローカル設定・在庫・問い合わせ回答はアップロードしません。
+3. Cloudflareの管理画面で **Workers & Pages → tabedoki-official → Create deployment** を開き、Productionへ公開用フォルダーまたはその内容だけを入れたZIPをアップロードし、配信します。今回のプロジェクトはDirect Uploadで、GitHubへのpushだけでは更新されません。
+4. ホーム・ポリシー・サポートと画像・CSSのHTTPS配信、各リンクと配信内容の一致を確認します。Cloudflareは `.html` のURLを拡張子なしのURLへ転送する場合があります。
+5. URLを変える場合は `eas.json`・`publication.local.json`・`.env.local` のポリシーURL、問い合わせフォームの掲載リンクも揃えます。既存アプリへ設定を反映するにはExpoの再起動または再ビルドが必要です。
+
+旧GitHub Pagesのホーム・ポリシー・サポートは新URLへ自動で移動するHTMLと、移動できない場合のリンクを表示します。旧URLからの案内はコミット `40cddb3889cc1c1d775e3d89b39b8f0606844270` です。GitHubのアカウント名・リポジトリ名やExpo Goの接続URLを変更する方法は使用していません。
+
+公開時に16ファイルのハッシュ一致を確認しました。新URLのcanonical・OG情報・サイトマップ、iPhone productionのポリシーURLの一致は `tests/official-site.test.cjs` と `tests/ios-release-config.test.cjs` でも確認します。配信先に合わせた説明はポリシー第9項へ反映しています。
+
+公式資料：[Pages Direct Upload](https://developers.cloudflare.com/pages/get-started/direct-upload/)・[静的ファイルの料金](https://developers.cloudflare.com/pages/functions/pricing/#static-asset-requests)。
 
 ## 構成とデザイン
 
@@ -106,9 +126,13 @@ URLはHTTPS・認証情報なしに限定し、ストアは公式ホストとア
 - 本文へのスキップ、見出しの階層、画像の説明、フォーカス表示、44px以上の主要操作ボタン、メニューのEscape操作、ギャラリーのキーボード操作に対応しています。
 - 基本の日本語SEOとOG情報を用意し、正式出力では設定したURLからcanonical・OG画像・サイトマップを作ります。プレビュー3ページはnoindex、robots.txtは巡回しない設定です。
 
-## 公開前の紹介サイトを更新する
+2026-10-26にポリシーページの読みやすさを調整しました。本文・表を16pxにし、見出しの余白と区切りを増やしています。PCでは追従する11項目の目次、スマートフォンでは標準の開閉式目次から各見出しへ移動できます。表は狭い画面で項目名・説明を縦に並べ、横幅に収めます。行・列の見出しとtableの意味付けを保持し、本文を折りたたんで隠す構成にはしていません。
 
-掲載用リポジトリ：[maeken07/tabedoki-website](https://github.com/maeken07/tabedoki-website)。アプリ開発元の `arukuArupaka/Torikawa` ではPagesの設定を変更する管理者権限がなかったため、ログイン中の本人のアカウントで管理できるサイト専用リポジトリを使います。今後の更新でも、このリポジトリとURLを引き継ぎます。
+`docs/privacy-policy.md` の文言は変更せず、見出し・本文・表が元の原稿と同じ順序・内容で出力されることを `tests/policy-site.test.cjs` で確認します。目次の移動先・重複する見出し・HTMLのエスケープも回帰テストの対象です。ブラウザーでPC・390px・320px・768px幅を確認し、446件のテストと型チェックが成功しました。実機iPhoneのSafari・VoiceOverでの確認は別に必要です。
+
+## 旧GitHub Pagesでの公開記録（移転前）
+
+旧掲載用リポジトリ：[maeken07/tabedoki-website](https://github.com/maeken07/tabedoki-website)。アプリ開発元の `arukuArupaka/Torikawa` ではPagesの設定を変更する管理者権限がなかったため、本人のアカウントで管理できるサイト専用リポジトリを使用しました。以下は移転前の公開手順の記録です。現在のサイト更新は上記のCloudflare Pagesを使用し、このリポジトリは旧URLの案内に残します。
 
 ```powershell
 npm.cmd run site:build -- --announcement
@@ -150,7 +174,7 @@ Node 24.21.0で `npm test` は420件すべて成功、`npm run typecheck` も成
 
 ### 2026-10-25・公開後の確認結果
 
-公開URL：<https://maeken07.github.io/tabedoki-website/>
+旧公開URL（現在は新サイトへの案内）：<https://maeken07.github.io/tabedoki-website/>
 
 掲載用リポジトリ：<https://github.com/maeken07/tabedoki-website>。公開コミットは `afff5093a4a59721c28c672da54f121449851a0c` です。Pagesの配信元は `main` の `/(root)`、HTTPS強制は有効で、GitHubのビルドは成功しています。
 

@@ -2,7 +2,7 @@ import { Image } from 'react-native';
 
 declare const require: (path: string) => number;
 const resolveImage = (asset: number | string | { uri: string }): string => typeof asset === 'string' ? asset
-  : typeof asset === 'object' ? asset.uri : Image.resolveAssetSource(asset).uri;
+  : typeof asset === 'object' ? asset.uri : Image.resolveAssetSource(asset)?.uri ?? '';
 
 /** Generated recipe illustrations; asset IDs make backups portable across builds. */
 export const generatedRecipeImages: Record<string, string> = {

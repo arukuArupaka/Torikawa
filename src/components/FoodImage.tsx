@@ -7,7 +7,7 @@ import { foodIconCategory, isYahooImage } from '../utils/yahooImagePolicy';
 /** A missing local photo or offline remote image must not hide the rest of a card. */
 export function FoodImage({ source, style, ...props }: ImageProps) {
   const [failedSource, setFailedSource] = useState<ImageProps['source']>();
-  const uri = typeof source === 'object' && source && !Array.isArray(source) ? source.uri : source;
+  const uri = typeof source === 'object' && source && 'uri' in source ? source.uri : source;
   const category = foodIconCategory(uri) ?? (isYahooImage(uri) ? 'other' : null);
   if (category) {
     const icons = { vegetables: 'leaf-outline', meat: 'restaurant-outline', seafood: 'fish-outline',
@@ -17,7 +17,7 @@ export function FoodImage({ source, style, ...props }: ImageProps) {
       <Ionicons name={icons[category]} color={colors.primary} size={32} />
     </View>;
   }
-  const failedUri = typeof failedSource === 'object' && failedSource && !Array.isArray(failedSource) ? failedSource.uri : failedSource;
+  const failedUri = typeof failedSource === 'object' && failedSource && 'uri' in failedSource ? failedSource.uri : failedSource;
   if (!source || (failedSource !== undefined && uri === failedUri)) return (
     <View accessibilityLabel="写真を表示できません" style={[style, { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft }]}>
       <Text style={{ color: colors.textMuted, fontSize: 11, textAlign: 'center' }}>写真なし</Text>

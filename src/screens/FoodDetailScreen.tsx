@@ -6,7 +6,7 @@ import { useAppAlert } from '../context/AppAlertContext';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useRef, useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { FormField } from '../components/FormField';
@@ -55,7 +55,7 @@ export function FoodDetailScreen({ navigation, route }: Props) {
   } | null>(null);
   const [quantityDraft, setQuantityDraft] = useState('');
   const [quantityError, setQuantityError] = useState('');
-  const quantityInput = useRef<TextInput>(null);
+  const quantityInput = useRef<TextInputInstance>(null);
   const quantitySaveLock = useRef(false);
   useEffect(() => {
     if (quantityEditor && (!food || food.id !== quantityEditor.foodId || food.status !== 'active')) setQuantityEditor(null);

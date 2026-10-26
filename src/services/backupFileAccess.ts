@@ -15,6 +15,6 @@ export async function shareJsonFile(contents: string, filename: string, title: s
   if (!(await Sharing.isAvailableAsync())) throw new Error('この端末ではファイル共有を利用できません。');
   assertStorageEpoch(storageEpoch);
   const file = new File(Paths.cache, filename);
-  file.write(contents);
+  file.writeSync(contents);
   await Sharing.shareAsync(file.uri, { dialogTitle: title, mimeType: 'application/json', UTI: 'public.json' });
 }

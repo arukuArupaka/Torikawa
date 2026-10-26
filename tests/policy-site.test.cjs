@@ -45,6 +45,7 @@ test('the approved publication sources export the current privacy policy without
   assert.match(policy, /iPhone版は現在公開準備中/);
   assert.match(policy, /初回公開のiPhone版では、共有商品データベースへの接続・投稿・通報は提供しません/);
   assert.match(policy, /GitHub Pages/);
+  assert.match(policy, /Cloudflare Pages/);
   assert.match(policy, /Cloudflare Workers/);
   assert.match(policy, /OpenAIのChatGPT/);
   assert.match(policy, /href="https:\/\/forms\.gle\/Rjoy4xiwzE7uBDf57"/);
@@ -63,5 +64,38 @@ test('policy rendering escapes untrusted markup and permits only safe public and
   }
   assert.match(renderMarkdown('[policy](privacy-policy.md)'), /href="privacy.html"/);
   assert.equal(renderMarkdown('[internal planning](privacy-policy-publication.md)'), '<p>internal planning</p>');
-  assert.match(renderMarkdown('| 見出し | 内容 |\n| --- | --- |\n| A | **B** |'), /<thead><tr><th>見出し<\/th><th>内容<\/th><\/tr><\/thead>/);
+  const table = renderMarkdown('| 見出し | 内容 |\n| --- | --- |\n| A | **B** |');
+  assert.match(table, /<table role="table">/);
+  assert.match(table, /<th role="columnheader" scope="col">見出し<\/th>/);
+  assert.match(table, /<th role="rowheader" scope="row">A<\/th>/);
+  assert.match(table, /<td role="cell"><strong>B<\/strong><\/td>/);
+});
+
+test('policy contents link to every section without hiding or rewriting the approved text', () => {
+  const realSources = Object.fromEntries(Object.keys(sources).map(file => [file, fs.readFileSync(path.join(__dirname, '../docs', file), 'utf8')]));
+  const html = createPolicyPages(realSources)['privacy.html'];
+  const ids = Array.from(html.matchAll(/<h2 id="(policy-section-\d+)" tabindex="-1">/g), match => match[1]);
+  assert.equal(ids.length, 11); assert.equal(new Set(ids).size, 11);
+  for (const id of ids) {
+    assert.equal(html.split(`href="#${id}"`).length - 1, 2, 'desktop and mobile contents must target the same section');
+    assert.ok(html.includes(`aria-labelledby="${id}"`));
+  }
+  assert.match(html, /<details class="policy-mobile-toc"><summary>目次から探す<\/summary>/);
+  assert.match(html, /nav aria-label="このページの目次"/);
+  assert.match(html, /href="#policy-top">ページの先頭へ/);
+  const article = html.match(/<article class="policy-content"[^>]*>([\s\S]*?)<\/article>/)[1];
+  const header = html.match(/<header class="policy-header">([\s\S]*?)<\/header>/)[1];
+  const text = value => value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  assert.equal(text(header + article), text(renderMarkdown(realSources['privacy-policy.md'])));
+  assert.doesNotMatch(article, /<details|hidden|display:\s*none/);
+});
+
+test('policy section links use generated identifiers and escape untrusted heading labels', () => {
+  const pages = createPolicyPages({ ...sources,
+    'privacy-policy.md': '# プライバシーポリシー\n\n## <img src=x onerror=alert(1)>\n\n本文\n\n## 同じ見出し\n\n次の本文\n\n## 同じ見出し\n\n最後の本文' });
+  const html = pages['privacy.html'];
+  assert.doesNotMatch(html, /<img|id="<|href="#</);
+  assert.match(html, /href="#policy-section-1">&lt;img src=x onerror=alert\(1\)&gt;<\/a>/);
+  assert.equal(html.split('id="policy-section-2"').length - 1, 1);
+  assert.equal(html.split('id="policy-section-3"').length - 1, 1);
 });

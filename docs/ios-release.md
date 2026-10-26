@@ -2,7 +2,7 @@
 
 更新：2026-10-22。利用者の方針はiPhoneアプリのApp Store公開です。Apple Developer Programは登録済み、App Store Connectのアプリは未作成です。登録済みとの回答は、PCでのApple認証や署名証明書の設定まで確認済みという意味ではありません。
 
-2026-10-26追記：[正式ポリシー](https://maeken07.github.io/tabedoki-website/privacy.html)を掲載し、`production`・ローカル設定へURLを反映しました。問い合わせの確認頻度・1年を目安とした削除方針を本人が採用し、フォーム説明にも反映済みです。初回公開用の共有商品APIの接続先は空にしました。App Store Connectへの登録、署名済みビルド、Yahooの商品名の保存・再利用条件の確認は未完了です。
+2026-10-26追記：[正式ポリシー](https://tabedoki-official.pages.dev/privacy.html)を掲載し、`production`・ローカル設定へURLを反映しました。問い合わせの確認頻度・1年を目安とした削除方針を本人が採用し、フォーム説明にも反映済みです。初回公開用の共有商品APIの接続先は空にしました。App Store Connectへの登録、署名済みビルド、Yahooの商品名の保存・再利用条件の確認は未完了です。
 
 同日、Expoアカウント `maeken` に `refrigerator-note` のEASプロジェクトを新規作成し、実際に返されたID `f5c33856-c308-4c95-913e-c7541999bfc3` を `extra.eas.projectId` に設定しました。EAS CLI 25.3.0でproduction設定を検証し、送信予定のアーカイブをローカルで確認済みです。ソースコードのアップロード・クラウドビルド・Appleへの提出はまだ実施していません。
 
@@ -29,7 +29,7 @@
 | --- | --- |
 | `EXPO_PUBLIC_OPERATOR_NAME` | 利用者が決めた「たべどき!!運営」。ローカルと `eas.json` のproductionプロファイルに設定済み。必要な事業者情報への対応とは別途確認する |
 | `EXPO_PUBLIC_SUPPORT_FORM_URL` | 回答者用フォーム `https://forms.gle/Rjoy4xiwzE7uBDf57`。ローカルとproductionプロファイルに設定済み |
-| `EXPO_PUBLIC_PRIVACY_POLICY_URL` | 正式本文を掲載した `https://maeken07.github.io/tabedoki-website/privacy.html`。ローカル・production設定へ反映済み。新規ビルドでリンクを確認する |
+| `EXPO_PUBLIC_PRIVACY_POLICY_URL` | 正式本文を掲載した `https://tabedoki-official.pages.dev/privacy.html`。ローカル・production設定へ反映済み。新規ビルドでリンクを確認する |
 | `EXPO_PUBLIC_YAHOO_LOOKUP_URL` | PCを停止しても使えるHTTPSのYahoo検索API。ループバック・LAN・一時トンネルのURLを正式配布用に流用しない |
 | `EXPO_PUBLIC_SHARED_PRODUCTS_URL` | 初回公開用のproduction設定では明示的に空欄。共有機能の提供を開始するときは、運用・ポリシーを揃えてから設定する |
 
@@ -60,7 +60,7 @@ Expo Goと単独アプリは保存先が別です。在庫や写真は自動で�
 
 ## 公式資料
 
-- [Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/)
+- [Expo SDK 58](https://docs.expo.dev/versions/v58.0.0/)
 - [EAS Buildの初回設定](https://docs.expo.dev/build/setup/)
 - [eas.jsonの設定](https://docs.expo.dev/eas/json/)
 - [EASの環境変数](https://docs.expo.dev/eas/environment-variables/)

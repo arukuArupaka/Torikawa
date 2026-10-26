@@ -4,9 +4,9 @@
 
 ## 開発環境
 
-このプロジェクトはExpo SDK 57、React Native、React、TypeScriptを使用します。依存関係の正確なバージョンは [package.json](../package.json) と [package-lock.json](../package-lock.json) に記録しています。
+このプロジェクトはExpo SDK 58、React Native 0.88、React 19.3、TypeScriptを使用します。依存関係の正確なバージョンは [package.json](../package.json) と [package-lock.json](../package-lock.json) に記録しています。
 
-Node.jsは24.19以降の24系を使用します。共有APIはNode.js組み込みのSQLiteを使います。[Expo SDK 57の公式ドキュメント](https://docs.expo.dev/versions/v57.0.0/)も参照してください。
+Node.jsは24.19以降の24系を使用します。共有APIはNode.js組み込みのSQLiteを使います。[Expo SDK 58の公式ドキュメント](https://docs.expo.dev/versions/v58.0.0/)も参照してください。
 
 VS Codeを使う場合は、リポジトリのフォルダーで `code .` を実行します。コマンドがない場合は「ファイル」→「フォルダーを開く」から選べます。
 
@@ -37,7 +37,7 @@ Expo起動中は `a` でAndroidエミュレーター、macOSでは `i` でiOSシ
 
 依存を追加する場合は `npx.cmd expo install パッケージ名` を使い、SDKに合うバージョンを選びます。通常のセットアップでは、READMEの `npm.cmd ci` だけで必要な依存を導入できます。
 
-[2026年10月17日の依存更新記録](dependency-update-2026-10-17.md)に、SDK 57の推奨パッチ版、脆弱性指摘の比較、残した依存の理由、実機確認項目をまとめています。依存の更新後は `npm.cmd test`、`npm.cmd run typecheck`、`npx.cmd expo-doctor` と各プラットフォームの書き出しを確認し、`npm.cmd run licenses` でOSS通知も再生成します。現在のauditの残件は、強制更新や検査の除外で隠さず記録しています。
+[2026年10月26日のSDK 58への更新記録](sdk58-upgrade-2026-10-26.md)に、Expo Goとの互換性、必要なAPI移行、検証結果と実機確認項目をまとめています。[2026年10月17日の依存更新記録](dependency-update-2026-10-17.md)はSDK 57当時の記録です。依存の更新後は `npm.cmd test`、`npm.cmd run typecheck`、`npx.cmd expo-doctor` と各プラットフォームの書き出しを確認し、`npm.cmd run licenses` でOSS通知も再生成します。現在のauditの残件は、強制更新や検査の除外で隠さず記録しています。
 
 ## 環境変数の設定
 
@@ -62,7 +62,7 @@ Copy-Item .env.example .env
 
 `EXPO_PUBLIC_` の値はアプリから参照できる公開設定です。秘密鍵・DB認証情報は入れません。共有APIのサーバー設定は [server/README.md](../server/README.md) にまとめています。
 
-正式ポリシーの[掲載用本文](privacy-policy.md)と[掲載前の確認事項](privacy-policy-publication.md)、[問い合わせ運用](support-operations.md)を用意しています。運営者表示名と問い合わせフォームはローカル・iPhoneのproductionビルド設定へ反映済みです。保持期間・配信先・施行日が未確定のため、正式ポリシーURLは未設定です。`npm.cmd run policy:build -- --preview` で掲載予定ページをローカルへ作成できます。未確定項目が残っている間は、正式掲載用の出力を停止します。
+正式ポリシーの[掲載用本文](privacy-policy.md)と[掲載前の確認事項](privacy-policy-publication.md)、[問い合わせ運用](support-operations.md)を用意しています。運営者表示名・問い合わせフォーム・[正式ポリシーURL](https://tabedoki-official.pages.dev/privacy.html)はローカル・iPhoneのproductionビルド設定へ反映済みです。[公式サイト](official-site.md)はCloudflare Pagesで公開し、旧URLからも新URLへ案内します。本文を改定するときは `npm.cmd run policy:build -- --preview` でローカル確認できます。未確定項目が残っている場合に正式掲載用の出力を停止する保護は維持します。
 
 Yahoo Client IDはサーバーに設定し、アプリに含めません。旧 `EXPO_PUBLIC_YAHOO_SHOPPING_APP_ID` は使用しません。検索結果の商品画像も使用せず、食材アイコンまたは自分の写真を表示します。接続手順は [Yahooの商品名検索](yahoo-name-search.md) を参照してください。利用規約上の保存・再利用範囲、商用利用などの確認が完了したことを意味しません。[Phase 5：公開準備](phase5-publication.md)を確認してください。連絡先・ポリシーが未設定の場合、アプリ内では準備中と表示します。
 
@@ -130,7 +130,7 @@ Torikawa/
 | 状況 | 対処 |
 | --- | --- |
 | PowerShellで `npm` が実行できない | `npm.cmd` / `npx.cmd` を使用 |
-| 「Project is incompatible」と表示される | プロジェクトとExpo GoがSDK 57に対応しているか確認し、古いサーバーを終了 |
+| 「Project is incompatible」と表示される | プロジェクトとExpo GoがともにSDK 58へ対応しているか確認。古いサーバーを終了し、新しいQRを使用。保存データ保護のためExpo Goを削除しない |
 | 古い画面が表示される | `npx.cmd expo start --clear` で再起動し、新しいQRコードを使用 |
 | スマホから接続できない | PCとスマホを同じWi-Fiへ接続。必要に応じて `npx.cmd expo start --tunnel` を使用 |
 | 共有機能が「準備中」になる | `EXPO_PUBLIC_SHARED_PRODUCTS_URL` を確認してExpoを再起動 |
