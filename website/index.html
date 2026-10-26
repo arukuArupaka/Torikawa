@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="冷蔵庫の中身も、食材の期限も。たべどき！！は、食材の期限・在庫を管理して、買った食材を使いきる毎日を支えるアプリです。">
+  <meta name="theme-color" content="#f9faf5">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; font-src 'self'; style-src 'self'; style-src-attr 'unsafe-hashes' 'sha256-1q1CgRR0Bk725F8cgE+Iv37LjM0gAziyuY7ZpSLhwnA='; script-src 'self'; base-uri 'none'; form-action 'none'">
+  <!--PREVIEW_META-->
+  <!--SEO_META-->
+  <title>たべどき！！｜その食材、忘れてない？</title>
+  <link rel="icon" type="image/png" href="assets/app-icon.png">
+  <link rel="stylesheet" href="site.css">
+  <script src="site.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">本文へ進む</a>
+  <header class="site-header" id="site-header">
+    <div class="header-inner">
+      <a class="brand" href="./" aria-label="たべどき！！ ホーム">
+        <img src="assets/app-icon.png" width="44" height="44" alt="" decoding="async">
+        <span>たべどき<span class="brand-marks">！！</span></span>
+      </a>
+      <button class="menu-toggle" id="menu-toggle" aria-expanded="false" aria-controls="site-nav" hidden>
+        <span id="menu-label">メニュー</span><span class="icon icon-menu" aria-hidden="true"></span>
+      </button>
+      <nav class="site-nav" id="site-nav" aria-label="メインメニュー">
+        <a href="#home">ホーム</a><a href="#features">特徴</a><a href="#guide">使い方</a><a href="#faq">よくある質問</a>
+        <a class="nav-download" href="#download">ダウンロード<span class="icon icon-arrow-down" aria-hidden="true"></span></a>
+      </nav>
+    </div>
+  </header>
+  <!--PREVIEW_NOTICE-->
+  <main id="main">
+    <section class="hero section-wrap" id="home" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="small-dot" aria-hidden="true"></span>食材の期限・在庫管理アプリ</p>
+        <h1 id="hero-title">その食材、<br><span>忘れてない？</span></h1>
+        <p class="hero-description">冷蔵庫の中身も、食材の期限も。<br>たべどき！！で、かんたん管理。</p>
+        <p class="hero-subtext">「何がある？」がわかると、<br>今日のごはんも、次の買い物も変わっていく。</p>
+        <div class="hero-actions"><a class="button primary" href="#download">アプリの公開について<span class="icon icon-arrow-right" aria-hidden="true"></span></a><a class="text-link" href="#features">特徴を見る<span class="icon icon-arrow-down" aria-hidden="true"></span></a></div>
+        <p class="release-status"><span class="status-dot" aria-hidden="true"></span><!--RELEASE_LABEL--></p>
+        <div class="hero-signature"><span class="icon icon-feather" aria-hidden="true"></span><p>食材をムダにしない、<br>毎日をもっと便利に。</p></div>
+      </div>
+      <figure class="hero-visual">
+        <div class="hero-orbit" aria-hidden="true"></div>
+        <div class="hero-phone-back phone-frame"><img src="assets/screens/register.jpg" width="390" height="844" alt="食材名・期限日・残量・保存場所を確認する登録画面" decoding="async"></div>
+        <div class="hero-phone-front phone-frame"><img src="assets/screens/home.jpg" width="390" height="844" alt="今日までと3日以内の食材を確認できるホーム画面" fetchpriority="high" decoding="async"></div>
+        <div class="visual-note note-top"><span class="icon icon-clock" aria-hidden="true"></span><span>今日の「食べどき」を、<br><strong>ひと目で。</strong></span></div>
+        <div class="visual-note note-bottom"><span class="icon icon-check-circle" aria-hidden="true"></span>あるものを知る。使いきる。</div>
+        <figcaption class="screen-disclaimer">開発中のWeb版の実画面・撮影用サンプルです。</figcaption>
+      </figure>
+    </section>
+
+    <section class="problems-section section-wrap" aria-labelledby="problems-title">
+      <div class="problems-heading" data-reveal><p class="eyebrow">こんなこと、ありませんか？</p><h2 id="problems-title">買ったのに、<br class="mobile-break">使いきれなかった。</h2><p>毎日の小さな「うっかり」を、<br class="mobile-break">ひとつずつ減らしていこう。</p></div>
+      <div class="problem-grid" data-reveal>
+        <article><span class="icon icon-clock" aria-hidden="true"></span><h3>気づけば、期限切れ。</h3><p>冷蔵庫の奥にしまった食材を、<br>すっかり忘れていた。</p></article>
+        <article><span class="icon icon-repeat" aria-hidden="true"></span><h3>また同じものを買った。</h3><p>まだ家にあるのに、<br>買い物かごへ入れてしまう。</p></article>
+        <article><span class="icon icon-search" aria-hidden="true"></span><h3>家に、何があったっけ？</h3><p>買い物中に思い出せず、<br>献立も決められない。</p></article>
+        <article><span class="icon icon-list" aria-hidden="true"></span><h3>確認するのが、ひと手間。</h3><p>一つずつ手に取って、<br>期限を確かめるのは大変。</p></article>
+      </div>
+      <p class="bridge-copy" data-reveal>冷蔵庫を開ける前に、<br class="mobile-break"><strong>たべどき！！を開こう。</strong><span class="icon icon-arrow-down" aria-hidden="true"></span></p>
+    </section>
+
+    <section class="features-section" id="features" aria-labelledby="features-title">
+      <div class="section-wrap">
+        <div class="section-heading centered" data-reveal><p class="eyebrow">たべどき！！の特徴</p><h2 id="features-title">あるものがわかる。<br>食べどきがわかる。</h2><p>買ったあとから、使いきるところまで。<br>食材管理を、いつもの暮らしに。</p></div>
+        <article class="feature-story" data-reveal>
+          <div class="feature-media media-inventory"><span class="media-word" aria-hidden="true">STOCK</span><div class="phone-frame feature-phone"><img src="assets/screens/storage.jpg" width="390" height="844" loading="lazy" decoding="async" alt="冷蔵・冷凍・常温に分けて食材を管理する画面"></div><div class="media-label"><span class="icon icon-box" aria-hidden="true"></span>冷蔵も、冷凍も、常温も。</div></div>
+          <div class="feature-copy"><p class="feature-kicker"><span>01</span>食材・在庫の管理</p><h3>冷蔵庫の中身を、<br>手のひらに。</h3><p>食材名、写真、残量、メモをひとつに。<br>家にあるものを、買い物の前にも確認できます。</p><div class="feature-points"><div><span class="icon icon-grid" aria-hidden="true"></span><h4>保存場所ごとに、すっきり。</h4><p>冷蔵・冷凍・常温で切り替えて、探したい食材を見つけやすく。</p></div><div><span class="icon icon-search" aria-hidden="true"></span><h4>名前で検索、期限順で確認。</h4><p>食材が増えても、必要な情報へすぐにたどり着けます。</p></div></div></div>
+        </article>
+        <article class="feature-story feature-reverse" data-reveal>
+          <div class="feature-media media-calendar"><span class="media-word" aria-hidden="true">TIMING</span><div class="phone-frame feature-phone"><img src="assets/screens/calendar.jpg" width="390" height="844" loading="lazy" decoding="async" alt="期限のある日に件数が表示されるカレンダー画面"></div><div class="media-label"><span class="icon icon-calendar" aria-hidden="true"></span>「いつまで？」を、見える形に。</div></div>
+          <div class="feature-copy"><p class="feature-kicker"><span>02</span>期限の確認・通知</p><h3>先に食べたいものが、<br>すぐわかる。</h3><p>今日までの食材、3日以内に期限がくる食材。<br>ひと目で確認して、今日使うものを決めましょう。</p><div class="feature-points"><div><span class="icon icon-calendar" aria-hidden="true"></span><h4>カレンダーで、先の予定まで。</h4><p>日付から食材を確認。数日先の食べどきも見渡せます。</p></div><div><span class="icon icon-bell" aria-hidden="true"></span><h4>期限の前に、通知でお知らせ。</h4><p>通知するタイミングを設定できます。アプリとiPhoneで通知を許可する必要があります。</p></div></div></div>
+        </article>
+        <article class="feature-story" data-reveal>
+          <div class="feature-media media-register"><span class="media-word" aria-hidden="true">EASY</span><div class="phone-frame feature-phone"><img src="assets/screens/register.jpg" width="390" height="844" loading="lazy" decoding="async" alt="食材名と期限、数量、保存場所をまとめて入力する画面"></div><div class="media-label"><span class="icon icon-edit-3" aria-hidden="true"></span>まずは、ひとつ登録してみよう。</div></div>
+          <div class="feature-copy"><p class="feature-kicker"><span>03</span>かんたん登録</p><h3>続けるために、<br>入力のひと手間を少なく。</h3><p>すべてを細かく入力しなくても大丈夫。<br>食材名と期限から、あなたのペースで始められます。</p><div class="feature-points"><div><span class="icon icon-camera" aria-hidden="true"></span><h4>バーコードから、商品名を検索。</h4><p>見つからない商品は手入力で。商品名検索にはインターネット接続が必要です。</p></div><div><span class="icon icon-repeat" aria-hidden="true"></span><h4>よく買う食材は、もう一度。</h4><p>前の登録内容を利用して入力を短縮。期限は今回のパッケージを確認してください。</p></div></div></div>
+        </article>
+        <p class="section-footnote">紹介しているのは現在の開発版の機能です。画面・仕様は公開時に変更になる場合があります。通知の実画面はWeb版には含まれません。</p>
+      </div>
+    </section>
+
+    <section class="guide-section" id="guide" aria-labelledby="guide-title"><div class="section-wrap">
+      <div class="guide-heading" data-reveal><div><p class="eyebrow">はじめての使い方</p><h2 id="guide-title">食べきる毎日は、<br>この3ステップから。</h2></div><p>まずは今日買ったものをひとつ。<br>無理なく、少しずつ始めましょう。</p></div>
+      <ol class="guide-steps" data-reveal>
+        <li><div class="step-top"><span class="step-number">01</span><span class="icon icon-edit-3" aria-hidden="true"></span></div><h3>食材を登録する</h3><p>名前・期限・残量・保存場所を確認して保存。写真やメモも付けられます。</p><span class="step-tag">買い物から帰ったら</span></li>
+        <li><div class="step-top"><span class="step-number">02</span><span class="icon icon-calendar" aria-hidden="true"></span></div><h3>期限や在庫を確認する</h3><p>ホームやカレンダーを開いて確認。期限の近い食材から、今日使うものを選びます。</p><span class="step-tag">料理や買い物の前に</span></li>
+        <li><div class="step-top"><span class="step-number">03</span><span class="icon icon-check-circle" aria-hidden="true"></span></div><h3>おいしく、使いきる</h3><p>使ったら残量を更新。使いきった食材を記録して、次の買い物につなげましょう。</p><span class="step-tag">食べ終わったら</span></li>
+      </ol><a class="text-link guide-help" href="support.html">詳しい使い方・サポート<span class="icon icon-arrow-up-right" aria-hidden="true"></span></a>
+    </div></section>
+
+    <section class="gallery-section section-wrap" id="gallery" aria-labelledby="gallery-title">
+      <div class="gallery-heading" data-reveal><div><p class="eyebrow">アプリ画面</p><h2 id="gallery-title">毎日の管理を、<br>見やすく、使いやすく。</h2></div><div class="gallery-navigation" id="gallery-navigation" hidden><span id="gallery-status" aria-live="polite" aria-atomic="true"></span><button class="round-button" id="gallery-prev" aria-label="前のアプリ画面を見る" aria-controls="gallery-track"><span class="icon icon-arrow-left" aria-hidden="true"></span></button><button class="round-button" id="gallery-next" aria-label="次のアプリ画面を見る" aria-controls="gallery-track"><span class="icon icon-arrow-right" aria-hidden="true"></span></button></div></div>
+      <p class="gallery-intro">横にスクロールして、実際の画面をご覧ください。</p>
+      <div class="gallery-track" id="gallery-track" tabindex="0" role="region" aria-label="アプリ画面ギャラリー。左右の矢印キーでも移動できます" aria-describedby="gallery-note">
+        <figure class="gallery-slide"><figcaption><span>01</span><strong>食材一覧</strong><p>先に使いたい食材から確認。</p></figcaption><div class="phone-frame"><img src="assets/screens/home.jpg" width="390" height="844" loading="lazy" decoding="async" alt="期限の件数と食材一覧が見えるホーム画面"></div></figure>
+        <figure class="gallery-slide"><figcaption><span>02</span><strong>食材の登録</strong><p>名前から保存まで、ひとつの画面で。</p></figcaption><div class="phone-frame"><img src="assets/screens/register.jpg" width="390" height="844" loading="lazy" decoding="async" alt="トマトの名前、期限、数量を入力した登録画面"></div></figure>
+        <figure class="gallery-slide"><figcaption><span>03</span><strong>カレンダー</strong><p>ひと月の期限を、見渡せる。</p></figcaption><div class="phone-frame"><img src="assets/screens/calendar.jpg" width="390" height="844" loading="lazy" decoding="async" alt="10月25日と28日に食材の期限があるカレンダー画面"></div></figure>
+        <figure class="gallery-slide"><figcaption><span>04</span><strong>保存場所別の管理</strong><p>探したい場所で、すっきり整理。</p></figcaption><div class="phone-frame"><img src="assets/screens/storage.jpg" width="390" height="844" loading="lazy" decoding="async" alt="保存場所別に切り替えて冷蔵の食材を表示した画面"></div></figure>
+        <figure class="gallery-slide"><figcaption><span>05</span><strong>レシピを探す</strong><p>ある食材を、今日のごはんへ。</p></figcaption><div class="phone-frame"><img src="assets/screens/recipes.jpg" width="390" height="844" loading="lazy" decoding="async" alt="登録したトマトと卵から内蔵レシピをおすすめする画面。料理画像はAI生成のイメージ"></div></figure>
+      </div>
+      <p class="section-footnote" id="gallery-note">開発中のWeb版を撮影した画面です。食材データは撮影用のサンプルで、日付・数量は例です。レシピの料理画像はAI生成のイメージです。</p>
+    </section>
+
+    <section class="faq-section section-wrap" id="faq" aria-labelledby="faq-title">
+      <div class="section-heading" data-reveal><p class="eyebrow">よくある質問</p><h2 id="faq-title">使う前の、<br>気になること。</h2><p>ほかのご質問も、<br>お気軽にお寄せください。</p><a class="text-link" href="support.html">サポートはこちら<span class="icon icon-arrow-up-right" aria-hidden="true"></span></a></div>
+      <div class="faq-list" data-reveal>
+        <details><summary>今すぐダウンロードできますか？<span class="icon icon-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p><!--DOWNLOAD_ANSWER--></p></div></details>
+        <details><summary>利用料金はかかりますか？<span class="icon icon-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>初回公開のiPhone版は、無料・広告なしで提供する予定です。配信開始時の案内は、このサイトとApp Storeでお知らせします。</p></div></details>
+        <details><summary>どの端末で使えますか？<span class="icon icon-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p><!--DEVICE_ANSWER--></p></div></details>
+        <details><summary>バーコードだけで期限もわかりますか？<span class="icon icon-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>バーコードで検索するのは商品名などの商品情報です。今回買った商品の期限・残量・保存場所は、パッケージや実際の状態を確認して登録してください。見つからない商品も手入力で登録できます。</p></div></details>
+        <details><summary>通知が届かないときは？<span class="icon icon-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>アプリとiPhoneの両方で、通知の設定を確認してください。通知は食材の管理を助けるもので、食品の安全性を判定するものではありません。期限や保存状態はご自身でも確認してください。</p></div></details>
+        <details><summary>冷蔵庫の中身がほかの人に見えますか？<span class="icon icon-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>個人の在庫・期限・数量・メモ・写真を、ほかの利用者に公開する機能ではありません。商品共有機能を利用する場合も、同意して送信した商品名やバーコードなどの商品情報が対象です。</p></div></details>
+        <details><summary>機種変更すると、データはどうなりますか？<span class="icon icon-plus" aria-hidden="true"></span></summary><div class="faq-answer"><p>データは利用している端末に保存し、別端末との自動同期はありません。機種変更やアプリの削除前には、アプリの設定からバックアップを書き出し、新しい端末で復元してください。</p></div></details>
+      </div>
+    </section>
+
+    <section class="download-section section-wrap" id="download" aria-labelledby="download-title"><div class="download-card" data-reveal>
+      <div class="download-copy"><p class="eyebrow">たべどき！！と、これから。</p><h2 id="download-title">買ってよかった。<br>食べきれてよかった。</h2><p>今日の食材を、明日の「しまった」にしない。<br>あなたの食べどきを、たべどき！！で。</p><div class="download-actions"><!--DOWNLOAD_ACTIONS--></div><p class="download-detail"><!--DOWNLOAD_DETAIL--></p></div>
+      <div class="download-brand"><img src="assets/app-icon.png" width="144" height="144" alt="葉っぱと時計を組み合わせた、たべどき！！のアプリアイコン" loading="lazy" decoding="async"><span>たべどき！！</span><small>食材をムダにしない、毎日をもっと便利に。</small></div>
+    </div></section>
+    <section class="contact-section section-wrap" aria-labelledby="contact-title"><div><span class="icon icon-heart" aria-hidden="true"></span><div><h2 id="contact-title">あなたの声で、もっと使いやすく。</h2><p>使い方のご質問、不具合のご報告、ご意見を受け付けています。</p></div></div><a class="text-link" href="support.html">お問い合わせ<span class="icon icon-arrow-up-right" aria-hidden="true"></span></a></section>
+  </main>
+  <footer class="site-footer"><div class="section-wrap footer-inner"><div class="footer-brand"><a class="brand" href="./"><img src="assets/app-icon.png" width="40" height="40" alt="" loading="lazy" decoding="async"><span>たべどき！！</span></a><p>食べどきを、見逃さない。</p></div><nav class="footer-links" aria-label="フッターメニュー"><a href="#home">ホーム</a><a href="#features">特徴</a><a href="#guide">使い方</a><a href="#faq">よくある質問</a><a href="#download">ダウンロード</a></nav><div class="footer-bottom"><div><a href="privacy.html">プライバシーポリシー</a><a href="support.html">お問い合わせ・サポート</a><a href="assets/licenses.txt">素材のライセンス</a></div><small>© 2026 たべどき!!運営</small></div><div class="yahoo-attribution">
+<!-- Begin Yahoo! JAPAN Web Services Attribution Snippet -->
+<span style="margin:15px 15px 15px 15px"><a href="https://developer.yahoo.co.jp/sitemap/">Webサービス by Yahoo! JAPAN</a></span>
+<!-- End Yahoo! JAPAN Web Services Attribution Snippet -->
+  </div></div></footer>
+</body>
+</html>

@@ -46,9 +46,11 @@ export function AppInformationScreen({ navigation, route }: Props) {
           </View>
         </> : <>
           <View style={styles.card}>
-            <Text accessibilityRole="header" style={styles.title}>アプリアイコン（Expoテンプレート）</Text>
-            <Text style={styles.body}>標準アイコン画像はExpoのテンプレートに由来します。MITライセンスの著作権表示と本文を掲載します。</Text>
-            {link('アイコンの元ファイル', expoTemplateAssetNotice.sourceUrl)}
+            <Text accessibilityRole="header" style={styles.title}>アプリアイコン</Text>
+            <Text style={styles.body}>葉っぱと時計を組み合わせた、このアプリ用のAI生成画像を使用しています。</Text>
+            <Text accessibilityRole="header" style={styles.title}>Expoテンプレートの素材</Text>
+            <Text style={styles.body}>開発初期に使用したExpoテンプレートの標準画像について、MITライセンスの著作権表示と本文を掲載します。</Text>
+            {link('Expoテンプレートの元ファイル', expoTemplateAssetNotice.sourceUrl)}
             <Text selectable style={styles.body}>{expoTemplateAssetNotice.text}</Text>
           </View>
           <View style={styles.card}>

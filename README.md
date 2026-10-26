@@ -96,8 +96,10 @@ Yahoo検索はサーバー経由で商品名を取得し、Yahooの商品画像�
 | --- | --- |
 | 公開前の画像・API・プライバシー等の課題を確認する | [公開前の権利・規約確認](docs/publication-compliance-review.md) |
 | アイコン・レシピ画像・文章の出所を確認する | [素材の確認記録](docs/asset-sources.md) |
-| プライバシーポリシーの掲載用本文を読む | [掲載用原稿・未施行](docs/privacy-policy.md) |
+| 正式プライバシーポリシーを読む | [公開ページ](https://maeken07.github.io/tabedoki-website/privacy.html)・[管理用の本文](docs/privacy-policy.md) |
 | ポリシーの未設定項目と掲載手順を確認する | [掲載前の確認事項](docs/privacy-policy-publication.md) |
+| 問い合わせの受付・返信・記録の削除を運用する | [問い合わせ運用手順](docs/support-operations.md) |
+| 公式サイトを起動・公開準備する（実画面・使い方・FAQ） | [公式サイトの作成と確認](docs/official-site.md) |
 | Phase 5の公開準備・未確定事項を確認する | [Phase 5：公開準備](docs/phase5-publication.md) |
 | 公開設定と実機確認を進める | [公開前チェックリスト](docs/publication-checklist.md) |
 | Phase 1〜4の確認結果と残る作業を見る | [横断確認の結果](docs/phases1-4-verification.md) |

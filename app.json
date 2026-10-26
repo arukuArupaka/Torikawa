@@ -4,22 +4,19 @@
     "slug": "refrigerator-note",
     "version": "1.20.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/branding/fresh-moment.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.arukuarupaka.tabedoki",
+      "buildNumber": "1"
     },
     "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#EAF7ED",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      },
+      "icon": "./assets/branding/fresh-moment.png",
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/branding/fresh-moment.png"
     },
     "plugins": [
       "expo-font",
@@ -43,6 +40,12 @@
       ],
       "expo-sharing",
       "expo-status-bar"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f5c33856-c308-4c95-913e-c7541999bfc3"
+      }
+    },
+    "owner": "maeken"
   }
 }

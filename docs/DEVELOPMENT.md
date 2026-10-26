@@ -33,6 +33,8 @@ Expo起動中は `a` でAndroidエミュレーター、macOSでは `i` でiOSシ
 
 友達のiPhoneへ渡す場合は、専用アプリのTestFlight／Ad Hoc配布、または [Webテスト版](web-friend-testing.md) を使います。Web版では期限通知・ネイティブ固有の権限を確認できません。
 
+正式リリースの対象はiPhone版です。[iPhone版のビルド・TestFlight・公開手順](ios-release.md)を参照してください。Web・Androidの既存設定は開発用として保持します。
+
 依存を追加する場合は `npx.cmd expo install パッケージ名` を使い、SDKに合うバージョンを選びます。通常のセットアップでは、READMEの `npm.cmd ci` だけで必要な依存を導入できます。
 
 [2026年10月17日の依存更新記録](dependency-update-2026-10-17.md)に、SDK 57の推奨パッチ版、脆弱性指摘の比較、残した依存の理由、実機確認項目をまとめています。依存の更新後は `npm.cmd test`、`npm.cmd run typecheck`、`npx.cmd expo-doctor` と各プラットフォームの書き出しを確認し、`npm.cmd run licenses` でOSS通知も再生成します。現在のauditの残件は、強制更新や検査の除外で隠さず記録しています。
@@ -60,7 +62,7 @@ Copy-Item .env.example .env
 
 `EXPO_PUBLIC_` の値はアプリから参照できる公開設定です。秘密鍵・DB認証情報は入れません。共有APIのサーバー設定は [server/README.md](../server/README.md) にまとめています。
 
-正式ポリシーの[掲載用本文](privacy-policy.md)と[掲載前の確認事項](privacy-policy-publication.md)を用意しています。連絡先・運用・施行日が未確定の原稿のため、作成しただけでは公開設定を変更しません。
+正式ポリシーの[掲載用本文](privacy-policy.md)と[掲載前の確認事項](privacy-policy-publication.md)、[問い合わせ運用](support-operations.md)を用意しています。運営者表示名と問い合わせフォームはローカル・iPhoneのproductionビルド設定へ反映済みです。保持期間・配信先・施行日が未確定のため、正式ポリシーURLは未設定です。`npm.cmd run policy:build -- --preview` で掲載予定ページをローカルへ作成できます。未確定項目が残っている間は、正式掲載用の出力を停止します。
 
 Yahoo Client IDはサーバーに設定し、アプリに含めません。旧 `EXPO_PUBLIC_YAHOO_SHOPPING_APP_ID` は使用しません。検索結果の商品画像も使用せず、食材アイコンまたは自分の写真を表示します。接続手順は [Yahooの商品名検索](yahoo-name-search.md) を参照してください。利用規約上の保存・再利用範囲、商用利用などの確認が完了したことを意味しません。[Phase 5：公開準備](phase5-publication.md)を確認してください。連絡先・ポリシーが未設定の場合、アプリ内では準備中と表示します。
 
@@ -137,6 +139,12 @@ Torikawa/
 共有APIの配置・永続ディスク・CORS・投稿制限・バックアップは [共有商品DBの運用手順](../server/README.md) を参照してください。
 
 別の接続先を指定してExpo exportする場合、キャッシュに前の値が残ることがあります。接続先が反映されないときは `--clear` を付けて書き出し直し、生成物に意図した公開URLが含まれることを確認してください。確認用のURL・デモ設定を公開ビルドへ残さないでください。
+
+## アプリアイコン
+
+`app.json` の `icon`・`android.icon`・`web.favicon` は、採用済みの `assets/branding/fresh-moment.png` を参照します。元画像と制作記録は [素材の説明](asset-sources.md) を参照してください。画像は正方形・透過なしのPNGで、必要な配布サイズはExpoが生成します。Androidで旧テンプレートが優先されるadaptiveIcon設定は使用していません。
+
+Expo Goではプロジェクトの表示用アイコンに使われますが、スマートフォンのホーム画面にあるExpo Go自体のアイコンは変わりません。独立したアプリのホームアイコンにはネイティブビルド・再インストールが必要です。Web版は再書き出しし、faviconのキャッシュが残る場合はブラウザーを再読み込みして確認してください。アプリの在庫や保存データを削除する必要はありません。
 
 ## バックアップ・商品通信の回帰確認
 

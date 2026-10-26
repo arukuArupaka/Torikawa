@@ -1,0 +1,59 @@
+{
+  "capturedDate": "2026-10-25",
+  "source": "たべどき！！の現在の開発版をWeb用に書き出し、PC内の撮影専用ブラウザーで操作して撮影。ネイティブiPhone版のスクリーンショットではない。",
+  "sourceExport": "dist-web-test/site-qgCVRl",
+  "sampleData": [
+    "トマト2個",
+    "たまご6個",
+    "冷凍ほうれん草1個",
+    "パスタ1袋"
+  ],
+  "privacy": "新しいブラウザー保存領域に撮影用サンプルのみ登録。利用者の在庫・写真・問い合わせ回答・外部サービスの画像は使用していない。",
+  "transformation": "撮影時のJPEGを同じバイト列のまま配信用に使用。390×844px。画面内容の描き直し、合成、再圧縮はしていない。",
+  "recipeImages": "内蔵レシピのAI生成イメージ。撮影画面内にもその旨を表示。",
+  "icon": {
+    "file": "app-icon.png",
+    "width": 256,
+    "height": 256,
+    "source": "../../assets/branding/fresh-moment.png",
+    "sourceSha256": "1c39081b29efdbf78567733805777fd1d3fb15b01e4767d450b878f6b38334fe",
+    "transformation": "@expo/image-utilsで256×256pxに縮小。元の採用画像は変更していない。"
+  },
+  "screens": [
+    {
+      "file": "screens/home.jpg",
+      "width": 390,
+      "height": 844,
+      "sha256": "fd381c59e07e76f764a09f6f2b9a4ea57bfb357efb8848ba2bc8ebe4543a13ae",
+      "bytes": 35907
+    },
+    {
+      "file": "screens/register.jpg",
+      "width": 390,
+      "height": 844,
+      "sha256": "7af8f672b3b253bbd86cac620d7819b125605df7f73b1a835938e01dc0695795",
+      "bytes": 26479
+    },
+    {
+      "file": "screens/calendar.jpg",
+      "width": 390,
+      "height": 844,
+      "sha256": "9630af48213971b7c70c3dfcd01a497561837a28e29102494550a69c2552efe7",
+      "bytes": 25722
+    },
+    {
+      "file": "screens/storage.jpg",
+      "width": 390,
+      "height": 844,
+      "sha256": "fddb479b1f3f373ade53339b51cac02ed099173208c4991552d56352f8b7d4a2",
+      "bytes": 35637
+    },
+    {
+      "file": "screens/recipes.jpg",
+      "width": 390,
+      "height": 844,
+      "sha256": "b93e1c445cd925d292c66038e8c0568bc8d7931b62ab5e0c75bab0eab861a84c",
+      "bytes": 50922
+    }
+  ]
+}

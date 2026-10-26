@@ -1,0 +1,13 @@
+{
+  "name": "tabedoki-yahoo-lookup",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "vars": { "DAILY_LOOKUP_LIMIT": "1000" },
+  "durable_objects": {
+    "bindings": [{ "name": "YAHOO_LOOKUP_GATE", "class_name": "YahooLookupGate" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["YahooLookupGate"] }]
+}

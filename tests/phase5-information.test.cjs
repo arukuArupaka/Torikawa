@@ -106,6 +106,23 @@ test('external service information retains the full Yahoo credit and working off
   assert.deepEqual(alerts, []);
 });
 
+test('icon information distinguishes the adopted generated artwork from retained Expo notices', async t => {
+  clear(); t.after(restore);
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(AppInformationScreen, {
+    navigation: { goBack() {} }, route: { params: { section: 'services' } },
+  })); });
+  t.after(async () => { await act(async () => renderer.unmount()); });
+  const text = JSON.stringify(renderer.toJSON());
+  assert.match(text, /葉っぱと時計を組み合わせた、このアプリ用のAI生成画像/);
+  assert.match(text, /Expoテンプレートの素材/);
+  assert.match(text, /開発初期に使用した/);
+  assert.match(text, /The MIT License/);
+  assert.doesNotMatch(text, /アプリアイコン（Expoテンプレート）/);
+  await act(async () => { renderer.root.findByProps({ accessibilityLabel: 'Expoテンプレートの元ファイル' }).props.onPress(); });
+  assert.deepEqual(opened, [require('../src/data/expoTemplateAssetNotice.json').sourceUrl]);
+});
+
 test('image information distinguishes generated recipe illustrations from retained personal images', async t => {
   clear(); t.after(restore);
   let renderer;

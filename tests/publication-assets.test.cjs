@@ -22,6 +22,27 @@ const previousRecipes = require('../src/data/legacySampleRecipes.v2.json');
 const snapshot = recipes => ({ foods: [], recipes, shoppingItems: [],
   notificationSettings: { enabled: false, daysBeforeList: [3], time: '18:00' } });
 
+test('the selected leaf-clock icon is used on iOS, Android and Web without a legacy Android override', () => {
+  const { expo } = require('../app.json');
+  const config = require('../app.config.js')({ config: expo });
+  const record = require('../assets/branding/manifest.json');
+  const iconPath = `./assets/branding/${record.file}`;
+  assert.equal(config.icon, iconPath);
+  assert.equal(config.ios.icon ?? config.icon, iconPath);
+  assert.equal(config.android.icon, iconPath);
+  assert.equal(config.android.adaptiveIcon, undefined, 'the former Expo foreground must not override the selected icon');
+  assert.equal(config.web.favicon, iconPath);
+  const bytes = fs.readFileSync(path.resolve(__dirname, '..', iconPath));
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), record.sha256);
+  assert.deepEqual([...bytes.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.equal(bytes.readUInt32BE(16), record.width);
+  assert.equal(bytes.readUInt32BE(20), record.height);
+  assert.equal(record.width, record.height);
+  assert.equal(bytes[25], 2, 'the original RGB PNG is opaque');
+  assert.equal(record.generator, 'built-in image_gen');
+  assert.match(record.prompt, /Fresh Moment/);
+});
+
 test('the original eight recipe instructions update without changing quantities, names, favorites or personal photos', () => {
   for (const previous of previousRecipes) {
     const saved = { ...structuredClone(previous), image: 'file:///my-photo.jpg', isFavorite: true, createdAt: '2025-01-01' };

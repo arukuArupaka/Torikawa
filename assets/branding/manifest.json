@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "id": "fresh-moment",
+  "name": "葉っぱ時計",
+  "file": "fresh-moment.png",
+  "generatedDate": "2026-10-19",
+  "adoptedDate": "2026-10-22",
+  "generator": "built-in image_gen",
+  "sourceFile": "output/app-icon-concepts-2026-10-19/01-fresh-moment.png",
+  "sha256": "1c39081b29efdbf78567733805777fd1d3fb15b01e4767d450b878f6b38334fe",
+  "width": 1254,
+  "height": 1254,
+  "prompt": "Create one polished app-icon concept for the existing Japanese mobile app たべどき！！, a friendly food inventory app that tracks fridge ingredients, expiry dates and remaining quantities to help people eat food at the right time. Use case: logo-brand. Asset type: mobile home screen app icon. Target dimensions: 1024 x 1024, square. Use a single large memorable symbol, generous 18% safe margins, strong legibility down to 48px, intentional negative space, premium Japanese everyday-life product design. Existing product tokens: primary forest green #167A34, soft mint #EAF7ED, near-white #F7F8F6, dark ink #17201A. Coral, warm orange and cream can be restrained food accents. Flat vector-like crisp finished artwork, beautifully balanced curves. Full-bleed opaque square background, no exterior rounded-corner mask or frame, no phone mockup, no typography, letters, numbers, caption, watermark, tiny labels, UI, or multiple variations. The attached local image is the existing generic Expo placeholder, supplied ONLY as context that this is being replaced: do not retain its blue A, blueprint grid, construction lines, or branding. Design a new original mark grounded in the supplied product tokens. Concept name: Fresh Moment. A single elegant circular forest-green clock face whose outer circle ends at the upper-right in a fresh simple leaf. Two thick warm-white clock hands, a small coral accent dot at the exact point where the leaf joins the clock. Pale mint background. A bold, instantly recognizable food-and-time symbol, subtle friendly organic character, exceptional simplicity. No small dial ticks."
+}
